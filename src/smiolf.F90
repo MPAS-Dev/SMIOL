@@ -1,0 +1,373 @@
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+! SMIOL -- The Simple MPAS I/O Library
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+module SMIOLf
+
+    use iso_c_binding, only : c_int
+
+    type, bind(C) :: SMIOLf_context
+        integer(c_int) :: i
+    end type SMIOLf_context
+
+    type, bind(C) :: SMIOLf_file
+        integer(c_int) :: i
+    end type SMIOLf_file
+
+    private
+
+    public :: SMIOLf_context, &
+              SMIOLf_file
+
+    public :: SMIOLf_init, &
+              SMIOLf_finalize, &
+              SMIOLf_inquire, &
+              SMIOLf_open_file, &
+              SMIOLf_close_file, &
+              SMIOLf_define_dim, &
+              SMIOLf_inquire_dim, &
+              SMIOLf_define_var, &
+              SMIOLf_inquire_var, &
+              SMIOLf_put_var, &
+              SMIOLf_get_var, &
+              SMIOLf_define_att, &
+              SMIOLf_inquire_att, &
+              SMIOLf_file_sync, &
+              SMIOLf_error_string, &
+              SMIOLf_set_option
+
+
+contains
+
+
+    !
+    ! Library methods
+    !
+
+    !-----------------------------------------------------------------------
+    !  routine SMIOLf_init
+    !
+    !> \brief Initialize a SMIOL context
+    !> \details
+    !>  Detailed description of what this routine does.
+    !
+    !-----------------------------------------------------------------------
+    integer function SMIOLf_init() result(ierr)
+
+        implicit none
+
+        ! C interface definitions
+        interface
+            function SMIOL_init() result(ierr) bind(C, name='SMIOL_init')
+                use iso_c_binding, only : c_int
+                integer(kind=c_int) :: ierr
+            end function
+        end interface
+
+        ierr = SMIOL_init()
+
+    end function SMIOLf_init
+
+
+    !-----------------------------------------------------------------------
+    !  routine SMIOLf_finalize
+    !
+    !> \brief Finalize a SMIOL context
+    !> \details
+    !>  Detailed description of what this routine does.
+    !
+    !-----------------------------------------------------------------------
+    integer function SMIOLf_finalize() result(ierr)
+
+        implicit none
+
+        ierr = 0
+
+    end function SMIOLf_finalize
+
+
+    !-----------------------------------------------------------------------
+    !  routine SMIOLf_inquire
+    !
+    !> \brief Inquire about a SMIOL context
+    !> \details
+    !>  Detailed description of what this routine does.
+    !
+    !-----------------------------------------------------------------------
+    integer function SMIOLf_inquire() result(ierr)
+
+        implicit none
+
+        ierr = 0
+
+    end function SMIOLf_inquire
+
+
+    !
+    ! File methods
+    !
+
+    !-----------------------------------------------------------------------
+    !  routine SMIOLf_open_file
+    !
+    !> \brief Opens a file within a SMIOL context
+    !> \details
+    !>  Detailed description of what this routine does.
+    !
+    !-----------------------------------------------------------------------
+    integer function SMIOLf_open_file() result(ierr)
+
+        implicit none
+
+        ierr = 0
+
+    end function SMIOLf_open_file
+
+
+    !-----------------------------------------------------------------------
+    !  routine SMIOLf_close_file
+    !
+    !> \brief Closes a file within a SMIOL context
+    !> \details
+    !>  Detailed description of what this routine does.
+    !
+    !-----------------------------------------------------------------------
+    integer function SMIOLf_close_file() result(ierr)
+
+        implicit none
+
+        ierr = 0
+
+    end function SMIOLf_close_file
+
+
+
+    !
+    ! Dimension methods
+    !
+
+    !-----------------------------------------------------------------------
+    !  routine SMIOLf_define_dim
+    !
+    !> \brief Defines a new dimension in a file
+    !> \details
+    !>  Detailed description of what this routine does.
+    !
+    !-----------------------------------------------------------------------
+    integer function SMIOLf_define_dim() result(ierr)
+
+        implicit none
+
+        ierr = 0
+
+    end function SMIOLf_define_dim
+
+
+    !-----------------------------------------------------------------------
+    !  routine SMIOLf_inquire_dim
+    !
+    !> \brief Inquires about an existing dimension in a file
+    !> \details
+    !>  Detailed description of what this routine does.
+    !
+    !-----------------------------------------------------------------------
+    integer function SMIOLf_inquire_dim() result(ierr)
+
+        implicit none
+
+        ierr = 0
+
+    end function SMIOLf_inquire_dim
+
+
+    !
+    ! Variable methods
+    !
+
+    !-----------------------------------------------------------------------
+    !  routine SMIOLf_define_var
+    !
+    !> \brief Defines a new variable in a file
+    !> \details
+    !>  Detailed description of what this routine does.
+    !
+    !-----------------------------------------------------------------------
+    integer function SMIOLf_define_var() result(ierr)
+
+        implicit none
+
+        ierr = 0
+
+    end function SMIOLf_define_var
+
+
+    !-----------------------------------------------------------------------
+    !  routine SMIOLf_inquire_var
+    !
+    !> \brief Inquires about an existing variable in a file
+    !> \details
+    !>  Detailed description of what this routine does.
+    !
+    !-----------------------------------------------------------------------
+    integer function SMIOLf_inquire_var() result(ierr)
+
+        implicit none
+
+        ierr = 0
+
+    end function SMIOLf_inquire_var
+
+
+    !-----------------------------------------------------------------------
+    !  routine SMIOLf_put_var
+    !
+    !> \brief Writes a variable to a file
+    !> \details
+    !>  Detailed description of what this routine does.
+    !
+    !-----------------------------------------------------------------------
+    integer function SMIOLf_put_var() result(ierr)
+
+        implicit none
+
+        ierr = 0
+
+    end function SMIOLf_put_var
+
+
+    !-----------------------------------------------------------------------
+    !  routine SMIOLf_get_var
+    !
+    !> \brief Reads a variable from a file
+    !> \details
+    !>  Detailed description of what this routine does.
+    !
+    !-----------------------------------------------------------------------
+    integer function SMIOLf_get_var() result(ierr)
+
+        implicit none
+
+        ierr = 0
+
+    end function SMIOLf_get_var
+
+
+    !
+    ! Attribute methods
+    !
+
+    !-----------------------------------------------------------------------
+    !  routine SMIOLf_define_att
+    !
+    !> \brief Defines a new attribute in a file
+    !> \details
+    !>  Detailed description of what this routine does.
+    !
+    !-----------------------------------------------------------------------
+    integer function SMIOLf_define_att() result(ierr)
+
+        implicit none
+
+        ierr = 0
+
+    end function SMIOLf_define_att
+
+
+    !-----------------------------------------------------------------------
+    !  routine SMIOLf_inquire_att
+    !
+    !> \brief Inquires about an attribute in a file
+    !> \details
+    !>  Detailed description of what this routine does.
+    !
+    !-----------------------------------------------------------------------
+    integer function SMIOLf_inquire_att() result(ierr)
+
+        implicit none
+
+        ierr = 0
+
+    end function SMIOLf_inquire_att
+
+
+    !
+    ! Control methods
+    !
+
+    !-----------------------------------------------------------------------
+    !  routine SMIOLf_file_sync
+    !
+    !> \brief Forces all in-memory data to be flushed to disk
+    !> \details
+    !>  Detailed description of what this routine does.
+    !
+    !-----------------------------------------------------------------------
+    integer function SMIOLf_file_sync() result(ierr)
+
+        implicit none
+
+        ierr = 0
+
+    end function SMIOLf_file_sync
+
+
+    !-----------------------------------------------------------------------
+    !  routine SMIOLf_error_string
+    !
+    !> \brief Returns an error string for a specified error code
+    !> \details
+    !>  Detailed description of what this routine does.
+    !
+    !-----------------------------------------------------------------------
+    character(len=128) function SMIOLf_error_string(ierrno) result(err_mesg)
+
+        use iso_c_binding, only : c_ptr, c_char, c_null_char, c_f_pointer
+
+        implicit none
+
+        integer, intent(in) :: ierrno
+
+        type (c_ptr) :: c_mesg_ptr
+        character(kind=c_char), dimension(:), pointer :: c_mesg
+        integer :: i
+    
+        ! C interface definitions
+        interface
+            function SMIOL_error_string(errno) result(err_mesg) bind(C, name='SMIOL_error_string')
+                use iso_c_binding, only : c_int, c_ptr
+                integer(kind=c_int), value :: errno
+                type (c_ptr) :: err_mesg
+            end function
+        end interface
+
+        c_mesg_ptr = SMIOL_error_string(ierrno)
+        call c_f_pointer(c_mesg_ptr, c_mesg, shape=[len(err_mesg)])
+
+        do i=1,len(err_mesg)
+            if (c_mesg(i) == c_null_char) exit
+        end do
+
+        i = i - 1
+
+        err_mesg(1:i) = transfer(c_mesg(1:i), err_mesg)
+        err_mesg = err_mesg(1:i)
+
+    end function SMIOLf_error_string
+
+
+    !-----------------------------------------------------------------------
+    !  routine SMIOLf_set_option
+    !
+    !> \brief Sets an option for the SMIOL library
+    !> \details
+    !>  Detailed description of what this routine does.
+    !
+    !-----------------------------------------------------------------------
+    integer function SMIOLf_set_option() result(ierr)
+
+        implicit none
+
+        ierr = 0
+
+    end function SMIOLf_set_option
+
+end module SMIOLf
