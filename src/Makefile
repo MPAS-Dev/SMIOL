@@ -1,8 +1,8 @@
 all: smiol
 
 smiol:
-	$(CC) $(CPPINCLUDES) $(CFLAGS) $(LDFLAGS) -o ../HelloWorld HelloWorld.c
-	$(FC) $(FCINCLUDES) $(FFLAGS) $(LDFLAGS) -o ../HelloWorld_Fortran HelloWorld.f90
+	$(CC) $(CPPINCLUDES) $(CFLAGS) $(LDFLAGS) -c smiol.c
+	ar cr ../smiol.a smiol.o
 
 clean:
-
+	rm -f smiol.o ../smiol.a

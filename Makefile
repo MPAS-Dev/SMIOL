@@ -14,6 +14,7 @@ gnu:
 	 "FCINCLUDES = " \
 	 "CC_PARALLEL = mpicc" \
 	 "FC_PARALLEL = mpif90" )
+	$(CC) -I./src/ $(CPPINCLUDES) $(CFLAGS) $(LDFLAGS) -o smiol_runner smiol_runner.c smiol.a 
 
 intel:
 	( $(MAKE) -C ./src \
@@ -25,14 +26,28 @@ intel:
 	 "FCINCLUDES = " \
 	 "CC_PARALLEL = mpicc" \
 	 "FC_PARALLEL = mpif90" )
+	$(CC) -I./src/ $(CPPINCLUDES) $(CFLAGS) $(LDFLAGS) -o smiol_runner smiol_runner.c smiol.a 
 
 pgi:
+	( $(MAKE) -C ./src \
+	 "CC = pgcc" \
+	 "CFLAGS = -g -traceback" \
+	 "CPPINCLUDES = " \
+	 "FC = pgfortran"\
+	 "FFLAGS = -g -Mbounds -Mchkptr -traceback" \
+	 "FCINCLUDES = " \
+	 "CC_PARALLEL = mpicc" \
+	 "FC_PARALLEL = mpif90" )
+	$(CC) -I./src/ $(CPPINCLUDES) $(CFLAGS) $(LDFLAGS) -o smiol_runner smiol_runner.c smiol.a 
 
 xi:
+
 
 test:
 
 
+
+
 clean:
-	rm -f HelloWorld HelloWorld_Fortran
-	$(MAKE) -C ./src clean
+	rm -f smiol.a smiol_runner
+	$(MAKE) -C ./src clean 
