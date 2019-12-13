@@ -12,6 +12,11 @@ struct {
 } SMIOL_file;
 
 /*
+ * Return error codes
+ */
+#define SMIOL_SUCCESS (0)
+
+/*
  * Library methods
  */
 int SMIOL_init(void);
@@ -48,5 +53,5 @@ int SMIOL_inquire_att(void);
  * Control methods
  */
 int SMIOL_file_sync(void);
-const char *SMIOL_error_string(void);
+const char *SMIOL_error_string(int errno);
 int SMIOL_set_option(void);
