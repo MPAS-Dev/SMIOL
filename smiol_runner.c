@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "smiol.h"
+#include "smiol_codes.inc"
 
 /*******************************************************************************
  * SMIOL C Runner - Take SMIOL out for a run!

@@ -14,7 +14,7 @@ struct {
 /*
  * Return error codes
  */
-#define SMIOL_SUCCESS (0)
+#include "smiol_codes.inc"
 
 /*
  * Library methods
