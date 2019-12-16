@@ -5,7 +5,7 @@ default:
 clang:
 
 gnu:
-	( $(MAKE) -C ./src \
+	( $(MAKE) smiol \
 	 "CC = gcc" \
 	 "CFLAGS = -g -Wall" \
 	 "CPPINCLUDES = " \
@@ -14,11 +14,9 @@ gnu:
 	 "FCINCLUDES = " \
 	 "CC_PARALLEL = mpicc" \
 	 "FC_PARALLEL = mpif90" )
-	$(CC) -I./src/ $(CPPINCLUDES) $(CFLAGS) $(LDFLAGS) -o smiol_runner_c smiol_runner.c smiol.a
-	$(FC) -I./src/ $(CPPINCLUDES) $(FFLAGS) $(LDFLAGS) -o smiol_runner_f smiol_runner.F90 smiolf.a smiol.a
 
 intel:
-	( $(MAKE) -C ./src \
+	( $(MAKE) smiol \
 	 "CC = icc" \
 	 "CFLAGS = -g -Wall" \
 	 "CPPINCLUDES = " \
@@ -27,11 +25,9 @@ intel:
 	 "FCINCLUDES = " \
 	 "CC_PARALLEL = mpicc" \
 	 "FC_PARALLEL = mpif90" )
-	$(CC) -I./src/ $(CPPINCLUDES) $(CFLAGS) $(LDFLAGS) -o smiol_runner_c smiol_runner.c smiol.a
-	$(FC) -I./src/ $(CPPINCLUDES) $(FFLAGS) $(LDFLAGS) -o smiol_runner_f smiol_runner.F90 smiolf.a smiol.a
 
 pgi:
-	( $(MAKE) -C ./src \
+	( $(MAKE) smiol \
 	 "CC = pgcc" \
 	 "CFLAGS = -g -traceback" \
 	 "CPPINCLUDES = " \
@@ -40,10 +36,13 @@ pgi:
 	 "FCINCLUDES = " \
 	 "CC_PARALLEL = mpicc" \
 	 "FC_PARALLEL = mpif90" )
-	$(CC) -I./src/ $(CPPINCLUDES) $(CFLAGS) $(LDFLAGS) -o smiol_runner_c smiol_runner.c smiol.a
-	$(FC) -I./src/ $(CPPINCLUDES) $(FFLAGS) $(LDFLAGS) -o smiol_runner_f smiol_runner.F90 smiolf.a smiol.a
 
 xi:
+
+smiol:
+	$(MAKE) -C ./src
+	$(CC) -I./src/ $(CPPINCLUDES) $(CFLAGS) -L`pwd` $(LDFLAGS) -o smiol_runner_c smiol_runner.c -lsmiol
+	$(FC) -I./src/ $(CPPINCLUDES) $(FFLAGS) -L`pwd` $(LDFLAGS) -o smiol_runner_f smiol_runner.F90 -lsmiolf -lsmiol
 
 
 test:
