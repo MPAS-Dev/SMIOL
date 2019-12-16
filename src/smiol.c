@@ -245,3 +245,33 @@ int SMIOL_set_option(void)
 {
 	return SMIOL_SUCCESS;
 }
+
+
+/********************************************************************************
+ *
+ * SMIOL_create_decomp
+ *
+ * Creates a mapping between compute elements and I/O elements.
+ *
+ * Detailed description.
+ *
+ ********************************************************************************/
+struct SMIOL_decomp *SMIOL_create_decomp(void)
+{
+	return NULL;
+}
+
+
+/********************************************************************************
+ *
+ * SMIOL_free_decomp
+ *
+ * Frees a mapping between compute elements and I/O elements.
+ *
+ * Detailed description.
+ *
+ ********************************************************************************/
+int SMIOL_free_decomp(struct SMIOL_decomp **d)
+{
+	return SMIOL_SUCCESS;
+}

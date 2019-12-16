@@ -11,6 +11,9 @@ struct {
 struct {
 } SMIOL_file;
 
+struct {
+} SMIOL_decomp;
+
 /*
  * Return error codes
  */
@@ -55,3 +58,9 @@ int SMIOL_inquire_att(void);
 int SMIOL_file_sync(void);
 const char *SMIOL_error_string(int errno);
 int SMIOL_set_option(void);
+
+/*
+ * Decomposition methods
+ */
+struct SMIOL_decomp *SMIOL_create_decomp(void);
+int SMIOL_free_decomp(struct SMIOL_decomp **d);

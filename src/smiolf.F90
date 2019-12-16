@@ -7,14 +7,6 @@ module SMIOLf
 
     use iso_c_binding, only : c_int
 
-    type, bind(C) :: SMIOLf_context
-        integer(c_int) :: i
-    end type SMIOLf_context
-
-    type, bind(C) :: SMIOLf_file
-        integer(c_int) :: i
-    end type SMIOLf_file
-
     private
 
     public :: SMIOLf_context, &
@@ -35,7 +27,22 @@ module SMIOLf
               SMIOLf_inquire_att, &
               SMIOLf_file_sync, &
               SMIOLf_error_string, &
-              SMIOLf_set_option
+              SMIOLf_set_option, &
+              SMIOLf_create_decomp, &
+              SMIOLf_free_decomp
+
+
+    type, bind(C) :: SMIOLf_context
+        integer(c_int) :: i
+    end type SMIOLf_context
+
+    type, bind(C) :: SMIOLf_file
+        integer(c_int) :: i
+    end type SMIOLf_file
+
+    type, bind(C) :: SMIOLf_decomp
+        integer(c_int) :: i
+    end type SMIOLf_decomp
 
 
 contains
@@ -371,5 +378,39 @@ contains
         ierr = 0
 
     end function SMIOLf_set_option
+
+
+    !-----------------------------------------------------------------------
+    !  routine SMIOLf_create_decomp
+    !
+    !> \brief Creates a mapping between compute elements and I/O elements
+    !> \details
+    !>  Detailed description of what this routine does.
+    !
+    !-----------------------------------------------------------------------
+    integer function SMIOLf_create_decomp() result(ierr)
+
+        implicit none
+
+        ierr = 0
+
+    end function SMIOLf_create_decomp
+
+
+    !-----------------------------------------------------------------------
+    !  routine SMIOLf_free_decomp
+    !
+    !> \brief Frees a mapping between compute elements and I/O elements
+    !> \details
+    !>  Detailed description of what this routine does.
+    !
+    !-----------------------------------------------------------------------
+    integer function SMIOLf_free_decomp() result(ierr)
+
+        implicit none
+
+        ierr = 0
+
+    end function SMIOLf_free_decomp
 
 end module SMIOLf
