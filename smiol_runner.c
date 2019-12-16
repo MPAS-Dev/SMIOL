@@ -6,7 +6,8 @@
  * SMIOL C Runner - Take SMIOL out for a run!
  *******************************************************************************/
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
 	int ierr;
 
 	if ((ierr = SMIOL_init()) != SMIOL_SUCCESS) {
