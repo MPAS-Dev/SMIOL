@@ -1,15 +1,24 @@
 default:
-	@echo "Please provide a compiler name (clang, gnu, intel, pgi, xi)"
+	@echo "Please provide a compiler name (llvm, gnu, intel, pgi, xi)"
 	exit 1
 
-clang:
+llvm:
+	( $(MAKE) smiol \
+	 "CC = clang" \
+	 "CFLAGS = -g -Weverything" \
+	 "CPPINCLUDES = " \
+	 "FC = flang" \
+	 "FFLAGS = -g -Mbounds -Mchkptr -Mstandard" \
+	 "FCINCLUDES = " \
+	 "CC_PARALLEL = mpicc" \
+	 "FC_PARALLEL = mpifort" )
 
 gnu:
 	( $(MAKE) smiol \
 	 "CC = gcc" \
 	 "CFLAGS = -g -Wall" \
 	 "CPPINCLUDES = " \
-	 "FC = gfortran"\
+	 "FC = gfortran" \
 	 "FFLAGS = -g -Wall -fcheck=all" \
 	 "FCINCLUDES = " \
 	 "CC_PARALLEL = mpicc" \
@@ -20,7 +29,7 @@ intel:
 	 "CC = icc" \
 	 "CFLAGS = -g -Wall" \
 	 "CPPINCLUDES = " \
-	 "FC = ifort "\
+	 "FC = ifort " \
 	 "FFLAGS = -g -warn all -check all" \
 	 "FCINCLUDES = " \
 	 "CC_PARALLEL = mpicc" \
@@ -31,7 +40,7 @@ pgi:
 	 "CC = pgcc" \
 	 "CFLAGS = -g -traceback" \
 	 "CPPINCLUDES = " \
-	 "FC = pgfortran"\
+	 "FC = pgfortran" \
 	 "FFLAGS = -g -Mbounds -Mchkptr -traceback" \
 	 "FCINCLUDES = " \
 	 "CC_PARALLEL = mpicc" \
