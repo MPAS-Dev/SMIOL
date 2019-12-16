@@ -14,7 +14,8 @@ gnu:
 	 "FCINCLUDES = " \
 	 "CC_PARALLEL = mpicc" \
 	 "FC_PARALLEL = mpif90" )
-	$(CC) -I./src/ $(CPPINCLUDES) $(CFLAGS) $(LDFLAGS) -o smiol_runner smiol_runner.c smiol.a 
+	$(CC) -I./src/ $(CPPINCLUDES) $(CFLAGS) $(LDFLAGS) -o smiol_runner_c smiol_runner.c smiol.a
+	$(FC) -I./src/ $(CPPINCLUDES) $(FFLAGS) $(LDFLAGS) -o smiol_runner_f smiol_runner.F90 smiolf.a smiol.a
 
 intel:
 	( $(MAKE) -C ./src \
@@ -26,7 +27,8 @@ intel:
 	 "FCINCLUDES = " \
 	 "CC_PARALLEL = mpicc" \
 	 "FC_PARALLEL = mpif90" )
-	$(CC) -I./src/ $(CPPINCLUDES) $(CFLAGS) $(LDFLAGS) -o smiol_runner smiol_runner.c smiol.a 
+	$(CC) -I./src/ $(CPPINCLUDES) $(CFLAGS) $(LDFLAGS) -o smiol_runner_c smiol_runner.c smiol.a
+	$(FC) -I./src/ $(CPPINCLUDES) $(FFLAGS) $(LDFLAGS) -o smiol_runner_f smiol_runner.F90 smiolf.a smiol.a
 
 pgi:
 	( $(MAKE) -C ./src \
@@ -38,7 +40,8 @@ pgi:
 	 "FCINCLUDES = " \
 	 "CC_PARALLEL = mpicc" \
 	 "FC_PARALLEL = mpif90" )
-	$(CC) -I./src/ $(CPPINCLUDES) $(CFLAGS) $(LDFLAGS) -o smiol_runner smiol_runner.c smiol.a 
+	$(CC) -I./src/ $(CPPINCLUDES) $(CFLAGS) $(LDFLAGS) -o smiol_runner_c smiol_runner.c smiol.a
+	$(FC) -I./src/ $(CPPINCLUDES) $(FFLAGS) $(LDFLAGS) -o smiol_runner_f smiol_runner.F90 smiolf.a smiol.a
 
 xi:
 
@@ -49,5 +52,5 @@ test:
 
 
 clean:
-	rm -f smiol.a smiol_runner
+	$(RM) -f smiol.a smiolf.a smiol_runner_c smiol_runner_f smiol_runner.o
 	$(MAKE) -C ./src clean 
