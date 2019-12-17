@@ -16,10 +16,10 @@ llvm:
 gnu:
 	( $(MAKE) smiol \
 	 "CC = gcc" \
-	 "CFLAGS = -g -Wall" \
+	 "CFLAGS = -g -Wall -pedantic" \
 	 "CPPINCLUDES = " \
-	 "FC = gfortran" \
-	 "FFLAGS = -g -Wall -fcheck=all" \
+	 "FC = gfortran"\
+	 "FFLAGS = -g -Wall -fcheck=all -pedantic -std=f2003" \
 	 "FCINCLUDES = " \
 	 "CC_PARALLEL = mpicc" \
 	 "FC_PARALLEL = mpif90" )
