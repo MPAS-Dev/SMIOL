@@ -1,5 +1,5 @@
 default:
-	@echo "Please provide a compiler name (clang, gnu, intel, pgi, xi, nag)"
+	@echo "Please provide a compiler name (llvm, gnu, intel, pgi, xi, nag)"
 	exit 1
 
 llvm:
@@ -46,7 +46,16 @@ pgi:
 	 "CC_PARALLEL = mpicc" \
 	 "FC_PARALLEL = mpif90" )
 
-xi:
+xl:
+	( $(MAKE) smiol \
+	 "CC = xlc_r" \
+	 "CFLAGS = -g" \
+	 "CPPINCLUDES = " \
+	 "FC = xlf2003_r" \
+	 "FFLAGS = -g -C" \
+	 "FCINCLUDES = " \
+	 "CC_PARALLEL = mpicc" \
+	 "FC_PARALLEL = mpifort" )
 
 nag:
 	( $(MAKE) smiol \
