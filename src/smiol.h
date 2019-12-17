@@ -5,14 +5,17 @@
 /*
  * Types
  */
-struct {
-} SMIOL_context;
+struct SMIOL_context {
+	int foo;
+};
 
-struct {
-} SMIOL_file;
+struct SMIOL_file {
+	int foo;
+};
 
-struct {
-} SMIOL_decomp;
+struct SMIOL_decomp {
+	int foo;
+};
 
 /*
  * Return error codes
