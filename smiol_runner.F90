@@ -81,8 +81,8 @@ program smiol_runner
         stop 1
     endif
 
-    write(0,*) "Testing SMIOLf_error_string success: ", SMIOLf_error_string(0)
-    write(0,*) "Testing SMIOLf_error_string unkown error: ", SMIOLf_error_string(1)
+    write(0,*) "Testing SMIOLf_error_string success: ", trim(SMIOLf_error_string(SMIOL_SUCCESS))
+    write(0,*) "Testing SMIOLf_error_string unkown error: ", trim(SMIOLf_error_string(1))
     write(0,*) "SUCCESS"
 
     stop 0

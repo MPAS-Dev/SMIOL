@@ -80,7 +80,7 @@ int main(int argc, char **argv)
 	}
 
 	printf("SMIOL_error_string test 'Unknown error': %s\n", SMIOL_error_string(-1));
-	printf("SMIOL_error_string test 'Success!': %s\n", SMIOL_error_string(0));
+	printf("SMIOL_error_string test 'Success!': %s\n", SMIOL_error_string(SMIOL_SUCCESS));
 	printf("Called all SMIOL functions successfully!\n");
 
 	return 0;
