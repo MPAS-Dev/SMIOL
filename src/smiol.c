@@ -1,4 +1,6 @@
 #include <stddef.h>
+#include <stdlib.h>
+#include <stdio.h>
 #include "smiol.h"
 
 
@@ -256,9 +258,40 @@ int SMIOL_set_option(void)
  * Detailed description.
  *
  ********************************************************************************/
-struct SMIOL_decomp *SMIOL_create_decomp(void)
+struct SMIOL_decomp *SMIOL_create_decomp(size_t n_compute_elements,
+		size_t n_io_elements, uint64_t *compute_elements,
+		uint64_t *io_elements)
 {
-	return NULL;
+	struct SMIOL_decomp *d;
+	size_t i;
+
+	d = malloc(sizeof(struct SMIOL_decomp));
+	d->n_compute_elements = n_compute_elements;
+	d->n_io_elements = n_io_elements;
+
+	d->compute_elements = malloc(sizeof(uint64_t) * d->n_compute_elements);
+	if (d->compute_elements == NULL) {
+		fprintf(stderr, "ERROR: Could not malloc space for d->compute_elements\n");
+		return NULL;
+	}
+
+	d->io_elements = malloc(sizeof(uint64_t) * d->n_io_elements);
+	if (d->io_elements == NULL) {
+		fprintf(stderr, "ERROR: Could not malloc space for d->io_elements\n");
+		return NULL;
+	}
+
+	// Copy compute elements
+	for (i = 0; i < d->n_compute_elements; i++) {
+		d->compute_elements[i] = compute_elements[i];
+	}
+
+	// Copy io elements
+	for (i = 0; i < d->n_io_elements; i++) {
+		d->io_elements[i] = io_elements[i];
+	}
+
+	return d;
 }
 
 

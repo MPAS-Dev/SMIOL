@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include "smiol.h"
 
 /*******************************************************************************
@@ -8,11 +9,41 @@
 int main(int argc, char **argv)
 {
 	int ierr;
+	size_t n_compute_elements = 1;
+	size_t n_io_elements = 1;
+	uint64_t *compute_elements;
+	uint64_t *io_elements;
+	struct SMIOL_decomp *decomp = NULL;
 
 	if ((ierr = SMIOL_init()) != SMIOL_SUCCESS) {
 		printf("ERROR: SMIOL_init: %s ", SMIOL_error_string(ierr));
 		return 1;
 	} 
+
+	// Create elements
+	compute_elements = malloc(sizeof(uint64_t) * n_compute_elements);
+	io_elements = malloc(sizeof(uint64_t) * n_io_elements);
+
+	decomp = SMIOL_create_decomp(n_compute_elements, n_io_elements,
+				compute_elements, io_elements);
+	if (decomp == NULL) {
+		printf("ERROR: SMIOL_create_decomp - Decomp was not allocated\n");
+		return 1;
+	}
+
+	// Free local copy
+	free(compute_elements);
+	free(io_elements);
+
+	if ((ierr = SMIOL_free_decomp(&decomp)) != SMIOL_SUCCESS) {
+		printf("ERROR: SMIOL_free_decomp: %s ", SMIOL_error_string(ierr));
+		return 1;
+	}
+
+	if (decomp != NULL) {
+		printf("ERROR: SMIOL_free_decomp - Decomp not 'NULL' after free\n");
+		return 1;
+	}
 
 	if ((ierr = SMIOL_finalize()) != SMIOL_SUCCESS) {
 		printf("ERROR: SMIOL_finalize: %s ", SMIOL_error_string(ierr));
