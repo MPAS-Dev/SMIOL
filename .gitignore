@@ -1,3 +1,7 @@
+#SMIOL test programs
+smiol_runner_c
+smiol_runner_f
+
 # All object and library files
 *.o
 *.a
