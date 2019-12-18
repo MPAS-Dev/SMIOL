@@ -80,5 +80,5 @@ test:
 
 
 clean:
-	$(RM) -f smiol.a smiolf.a smiol_runner_c smiol_runner_f smiol_runner.o
+	$(RM) -f smiol_runner_c smiol_runner_f
 	$(MAKE) -C ./src clean 
