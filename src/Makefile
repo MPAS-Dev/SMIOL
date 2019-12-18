@@ -8,4 +8,4 @@ smiol:
 
 clean:
 	$(RM) -f smiol.o ../libsmiol.a
-	$(RM) -f smiof.o smiolf.mod ../libsmiolf.a
+	$(RM) -f smiolf.o smiolf.mod ../libsmiolf.a
