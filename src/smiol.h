@@ -2,6 +2,8 @@
  * SMIOL -- The Simple MPAS I/O Library
  *******************************************************************************/
 
+#include <stdint.h>
+
 /*
  * Types
  */
@@ -14,7 +16,10 @@ struct SMIOL_file {
 };
 
 struct SMIOL_decomp {
-	int foo;
+	size_t n_compute_elements;
+	size_t n_io_elements;
+	uint64_t *compute_elements;
+	uint64_t *io_elements;
 };
 
 /*
