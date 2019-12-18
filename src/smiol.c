@@ -306,5 +306,14 @@ struct SMIOL_decomp *SMIOL_create_decomp(size_t n_compute_elements,
  ********************************************************************************/
 int SMIOL_free_decomp(struct SMIOL_decomp **d)
 {
+	if ((*d) == NULL) {
+		return SMIOL_SUCCESS;
+	}
+
+	free((*d)->compute_elements);
+	free((*d)->io_elements);
+	free((*d));
+	*d = NULL;
+
 	return SMIOL_SUCCESS;
 }
