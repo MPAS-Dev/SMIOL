@@ -15,6 +15,11 @@ int main(int argc, char **argv)
 	uint64_t *io_elements;
 	struct SMIOL_decomp *decomp = NULL;
 
+	if (argc == 2) {
+		n_compute_elements = (size_t) atoi(argv[1]);
+		n_io_elements = (size_t) atoi(argv[1]);
+	}
+
 	if ((ierr = SMIOL_init()) != SMIOL_SUCCESS) {
 		printf("ERROR: SMIOL_init: %s ", SMIOL_error_string(ierr));
 		return 1;
