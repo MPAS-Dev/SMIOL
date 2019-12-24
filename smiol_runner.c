@@ -14,6 +14,7 @@ int main(int argc, char **argv)
 	uint64_t *compute_elements;
 	uint64_t *io_elements;
 	struct SMIOL_decomp *decomp = NULL;
+	struct SMIOL_context *context = NULL;
 
 	if (argc == 2) {
 		n_compute_elements = (size_t) atoi(argv[1]);
@@ -25,10 +26,15 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if ((ierr = SMIOL_init()) != SMIOL_SUCCESS) {
+	if ((ierr = SMIOL_init(MPI_COMM_WORLD, &context)) != SMIOL_SUCCESS) {
 		printf("ERROR: SMIOL_init: %s ", SMIOL_error_string(ierr));
 		return 1;
 	} 
+
+	if (context == NULL) {
+		fprintf(stderr, "SMIOL_init returned a NULL context\n");
+		return 1;
+	}
 
 	// Create elements
 	compute_elements = malloc(sizeof(uint64_t) * n_compute_elements);
