@@ -61,11 +61,6 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if ((ierr = SMIOL_finalize()) != SMIOL_SUCCESS) {
-		printf("ERROR: SMIOL_finalize: %s ", SMIOL_error_string(ierr));
-		return 1;
-	}
-
 	if ((ierr = SMIOL_inquire()) != SMIOL_SUCCESS) {
 		printf("ERROR: SMIOL_inquire: %s ", SMIOL_error_string(ierr));
 		return 1;
@@ -130,6 +125,16 @@ int main(int argc, char **argv)
 	printf("SMIOL_error_string test 'Success!': %s\n", SMIOL_error_string(SMIOL_SUCCESS));
 	printf("SMIOL_error_string test 'malloc returned a null pointer': %s\n",
 		SMIOL_error_string(SMIOL_MALLOC_FAILURE));
+
+	if ((ierr = SMIOL_finalize(&context)) != SMIOL_SUCCESS) {
+		printf("ERROR: SMIOL_finalize: %s ", SMIOL_error_string(ierr));
+		return 1;
+	}
+
+	if (context != NULL) {
+		fprintf(stderr, "SMIOL_finalize returned a non-NULL context\n");
+		return 1;
+	}
 	printf("Called all SMIOL functions successfully!\n");
 
 	if (MPI_Finalize() != MPI_SUCCESS) {

@@ -75,11 +75,24 @@ int SMIOL_init(MPI_Comm comm, struct SMIOL_context **context)
  *
  * Finalize a SMIOL context.
  *
- * Detailed description.
+ * Finalizes a SMIOL context and frees all memory in the SMIOL_context instance.
+ * After this routine is called, no other SMIOL routines that make reference to
+ * the finalized context should be called.
  *
  ********************************************************************************/
-int SMIOL_finalize(void)
+int SMIOL_finalize(struct SMIOL_context **context)
 {
+	/*
+	 * If the pointer to the context pointer is NULL, assume we have nothing
+	 * to do and declare success
+	 */
+	if (context == NULL) {
+		return SMIOL_SUCCESS;
+	}
+
+	free((*context));
+	(*context) = NULL;
+
 	return SMIOL_SUCCESS;
 }
 
