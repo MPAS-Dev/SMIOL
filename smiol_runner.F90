@@ -3,8 +3,17 @@
 program smiol_runner
 
     use SMIOLf
+    use mpi
 
     implicit none
+
+    integer :: ierr
+
+    call MPI_Init(ierr)
+    if (ierr /= MPI_SUCCESS) then
+        write(0,*) 'Error: MPI_Init failed'
+        stop 1
+    end if
 
     if (SMIOLf_init() /= SMIOL_SUCCESS) then
         write(0,*) "ERROR: 'SMIOLf_init' was not called successfully"
@@ -86,6 +95,12 @@ program smiol_runner
     write(0,*) "Testing SMIOLf_error_string malloc returned a null pointer: ", &
                trim(SMIOLf_error_string(SMIOL_MALLOC_FAILURE))
     write(0,*) "SUCCESS"
+
+    call MPI_Finalize(ierr)
+    if (ierr /= MPI_SUCCESS) then
+        write(0,*) 'Error: MPI_Finalize failed'
+        stop 1
+    end if
 
     stop 0
 

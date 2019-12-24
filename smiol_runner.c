@@ -20,6 +20,11 @@ int main(int argc, char **argv)
 		n_io_elements = (size_t) atoi(argv[1]);
 	}
 
+	if (MPI_Init(&argc, &argv) != MPI_SUCCESS) {
+		fprintf(stderr, "Error: MPI_Init failed.\n");
+		return 1;
+	}
+
 	if ((ierr = SMIOL_init()) != SMIOL_SUCCESS) {
 		printf("ERROR: SMIOL_init: %s ", SMIOL_error_string(ierr));
 		return 1;
@@ -120,6 +125,11 @@ int main(int argc, char **argv)
 	printf("SMIOL_error_string test 'malloc returned a null pointer': %s\n",
 		SMIOL_error_string(SMIOL_MALLOC_FAILURE));
 	printf("Called all SMIOL functions successfully!\n");
+
+	if (MPI_Finalize() != MPI_SUCCESS) {
+		fprintf(stderr, "Error: MPI_Finalize failed.\n");
+		return 1;
+	}
 
 	return 0;
 }

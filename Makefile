@@ -69,9 +69,9 @@ nag:
 	 "FC_PARALLEL = mpifort" )
 
 smiol:
-	$(MAKE) -C ./src
-	$(CC) -I./src/ $(CPPINCLUDES) $(CFLAGS) -L./ $(LDFLAGS) -o smiol_runner_c smiol_runner.c -lsmiol
-	$(FC) -I./src/ $(CPPINCLUDES) $(FFLAGS) -L./ $(LDFLAGS) -o smiol_runner_f smiol_runner.F90 -lsmiolf -lsmiol
+	$(MAKE) -C ./src CC=$(CC_PARALLEL) FC=$(FC_PARALLEL)
+	$(CC_PARALLEL) -I./src/ $(CPPINCLUDES) $(CFLAGS) -L./ $(LDFLAGS) -o smiol_runner_c smiol_runner.c -lsmiol
+	$(FC_PARALLEL) -I./src/ $(CPPINCLUDES) $(FFLAGS) -L./ $(LDFLAGS) -o smiol_runner_f smiol_runner.F90 -lsmiolf -lsmiol
 
 
 test:
