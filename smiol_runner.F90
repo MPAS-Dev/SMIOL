@@ -83,6 +83,8 @@ program smiol_runner
 
     write(0,*) "Testing SMIOLf_error_string success: ", trim(SMIOLf_error_string(SMIOL_SUCCESS))
     write(0,*) "Testing SMIOLf_error_string unkown error: ", trim(SMIOLf_error_string(1))
+    write(0,*) "Testing SMIOLf_error_string malloc returned a null pointer: ", &
+               trim(SMIOLf_error_string(SMIOL_MALLOC_FAILURE))
     write(0,*) "SUCCESS"
 
     stop 0

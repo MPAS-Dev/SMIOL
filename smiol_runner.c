@@ -117,6 +117,8 @@ int main(int argc, char **argv)
 
 	printf("SMIOL_error_string test 'Unknown error': %s\n", SMIOL_error_string(-1));
 	printf("SMIOL_error_string test 'Success!': %s\n", SMIOL_error_string(SMIOL_SUCCESS));
+	printf("SMIOL_error_string test 'malloc returned a null pointer': %s\n",
+		SMIOL_error_string(SMIOL_MALLOC_FAILURE));
 	printf("Called all SMIOL functions successfully!\n");
 
 	return 0;

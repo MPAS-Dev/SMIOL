@@ -228,6 +228,8 @@ const char *SMIOL_error_string(int errno)
 	switch (errno) {
 	case SMIOL_SUCCESS:
 		return "Success!";
+	case SMIOL_MALLOC_FAILURE:
+		return "malloc returned a null pointer";
 	default:
 		return "Unknown error";
 	}

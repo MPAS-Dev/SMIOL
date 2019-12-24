@@ -1,1 +1,2 @@
 #define SMIOL_SUCCESS (0)
+#define SMIOL_MALLOC_FAILURE (-1)
