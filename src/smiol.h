@@ -33,6 +33,7 @@ struct SMIOL_decomp {
 /*
  * Library methods
  */
+int SMIOL_fortran_init(MPI_Fint comm, struct SMIOL_context **context);
 int SMIOL_init(MPI_Comm comm, struct SMIOL_context **context);
 int SMIOL_finalize(struct SMIOL_context **context);
 int SMIOL_inquire(void);

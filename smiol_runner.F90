@@ -8,6 +8,7 @@ program smiol_runner
     implicit none
 
     integer :: ierr
+    type (SMIOLf_context), pointer :: context => null()
 
     call MPI_Init(ierr)
     if (ierr /= MPI_SUCCESS) then
@@ -15,15 +16,15 @@ program smiol_runner
         stop 1
     end if
 
-    if (SMIOLf_init() /= SMIOL_SUCCESS) then
+    if (SMIOLf_init(MPI_COMM_WORLD, context) /= SMIOL_SUCCESS) then
         write(0,*) "ERROR: 'SMIOLf_init' was not called successfully"
         stop 1
     endif 
 
-    if (SMIOLf_finalize() /= SMIOL_SUCCESS) then
-        write(0,*) "ERROR: 'SMIOLf_finalize' was not called successfully"
+    if (.not. associated(context)) then
+        write(0,*) 'Error: SMIOLf_init returned an unassociated context'
         stop 1
-    endif
+    end if
 
     if (SMIOLf_inquire() /= SMIOL_SUCCESS) then
         write(0,*) "ERROR: 'SMIOLf_inquire' was not called successfully"
@@ -95,6 +96,16 @@ program smiol_runner
     write(0,*) "Testing SMIOLf_error_string malloc returned a null pointer: ", &
                trim(SMIOLf_error_string(SMIOL_MALLOC_FAILURE))
     write(0,*) "SUCCESS"
+
+    if (SMIOLf_finalize(context) /= SMIOL_SUCCESS) then
+        write(0,*) "ERROR: 'SMIOLf_finalize' was not called successfully"
+        stop 1
+    endif
+
+    if (associated(context)) then
+        write(0,*) 'Error: SMIOLf_finalize returned an associated context'
+        stop 1
+    end if
 
     call MPI_Finalize(ierr)
     if (ierr /= MPI_SUCCESS) then

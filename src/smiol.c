@@ -6,6 +6,23 @@
 
 /********************************************************************************
  *
+ * SMIOL_fortran_init
+ *
+ * Initialize a SMIOL context from Fortran.
+ *
+ * This function is a simply a wrapper for the SMOIL_init routine that is intended
+ * to be called from Fortran. Accordingly, the first argument is of type MPI_Fint
+ * (a Fortran integer) rather than MPI_Comm.
+ *
+ ********************************************************************************/
+int SMIOL_fortran_init(MPI_Fint comm, struct SMIOL_context **context)
+{
+	return SMIOL_init(MPI_Comm_f2c(comm), context);
+}
+
+
+/********************************************************************************
+ *
  * SMIOL_init
  *
  * Initialize a SMIOL context.

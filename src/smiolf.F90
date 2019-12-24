@@ -33,7 +33,9 @@ module SMIOLf
 
 
     type, bind(C) :: SMIOLf_context
-        integer(c_int) :: i
+        integer :: fcomm             ! Fortran handle to MPI communicator; MPI_Fint on the C side, which is supposed to match a Fortran integer
+        integer(c_int) :: comm_size  ! Size of MPI communicator
+        integer(c_int) :: comm_rank  ! Rank within MPI communicator
     end type SMIOLf_context
 
     type, bind(C) :: SMIOLf_file
@@ -57,22 +59,54 @@ contains
     !
     !> \brief Initialize a SMIOL context
     !> \details
-    !>  Detailed description of what this routine does.
+    !>  Initializes a SMIOL context, within which decompositions may be defined and
+    !>  files may be read and written. At present, the only input argument is an MPI
+    !>  communicator.
+    !>
+    !>  Upon successful return the context argument points to a valid SMIOL context;
+    !>  otherwise, it is NULL and an error code other than MPI_SUCCESS is returned.
+    !>
+    !>  Note: It is assumed that MPI_Init has been called prior to this routine, so
+    !>        that any use of the provided MPI communicator will be valid.
     !
     !-----------------------------------------------------------------------
-    integer function SMIOLf_init() result(ierr)
+    integer function SMIOLf_init(comm, context) result(ierr)
+
+        use iso_c_binding, only : c_ptr, c_f_pointer, c_null_ptr, c_associated
 
         implicit none
 
+        integer, intent(in) :: comm
+        type (SMIOLf_context), pointer :: context
+
+        type (c_ptr) :: c_context = c_null_ptr
+
         ! C interface definitions
         interface
-            function SMIOL_init() result(ierr) bind(C, name='SMIOL_init')
-                use iso_c_binding, only : c_int
+            function SMIOL_fortran_init(comm, context) result(ierr) bind(C, name='SMIOL_fortran_init')
+                use iso_c_binding, only : c_int, c_ptr
+                integer, value :: comm   ! MPI_Fint on the C side, which is supposed to match a Fortran integer
+                type (c_ptr) :: context
                 integer(kind=c_int) :: ierr
             end function
         end interface
 
-        ierr = SMIOL_init()
+        ierr = SMIOL_fortran_init(comm, c_context)
+
+        if (ierr == SMIOL_SUCCESS) then
+            if (.not. c_associated(c_context)) then
+                nullify(context)
+                ierr = -997     ! TODO: define an error code for this. The c_context should not be null...
+            else
+                call c_f_pointer(c_context, context)
+            end if
+        else
+            if (.not. c_associated(c_context)) then
+                nullify(context)
+            else
+                ierr = -997     ! TODO: define an error code for this. The c_context should be null...
+            end if
+        end if
 
     end function SMIOLf_init
 
@@ -82,14 +116,49 @@ contains
     !
     !> \brief Finalize a SMIOL context
     !> \details
-    !>  Detailed description of what this routine does.
+    !>  Finalizes a SMIOL context and frees all memory in the SMIOL_context instance.
+    !>  After this routine is called, no other SMIOL routines that make reference to
+    !>  the finalized context should be called.
+    !>
+    !>  Upon return, the context argument will be unassociated if no errors occurred.
     !
     !-----------------------------------------------------------------------
-    integer function SMIOLf_finalize() result(ierr)
+    integer function SMIOLf_finalize(context) result(ierr)
+
+        use iso_c_binding, only : c_ptr, c_loc, c_associated, c_null_ptr
 
         implicit none
 
-        ierr = 0
+        type (SMIOLf_context), pointer :: context
+
+        type (c_ptr) :: c_context = c_null_ptr
+
+        ! C interface definitions
+        interface
+            function SMIOL_finalize(context) result(ierr) bind(C, name='SMIOL_finalize')
+                use iso_c_binding, only : c_int, c_ptr
+                type (c_ptr) :: context
+                integer(kind=c_int) :: ierr
+            end function
+        end interface
+
+        if (associated(context)) then
+            c_context = c_loc(context)
+        end if
+
+        ierr = SMIOL_finalize(c_context)
+
+        if (ierr == SMIOL_SUCCESS) then
+            if (c_associated(c_context)) then
+                ierr = -997     ! TODO: define an error code for this. The c_context should be null...
+            else
+                nullify(context)
+            end if
+        else
+            if (.not. c_associated(c_context)) then
+                nullify(context)
+            end if
+        end if
 
     end function SMIOLf_finalize
 
