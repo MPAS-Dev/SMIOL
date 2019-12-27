@@ -19,7 +19,7 @@ gnu:
 	 "CFLAGS = -g -Wall -pedantic" \
 	 "CPPINCLUDES = " \
 	 "FC = gfortran"\
-	 "FFLAGS = -g -Wall -fcheck=all -pedantic -std=f2003" \
+	 "FFLAGS = -g -Wall -fcheck=all -pedantic -std=f2003 -fbacktrace" \
 	 "FCINCLUDES = " \
 	 "CC_PARALLEL = mpicc" \
 	 "FC_PARALLEL = mpif90" )
