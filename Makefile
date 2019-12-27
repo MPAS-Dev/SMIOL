@@ -27,10 +27,10 @@ gnu:
 intel:
 	( $(MAKE) smiol \
 	 "CC = icc" \
-	 "CFLAGS = -g -Wall" \
+	 "CFLAGS = -g -Wall -traceback" \
 	 "CPPINCLUDES = " \
 	 "FC = ifort " \
-	 "FFLAGS = -g -warn all -check all" \
+	 "FFLAGS = -g -warn all -check all -traceback" \
 	 "FCINCLUDES = " \
 	 "CC_PARALLEL = mpicc" \
 	 "FC_PARALLEL = mpif90" )
