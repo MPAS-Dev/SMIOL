@@ -40,6 +40,8 @@ int SMIOL_fortran_init(MPI_Fint comm, struct SMIOL_context **context)
  ********************************************************************************/
 int SMIOL_init(MPI_Comm comm, struct SMIOL_context **context)
 {
+	MPI_Comm smiol_comm;
+
 	/*
 	 * Before dereferencing context below, ensure that the pointer
 	 * the context pointer is not NULL
@@ -67,16 +69,23 @@ int SMIOL_init(MPI_Comm comm, struct SMIOL_context **context)
 		return SMIOL_MALLOC_FAILURE;
 	}
 
-	/* TODO: should we MPI_Comm_dup ? */
-	(*context)->fcomm = MPI_Comm_c2f(comm);
+	/*
+	 * Make a duplicate of the MPI communicator for use by SMIOL
+	 */
+	if (MPI_Comm_dup(comm, &smiol_comm) != MPI_SUCCESS) {
+		free((*context));
+		(*context) = NULL;
+		return -998;    /* Should we define an error code for this? */
+	}
+	(*context)->fcomm = MPI_Comm_c2f(smiol_comm);
 
-	if (MPI_Comm_size(comm, &((*context)->comm_size)) != MPI_SUCCESS) {
+	if (MPI_Comm_size(smiol_comm, &((*context)->comm_size)) != MPI_SUCCESS) {
 		free((*context));
 		(*context) = NULL;
 		return -998;    /* Should we define an error code for this? */
 	}
 
-	if (MPI_Comm_rank(comm, &((*context)->comm_rank)) != MPI_SUCCESS) {
+	if (MPI_Comm_rank(smiol_comm, &((*context)->comm_rank)) != MPI_SUCCESS) {
 		free((*context));
 		(*context) = NULL;
 		return -998;    /* Should we define an error code for this? */
@@ -99,12 +108,25 @@ int SMIOL_init(MPI_Comm comm, struct SMIOL_context **context)
  ********************************************************************************/
 int SMIOL_finalize(struct SMIOL_context **context)
 {
+	MPI_Comm smiol_comm;
+
 	/*
 	 * If the pointer to the context pointer is NULL, assume we have nothing
 	 * to do and declare success
 	 */
 	if (context == NULL) {
 		return SMIOL_SUCCESS;
+	}
+
+	if ((*context) == NULL) {
+		return SMIOL_SUCCESS;
+	}
+
+	smiol_comm = MPI_Comm_f2c((*context)->fcomm);
+	if (MPI_Comm_free(&smiol_comm) != MPI_SUCCESS) {
+		free((*context));
+		(*context) = NULL;
+		return -998;
 	}
 
 	free((*context));
