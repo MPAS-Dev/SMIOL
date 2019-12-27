@@ -17,6 +17,7 @@ int main(int argc, char **argv)
 	uint64_t *io_elements;
 	struct SMIOL_decomp *decomp = NULL;
 	struct SMIOL_context *context = NULL;
+	struct SMIOL_file *file = NULL;
 
 	if (argc == 2) {
 		n_compute_elements = (size_t) atoi(argv[1]);
@@ -79,12 +80,12 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if ((ierr = SMIOL_open_file()) != SMIOL_SUCCESS) {
+	if ((ierr = SMIOL_open_file(context, "blah.nc", &file)) != SMIOL_SUCCESS) {
 		printf("ERROR: SMIOL_open_file: %s ", SMIOL_error_string(ierr));
 		return 1;
 	}
 
-	if ((ierr = SMIOL_close_file()) != SMIOL_SUCCESS) {
+	if ((ierr = SMIOL_close_file(&file)) != SMIOL_SUCCESS) {
 		printf("ERROR: SMIOL_close_file: %s ", SMIOL_error_string(ierr));
 		return 1;
 	}

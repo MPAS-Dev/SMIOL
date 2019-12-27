@@ -189,14 +189,23 @@ contains
     !
     !> \brief Opens a file within a SMIOL context
     !> \details
-    !>  Detailed description of what this routine does.
+    !>  Creates or opens the file specified by filename within the provided SMIOL
+    !>  context.
+    !>
+    !>  Upon successful completion, SMIOL_SUCCESS is returned, and the file handle argument
+    !>  will point to a valid file handle. Otherwise, the file handle is not associated
+    !>  and an error code other than SMIOL_SUCCESS is returned.
     !
     !-----------------------------------------------------------------------
-    integer function SMIOLf_open_file() result(ierr)
+    integer function SMIOLf_open_file(context, filename, file) result(ierr)
 
         implicit none
 
-        ierr = 0
+        type (SMIOLf_context), pointer :: context
+        character(len=*), intent(in) :: filename
+        type (SMIOLf_file), pointer :: file
+
+        ierr = SMIOL_SUCCESS
 
     end function SMIOLf_open_file
 
@@ -206,17 +215,21 @@ contains
     !
     !> \brief Closes a file within a SMIOL context
     !> \details
-    !>  Detailed description of what this routine does.
+    !>  Closes the file associated with the provided file handle. Upon successful
+    !>  completion, SMIOL_SUCCESS is returned, the file will be closed, and all memory
+    !>  that is uniquely associated with the file handle will be deallocated.
+    !>  Otherwise, an error code other than SMIOL_SUCCESS will be returned.
     !
     !-----------------------------------------------------------------------
-    integer function SMIOLf_close_file() result(ierr)
+    integer function SMIOLf_close_file(file) result(ierr)
 
         implicit none
 
-        ierr = 0
+        type (SMIOLf_file), pointer :: file
+
+        ierr = SMIOL_SUCCESS
 
     end function SMIOLf_close_file
-
 
 
     !
