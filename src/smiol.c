@@ -310,6 +310,12 @@ const char *SMIOL_error_string(int errno)
 		return "Success!";
 	case SMIOL_MALLOC_FAILURE:
 		return "malloc returned a null pointer";
+	case SMIOL_INVALID_ARGUMENT:
+		return "invalid subroutine argument";
+	case SMIOL_MPI_ERROR:
+		return "internal MPI call failed";
+	case SMIOL_FORTRAN_ERROR:
+		return "Fortran wrapper detected an inconsistency in C return values";
 	default:
 		return "Unknown error";
 	}

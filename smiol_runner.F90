@@ -100,11 +100,17 @@ program smiol_runner
         stop 1
     endif
 
-    write(0,*) "Testing SMIOLf_error_string success: ", trim(SMIOLf_error_string(SMIOL_SUCCESS))
-    write(0,*) "Testing SMIOLf_error_string unkown error: ", trim(SMIOLf_error_string(1))
-    write(0,*) "Testing SMIOLf_error_string malloc returned a null pointer: ", &
+    write(0,'(a)') "Testing SMIOLf_error_string success: ", trim(SMIOLf_error_string(SMIOL_SUCCESS))
+    write(0,'(a)') "Testing SMIOLf_error_string unkown error: ", trim(SMIOLf_error_string(1))
+    write(0,'(a)') "Testing SMIOLf_error_string malloc returned a null pointer: ", &
                trim(SMIOLf_error_string(SMIOL_MALLOC_FAILURE))
-    write(0,*) "SUCCESS"
+    write(0,'(a)') "Testing SMIOL_error_string test invalid subroutine argument: ", &
+               trim(SMIOLf_error_string(SMIOL_INVALID_ARGUMENT))
+    write(0,'(a)') "Testing SMIOL_error_string test internal MPI call failed: ", &
+               trim(SMIOLf_error_string(SMIOL_MPI_ERROR))
+    write(0,'(a)') "Testing SMIOL_error_string test Fortran wrapper detected an inconsistency in C return values: ", &
+               trim(SMIOLf_error_string(SMIOL_FORTRAN_ERROR))
+    write(0,'(a)') "SUCCESS"
 
     if (SMIOLf_finalize(context) /= SMIOL_SUCCESS) then
         write(0,*) "ERROR: 'SMIOLf_finalize' was not called successfully"

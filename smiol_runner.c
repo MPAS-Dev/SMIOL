@@ -138,6 +138,12 @@ int main(int argc, char **argv)
 	printf("SMIOL_error_string test 'Success!': %s\n", SMIOL_error_string(SMIOL_SUCCESS));
 	printf("SMIOL_error_string test 'malloc returned a null pointer': %s\n",
 		SMIOL_error_string(SMIOL_MALLOC_FAILURE));
+	printf("SMIOL_error_string test 'invalid subroutine argument': %s\n",
+		SMIOL_error_string(SMIOL_INVALID_ARGUMENT));
+	printf("SMIOL_error_string test 'internal MPI call failed': %s\n",
+		SMIOL_error_string(SMIOL_MPI_ERROR));
+	printf("SMIOL_error_string test 'Fortran wrapper detected an inconsistency in C return values': %s\n",
+		SMIOL_error_string(SMIOL_FORTRAN_ERROR));
 
 	if ((ierr = SMIOL_finalize(&context)) != SMIOL_SUCCESS) {
 		printf("ERROR: SMIOL_finalize: %s ", SMIOL_error_string(ierr));
@@ -148,6 +154,7 @@ int main(int argc, char **argv)
 		fprintf(stderr, "SMIOL_finalize returned a non-NULL context\n");
 		return 1;
 	}
+
 	printf("Called all SMIOL functions successfully!\n");
 
 	if (MPI_Finalize() != MPI_SUCCESS) {

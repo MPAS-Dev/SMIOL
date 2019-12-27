@@ -1,2 +1,5 @@
-#define SMIOL_SUCCESS (0)
-#define SMIOL_MALLOC_FAILURE (-1)
+#define SMIOL_SUCCESS           (0)
+#define SMIOL_MALLOC_FAILURE   (-1)
+#define SMIOL_INVALID_ARGUMENT (-2)
+#define SMIOL_MPI_ERROR        (-3)
+#define SMIOL_FORTRAN_ERROR    (-4)
