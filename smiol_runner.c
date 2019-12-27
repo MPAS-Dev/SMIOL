@@ -6,6 +6,8 @@
  * SMIOL C Runner - Take SMIOL out for a run!
  *******************************************************************************/
 
+int test_init_finalize(void);
+
 int main(int argc, char **argv)
 {
 	int ierr;
@@ -24,6 +26,17 @@ int main(int argc, char **argv)
 	if (MPI_Init(&argc, &argv) != MPI_SUCCESS) {
 		fprintf(stderr, "Error: MPI_Init failed.\n");
 		return 1;
+	}
+
+	/*
+	 * Unit tests for SMIOL_init and SMIOL_finalize
+	 */
+	ierr = test_init_finalize();
+	if (ierr == 0) {
+		fprintf(stderr, "All tests PASSED!\n\n");
+	}
+	else {
+		fprintf(stderr, "%i tests FAILED!\n\n", ierr);
 	}
 
 	if ((ierr = SMIOL_init(MPI_COMM_WORLD, &context)) != SMIOL_SUCCESS) {
@@ -143,4 +156,113 @@ int main(int argc, char **argv)
 	}
 
 	return 0;
+}
+
+int test_init_finalize(void)
+{
+	int ierr;
+	int errcount;
+	struct SMIOL_context *context;
+
+	fprintf(stderr, "********************************************************************************\n");
+	fprintf(stderr, "************ SMIOL_init / SMIOL_finalize unit tests ****************************\n");
+	fprintf(stderr, "\n");
+
+	errcount = 0;
+
+	/* Null context pointer */
+	fprintf(stderr, "Null pointer to context pointer (SMIOL_init): ");
+	ierr = SMIOL_init(MPI_COMM_WORLD, NULL);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(stderr, "FAIL - SMIOL_SUCCESS was returned, when an error was expected\n");
+		errcount++;
+	}
+	else {
+		fprintf(stderr, "PASS\n");
+	}
+
+	/* Invalid MPI communicator, and with a non-NULL context that should be NULL on return */
+	fprintf(stderr, "Invalid MPI communicator (SMIOL_init): ");
+	context = (struct SMIOL_context *)NULL + 42;   /* Any non-NULL value should be fine... */
+	ierr = SMIOL_init(MPI_COMM_NULL, &context);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(stderr, "FAIL - SMIOL_SUCCESS was returned, when an error was expected\n");
+		errcount++;
+	}
+	else if (context != NULL) {
+		fprintf(stderr, "FAIL - an error code was returned, but context was not NULL\n");
+		errcount++;
+	}
+	else {
+		fprintf(stderr, "PASS\n");
+	}
+
+	/* Handle NULL context in SMIOL_finalize */
+	fprintf(stderr, "Handle NULL context (SMIOL_finalize): ");
+	context = NULL;
+	ierr = SMIOL_finalize(&context);
+	if (ierr == SMIOL_SUCCESS && context == NULL) {
+		fprintf(stderr, "PASS\n");
+	}
+	else if (context != NULL) {
+		fprintf(stderr, "FAIL - context is not NULL\n");
+		errcount++;
+	}
+	else {
+		fprintf(stderr, "FAIL - context is NULL as expected, but SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+
+	/* Handle NULL pointer to context pointer in SMIOL_finalize */
+	fprintf(stderr, "Handle NULL pointer to context pointer (SMIOL_finalize): ");
+	ierr = SMIOL_finalize(NULL);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(stderr, "PASS\n");
+	}
+	else {
+		fprintf(stderr, "FAIL - SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+
+	/* Everything OK for SMIOL_init */
+	fprintf(stderr, "Everything OK (SMIOL_init): ");
+	context = NULL;
+	ierr = SMIOL_init(MPI_COMM_WORLD, &context);
+	if (ierr == SMIOL_SUCCESS && context != NULL) {
+		fprintf(stderr, "PASS\n");
+	}
+	else if (ierr == SMIOL_SUCCESS && context == NULL) {
+		fprintf(stderr, "FAIL - context is NULL, although SMIOL_SUCCESS was returned\n");
+		errcount++;
+	}
+	else if (ierr != SMIOL_SUCCESS && context != NULL) {
+		fprintf(stderr, "FAIL - context is not NULL as expected, but SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+	else {
+		fprintf(stderr, "FAIL - context is NULL, and SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+
+	/* Everything OK for SMIOL_finalize */
+	fprintf(stderr, "Everything OK (SMIOL_finalize): ");
+	ierr = SMIOL_finalize(&context);
+	if (ierr == SMIOL_SUCCESS && context == NULL) {
+		fprintf(stderr, "PASS\n");
+	}
+	else if (context != NULL) {
+		fprintf(stderr, "FAIL - context is not NULL\n");
+		errcount++;
+	}
+	else {
+		fprintf(stderr, "FAIL - context is NULL as expected, but SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+
+	fflush(stderr);
+	ierr = MPI_Barrier(MPI_COMM_WORLD);
+
+	fprintf(stderr, "\n");
+
+	return errcount;
 }

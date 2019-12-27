@@ -16,6 +16,15 @@ program smiol_runner
         stop 1
     end if
 
+    ierr = test_init_finalize()
+    if (ierr == 0) then
+        write(0,*) 'All tests PASSED!'
+        write(0,*) ''
+    else
+        write(0,*) ierr, ' tests FAILED!'
+        write(0,*) ''
+    end if
+
     if (SMIOLf_init(MPI_COMM_WORLD, context) /= SMIOL_SUCCESS) then
         write(0,*) "ERROR: 'SMIOLf_init' was not called successfully"
         stop 1
@@ -114,5 +123,87 @@ program smiol_runner
     end if
 
     stop 0
+
+
+contains
+
+
+    function test_init_finalize() result(ierrcount)
+
+        implicit none
+
+        integer :: ierrcount
+        type (SMIOLf_context), pointer :: context
+        type (SMIOLf_context), pointer :: context_temp
+
+        write(0,'(a)') '********************************************************************************'
+        write(0,'(a)') '************ SMIOLf_init / SMIOLf_finalize unit tests **************************'
+        write(0,'(a)') ''
+
+        ierrcount = 0
+
+        ! Invalid MPI communicator, and with an associated context that should be nullified
+        write(0,'(a)',advance='no') 'Invalid MPI communicator (SMIOLf_init): '
+        allocate(context_temp)
+        context => context_temp
+        ierr = SMIOLf_init(MPI_COMM_NULL, context);
+        deallocate(context_temp)
+        if (ierr == SMIOL_SUCCESS) then
+            write(0,'(a)') 'FAIL - SMIOL_SUCCESS was returned, when an error was expected'
+            ierrcount = ierrcount + 1
+        else if (associated(context)) then
+            write(0,'(a)') 'FAIL - an error code was returned, but context was not nullified'
+            ierrcount = ierrcount + 1
+        else
+            write(0,'(a)') 'PASS'
+        end if
+
+        ! Handle unassociated context in SMIOL_finalize
+        write(0,'(a)',advance='no') 'Handle unassociated context (SMIOLf_finalize): '
+        nullify(context)
+        ierr = SMIOLf_finalize(context)
+        if (ierr == SMIOL_SUCCESS .and. .not. associated(context)) then
+            write(0,'(a)') 'PASS'
+        else if (associated(context)) then
+            write(0,'(a)') 'FAIL - context is associated'
+            ierrcount = ierrcount + 1
+        else
+            write(0,'(a)') 'FAIL - context is unassociated as expected, but SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Everything OK for SMIOLf_init
+        write(0,'(a)',advance='no') 'Everything OK (SMIOLf_init): '
+        nullify(context)
+        ierr = SMIOLf_init(MPI_COMM_WORLD, context)
+        if (ierr == SMIOL_SUCCESS .and. associated(context)) then
+            write(0,'(a)') 'PASS'
+        else if (ierr == SMIOL_SUCCESS .and. .not. associated(context)) then    ! May not be possible at present...
+            write(0,'(a)') 'FAIL - context is not associated, although SMIOL_SUCCESS was returned'
+            ierrcount = ierrcount + 1
+        else if (ierr /= SMIOL_SUCCESS .and. associated(context)) then
+            write(0,'(a)') 'FAIL - context is associated as expected, but SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        else
+            write(0,'(a)') 'FAIL - context is not associated, and SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Everything OK for SMIOLf_finalize
+        write(0,'(a)',advance='no') 'Everything OK (SMIOLf_finalize): '
+        ierr = SMIOLf_finalize(context)
+        if (ierr == SMIOL_SUCCESS .and. .not. associated(context)) then
+            write(0,'(a)') 'PASS'
+        else if (associated(context)) then
+            write(0,'(a)') 'FAIL - context is associated'
+            ierrcount = ierrcount + 1
+        else
+            write(0,'(a)') 'FAIL - context is not associated as expected, but SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        write(0,'(a)') ''
+
+    end function test_init_finalize
 
 end program smiol_runner
