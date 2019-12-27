@@ -5,7 +5,7 @@
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 module SMIOLf
 
-    use iso_c_binding, only : c_int
+    use iso_c_binding, only : c_int, c_ptr
 
     private
 
@@ -39,7 +39,7 @@ module SMIOLf
     end type SMIOLf_context
 
     type, bind(C) :: SMIOLf_file
-        integer(c_int) :: i
+        type (c_ptr) :: context      ! Pointer to (struct SMIOL_context); the context within which the file was opened
     end type SMIOLf_file
 
     type, bind(C) :: SMIOLf_decomp
@@ -199,13 +199,62 @@ contains
     !-----------------------------------------------------------------------
     integer function SMIOLf_open_file(context, filename, file) result(ierr)
 
+        use iso_c_binding, only : c_loc, c_ptr, c_null_ptr, c_char, c_null_char, c_associated, c_f_pointer
+
         implicit none
 
         type (SMIOLf_context), pointer :: context
         character(len=*), intent(in) :: filename
         type (SMIOLf_file), pointer :: file
 
-        ierr = SMIOL_SUCCESS
+        type (c_ptr) :: c_context = c_null_ptr
+        type (c_ptr) :: c_file = c_null_ptr
+        character(kind=c_char), dimension(:), pointer :: c_filename => null()
+
+        integer :: i
+
+        ! C interface definitions
+        interface
+            function SMIOL_open_file(context, filename, file) result(ierr) bind(C, name='SMIOL_open_file')
+                use iso_c_binding, only : c_char, c_ptr, c_int
+                type (c_ptr), value :: context
+                character(kind=c_char), dimension(*) :: filename
+                type (c_ptr) :: file
+                integer(kind=c_int) :: ierr
+            end function
+        end interface
+
+        if (associated(context)) then
+            c_context = c_loc(context)
+        end if
+
+        !
+        ! Convert Fortran string to C character array
+        !
+        allocate(c_filename(len_trim(filename) + 1))
+        do i=1,len_trim(filename)
+            c_filename(i) = filename(i:i)
+        end do
+        c_filename(i) = c_null_char
+
+        ierr = SMIOL_open_file(c_context, c_filename, c_file)
+
+        deallocate(c_filename)
+
+        if (ierr == SMIOL_SUCCESS) then
+            if (.not. c_associated(c_file)) then
+                nullify(file)
+                ierr = -997     ! TODO: define an error code for this. The c_file should not be null...
+            else
+                call c_f_pointer(c_file, file)
+            end if
+        else
+            if (.not. c_associated(c_file)) then
+                nullify(file)
+            else
+                ierr = -997     ! TODO: define an error code for this. The c_file should be null...
+            end if
+        end if
 
     end function SMIOLf_open_file
 
@@ -223,11 +272,40 @@ contains
     !-----------------------------------------------------------------------
     integer function SMIOLf_close_file(file) result(ierr)
 
+        use iso_c_binding, only : c_loc, c_ptr, c_null_ptr, c_associated
+
         implicit none
 
         type (SMIOLf_file), pointer :: file
 
-        ierr = SMIOL_SUCCESS
+        type (c_ptr) :: c_file = c_null_ptr
+
+        ! C interface definitions
+        interface
+            function SMIOL_close_file(file) result(ierr) bind(C, name='SMIOL_close_file')
+                use iso_c_binding, only : c_ptr, c_int
+                type (c_ptr) :: file
+                integer(kind=c_int) :: ierr
+            end function
+        end interface
+
+        if (associated(file)) then
+            c_file = c_loc(file)
+        end if
+
+        ierr = SMIOL_close_file(c_file)
+
+        if (ierr == SMIOL_SUCCESS) then
+            if (c_associated(c_file)) then
+                ierr = -997     ! TODO: define an error code for this. The c_file should be null...
+            else
+                nullify(file)
+            end if
+        else
+            if (.not. c_associated(c_file)) then
+                nullify(file)
+            end if
+        end if
 
     end function SMIOLf_close_file
 

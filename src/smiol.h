@@ -15,7 +15,7 @@ struct SMIOL_context {
 };
 
 struct SMIOL_file {
-	int foo;
+	struct SMIOL_context *context; /* Context for this file */
 };
 
 struct SMIOL_decomp {

@@ -145,6 +145,33 @@ int SMIOL_inquire(void)
  ********************************************************************************/
 int SMIOL_open_file(struct SMIOL_context *context, const char *filename, struct SMIOL_file **file)
 {
+	/*
+	 * Before dereferencing file below, ensure that the pointer
+	 * the file pointer is not NULL
+	 */
+	if (file == NULL) {
+		return -999;    /* Should we define an error code for this? */
+	}
+
+	/*
+	 * Check that context is valid
+	 */
+	if (context == NULL) {
+		return -999;    /* Should we define an error code for this? */
+	}
+
+	*file = (struct SMIOL_file *)malloc(sizeof(struct SMIOL_file));
+	if ((*file) == NULL) {
+		return SMIOL_MALLOC_FAILURE;
+	}
+
+	/*
+	 * Save pointer to context for this file
+	 */
+	(*file)->context = context;
+
+fprintf(stderr, "DEBUG: SMIOL_open_file: Would open SMIOL file %s\n", filename);
+
 	return SMIOL_SUCCESS;
 }
 
@@ -163,6 +190,17 @@ int SMIOL_open_file(struct SMIOL_context *context, const char *filename, struct 
  ********************************************************************************/
 int SMIOL_close_file(struct SMIOL_file **file)
 {
+	/*
+	 * If the pointer to the file pointer is NULL, assume we have nothing
+	 * to do and declare success
+	 */
+	if (file == NULL) {
+		return SMIOL_SUCCESS;
+	}
+
+	free((*file));
+	(*file) = NULL;
+
 	return SMIOL_SUCCESS;
 }
 
