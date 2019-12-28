@@ -170,8 +170,6 @@ int SMIOL_open_file(struct SMIOL_context *context, const char *filename, struct 
 	 */
 	(*file)->context = context;
 
-fprintf(stderr, "DEBUG: SMIOL_open_file: Would open SMIOL file %s\n", filename);
-
 	return SMIOL_SUCCESS;
 }
 

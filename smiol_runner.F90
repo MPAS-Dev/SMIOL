@@ -17,6 +17,10 @@ program smiol_runner
         stop 1
     end if
 
+
+    !
+    ! Unit tests for SMIOL_init and SMIOL_finalize
+    !
     ierr = test_init_finalize()
     if (ierr == 0) then
         write(0,*) 'All tests PASSED!'
@@ -25,6 +29,20 @@ program smiol_runner
         write(0,*) ierr, ' tests FAILED!'
         write(0,*) ''
     end if
+
+
+    !
+    ! Unit tests for SMIOL_open_file and SMIOL_close_file
+    !
+    ierr = test_open_close()
+    if (ierr == 0) then
+        write(0,*) 'All tests PASSED!'
+        write(0,*) ''
+    else
+        write(0,*) ierr, ' tests FAILED!'
+        write(0,*) ''
+    end if
+
 
     if (SMIOLf_init(MPI_COMM_WORLD, context) /= SMIOL_SUCCESS) then
         write(0,*) "ERROR: 'SMIOLf_init' was not called successfully"
@@ -153,7 +171,7 @@ contains
         write(0,'(a)',advance='no') 'Invalid MPI communicator (SMIOLf_init): '
         allocate(context_temp)
         context => context_temp
-        ierr = SMIOLf_init(MPI_COMM_NULL, context);
+        ierr = SMIOLf_init(MPI_COMM_NULL, context)
         deallocate(context_temp)
         if (ierr == SMIOL_SUCCESS) then
             write(0,'(a)') 'FAIL - SMIOL_SUCCESS was returned, when an error was expected'
@@ -212,5 +230,61 @@ contains
         write(0,'(a)') ''
 
     end function test_init_finalize
+
+
+    function test_open_close() result(ierrcount)
+
+        implicit none
+
+        integer :: ierrcount
+        type (SMIOLf_context), pointer :: context
+        type (SMIOLf_file), pointer :: file
+
+        write(0,'(a)') '********************************************************************************'
+        write(0,'(a)') '************ SMIOL_open_file / SMIOL_close_file unit tests *********************'
+        write(0,'(a)') ''
+
+        ierrcount = 0
+
+
+        ! Create a SMIOL context for testing file open/close routines
+        nullify(context)
+        ierr = SMIOLf_init(MPI_COMM_WORLD, context)
+        if (ierr /= SMIOL_SUCCESS .or. .not. associated(context)) then
+            ierrcount = -1
+            return
+        end if
+
+        ! Everything OK (SMIOLf_open_file)
+        write(0,'(a)',advance='no') 'Everything OK (SMIOLf_open_file): '
+        nullify(file)
+        ierr = SMIOLf_open_file(context, 'test_fortran.nc', file)
+        if (ierr == SMIOL_SUCCESS .and. associated(file)) then
+            write(0,'(a)') 'PASS'
+        else
+            write(0,'(a)') 'FAIL - file handle is not associated or SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Everything OK (SMIOLf_close_file)
+        write(0,'(a)',advance='no') 'Everything OK (SMIOLf_close_file): '
+        ierr = SMIOLf_close_file(file)
+        if (ierr == SMIOL_SUCCESS .and. .not. associated(file)) then
+            write(0,'(a)') 'PASS'
+        else
+            write(0,'(a)') 'FAIL - file handle is associated or SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Free the SMIOL context
+        ierr = SMIOLf_finalize(context)
+        if (ierr /= SMIOL_SUCCESS .or. associated(context)) then
+            ierrcount = -1
+            return
+        end if
+
+        write(0,'(a)') ''
+
+    end function test_open_close
 
 end program smiol_runner
