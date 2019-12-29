@@ -16,6 +16,9 @@ struct SMIOL_context {
 
 struct SMIOL_file {
 	struct SMIOL_context *context; /* Context for this file */
+#ifdef SMIOL_PNETCDF
+	int ncidp; /* parallel-netCDF file handle */
+#endif
 };
 
 struct SMIOL_decomp {

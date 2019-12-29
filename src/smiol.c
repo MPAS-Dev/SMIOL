@@ -3,6 +3,10 @@
 #include <stdio.h>
 #include "smiol.h"
 
+#ifdef SMIOL_PNETCDF
+#include "pnetcdf.h"
+#endif
+
 
 /********************************************************************************
  *
@@ -170,6 +174,15 @@ int SMIOL_open_file(struct SMIOL_context *context, const char *filename, struct 
 	 */
 	(*file)->context = context;
 
+#ifdef SMIOL_PNETCDF
+	if (ncmpi_create(MPI_Comm_f2c(context->fcomm), filename, NC_NOCLOBBER,
+				MPI_INFO_NULL, &((*file)->ncidp)) != NC_NOERR) {
+		free((*file));
+		(*file) = NULL;
+		return -996;
+	}
+#endif
+
 	return SMIOL_SUCCESS;
 }
 
@@ -195,6 +208,14 @@ int SMIOL_close_file(struct SMIOL_file **file)
 	if (file == NULL) {
 		return SMIOL_SUCCESS;
 	}
+
+#ifdef SMIOL_PNETCDF
+	if (ncmpi_close((*file)->ncidp) != NC_NOERR) {
+		free((*file));
+		(*file) = NULL;
+		return -996;
+	}
+#endif
 
 	free((*file));
 	(*file) = NULL;
