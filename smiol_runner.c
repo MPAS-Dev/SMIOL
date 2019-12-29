@@ -15,6 +15,7 @@ int main(int argc, char **argv)
 {
 	int ierr;
 	int my_proc_id;
+	int64_t dimsize;
 	size_t n_compute_elements = 1;
 	size_t n_io_elements = 1;
 	int64_t *compute_elements;
@@ -152,14 +153,14 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if ((ierr = SMIOL_close_file(&file)) != SMIOL_SUCCESS) {
-		fprintf(test_log, "ERROR: SMIOL_close_file: %s ", SMIOL_error_string(ierr));
+	if ((ierr = SMIOL_inquire_dim(file, "nCells", &dimsize)) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_inquire_dim: %s ", SMIOL_error_string(ierr));
 		return 1;
 	}
+	fprintf(test_log, "Size of nCells dimension is %li\n", (long int)dimsize);
 
-	if ((ierr = SMIOL_inquire_dim()) != SMIOL_SUCCESS) {
-		fprintf(test_log, "ERROR: SMIOL_inquire_dim: %s ",
-			SMIOL_error_string(ierr));
+	if ((ierr = SMIOL_close_file(&file)) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_close_file: %s ", SMIOL_error_string(ierr));
 		return 1;
 	}
 

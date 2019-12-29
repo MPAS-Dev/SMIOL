@@ -54,7 +54,7 @@ int SMIOL_close_file(struct SMIOL_file **file);
  * Dimension methods
  */
 int SMIOL_define_dim(struct SMIOL_file *file, const char *dimname, int64_t dimsize);
-int SMIOL_inquire_dim(void);
+int SMIOL_inquire_dim(struct SMIOL_file *file, const char *dimname, int64_t *dimsize);
 
 /*
  * Variable methods

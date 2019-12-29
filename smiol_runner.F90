@@ -19,6 +19,7 @@ program smiol_runner
     type (SMIOLf_context), pointer :: context => null()
     type (SMIOLf_file), pointer :: file => null()
     character(len=16) :: log_fname
+    integer(kind=SMIOL_offset_kind) :: dimsize
 
     call MPI_Init(ierr)
     if (ierr /= MPI_SUCCESS) then
@@ -132,13 +133,14 @@ program smiol_runner
         stop 1
     endif
 
-    if (SMIOLf_close_file(file) /= SMIOL_SUCCESS) then
-        write(test_log,'(a)') "ERROR: 'SMIOLf_close_file' was not called successfully"
+    if (SMIOLf_inquire_dim(file, 'nCells', dimsize) /= SMIOL_SUCCESS) then
+        write(test_log,'(a)') "ERROR: 'SMIOLf_inquire_dim' was not called successfully"
         stop 1
     endif
+    write(test_log,'(a,i6)') 'Size of nCells dimension is ', dimsize
 
-    if (SMIOLf_inquire_dim() /= SMIOL_SUCCESS) then
-        write(test_log,'(a)') "ERROR: 'SMIOLf_inquire_dim' was not called successfully"
+    if (SMIOLf_close_file(file) /= SMIOL_SUCCESS) then
+        write(test_log,'(a)') "ERROR: 'SMIOLf_close_file' was not called successfully"
         stop 1
     endif
 

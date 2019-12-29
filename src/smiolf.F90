@@ -399,14 +399,57 @@ contains
     !
     !> \brief Inquires about an existing dimension in a file
     !> \details
-    !>  Detailed description of what this routine does.
+    !>  Inquires about the size of an existing dimension in a file. For record
+    !>  dimensions, the current size of the dimension is returned; future writes of
+    !>  additional records to a file can lead to different return sizes for record
+    !>  dimensions.
+    !>
+    !>  Upon successful completion, SMIOL_SUCCESS is returned; otherwise, an error
+    !>  code is returned.
     !
     !-----------------------------------------------------------------------
-    integer function SMIOLf_inquire_dim() result(ierr)
+    integer function SMIOLf_inquire_dim(file, dimname, dimsize) result(ierr)
+
+        use iso_c_binding, only : c_char, c_null_char, c_loc, c_ptr, c_null_ptr, c_associated
 
         implicit none
 
-        ierr = 0
+        type (SMIOLf_file), target :: file
+        character(len=*), intent(in) :: dimname
+        integer(kind=SMIOL_offset_kind), intent(out) :: dimsize
+
+        type (c_ptr) :: c_file
+        character(kind=c_char), dimension(:), pointer :: c_dimname
+
+        integer :: i
+
+        ! C interface definitions
+        interface
+            function SMIOL_inquire_dim(file, dimname, dimsize) result(ierr) bind(C, name='SMIOL_inquire_dim')
+                use iso_c_binding, only : c_ptr, c_char, c_int64_t, c_int
+                type (c_ptr), value :: file
+                character(kind=c_char), dimension(*) :: dimname
+                integer(kind=c_int64_t) :: dimsize
+                integer(kind=c_int) :: ierr
+            end function
+        end interface
+
+        ! Get C address of file; there is no need to worry about an unassociated file here,
+        ! since the file argument is not a pointer
+        c_file = c_loc(file)
+
+        !
+        ! Convert Fortran string to C character array
+        !
+        allocate(c_dimname(len_trim(dimname) + 1))
+        do i=1,len_trim(dimname)
+            c_dimname(i) = dimname(i:i)
+        end do
+        c_dimname(i) = c_null_char
+
+        ierr = SMIOL_inquire_dim(c_file, c_dimname, dimsize)
+
+        deallocate(c_dimname)
 
     end function SMIOLf_inquire_dim
 

@@ -367,11 +367,40 @@ int SMIOL_define_dim(struct SMIOL_file *file, const char *dimname, int64_t dimsi
  *
  * Inquires about an existing dimension in a file.
  *
- * Detailed description.
+ * Inquires about the size of an existing dimension in a file. For record
+ * dimensions, the current size of the dimension is returned; future writes of
+ * additional records to a file can lead to different return sizes for record
+ * dimensions.
+ *
+ * Upon successful completion, SMIOL_SUCCESS is returned; otherwise, an error
+ * code is returned.
  *
  ********************************************************************************/
-int SMIOL_inquire_dim(void)
+int SMIOL_inquire_dim(struct SMIOL_file *file, const char *dimname, int64_t *dimsize)
 {
+	/*
+	 * Check that file handle is valid
+	 */
+	if (file == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	/*
+	 * Check that dimension name is valid
+	 */
+	if (dimname == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	/*
+	 * Check that dimension size is not NULL
+	 */
+	if (dimsize == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	(*dimsize) = 1;
+
 	return SMIOL_SUCCESS;
 }
 
