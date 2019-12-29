@@ -8,6 +8,7 @@
 
 int test_init_finalize(FILE *test_log);
 int test_open_close(FILE *test_log);
+int test_dimensions(FILE *test_log);
 int test_decomp(FILE *test_log);
 
 int main(int argc, char **argv)
@@ -70,6 +71,18 @@ int main(int argc, char **argv)
 
 
 	/*
+	 * Unit tests for dimensions
+	 */
+	ierr = test_dimensions(test_log);
+	if (ierr == 0) {
+		fprintf(test_log, "All tests PASSED!\n\n");
+	}
+	else {
+		fprintf(test_log, "%i tests FAILED!\n\n", ierr);
+	}
+
+
+	/*
 	 * Unit tests for SMIOL_create_decomp and SMIOL_free_decomp
 	 */
 	ierr = test_decomp(test_log);
@@ -79,6 +92,7 @@ int main(int argc, char **argv)
 	else {
 		fprintf(test_log, "%i tests FAILED!\n\n", ierr);
 	}
+
 
 	if ((ierr = SMIOL_init(MPI_COMM_WORLD, &context)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_init: %s ", SMIOL_error_string(ierr));
@@ -673,6 +687,112 @@ int test_decomp(FILE *test_log)
 	} else if (ierr != SMIOL_SUCCESS && decomp == NULL) {
 		fprintf(test_log, "FAIL - decomp was NULL but did not returned SMIOL_SUCCESS\n");
 		errcount++;
+	}
+
+	fflush(test_log);
+	ierr = MPI_Barrier(MPI_COMM_WORLD);
+
+	fprintf(test_log, "\n");
+
+	return errcount;
+}
+
+int test_dimensions(FILE *test_log)
+{
+	int ierr;
+	int errcount;
+	struct SMIOL_context *context;
+	struct SMIOL_file *file;
+
+	fprintf(test_log, "********************************************************************************\n");
+	fprintf(test_log, "************ SMIOL_define_dim **************************************************\n");
+	fprintf(test_log, "\n");
+
+	errcount = 0;
+
+	/* Create a SMIOL context for testing dimension routines */
+	context = NULL;
+	ierr = SMIOL_init(MPI_COMM_WORLD, &context);
+	if (ierr != SMIOL_SUCCESS || context == NULL) {
+		fprintf(test_log, "Failed to create SMIOL context...\n");
+		return -1;
+	}
+
+	/* Create a SMIOL file for testing dimension routines */
+	file = NULL;
+	ierr = SMIOL_open_file(context, "test_dims.nc", SMIOL_FILE_CREATE, &file);
+	if (ierr != SMIOL_SUCCESS || file == NULL) {
+		fprintf(test_log, "Failed to create SMIOL file...\n");
+		return -1;
+	}
+
+	/* Handle NULL file handle */
+	fprintf(test_log, "Handle NULL file handle (SMIOL_define_dim): ");
+	ierr = SMIOL_define_dim(NULL, "invalid_dim", 42);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	}
+	else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was returned, when an error was expected\n");
+		errcount++;
+	}
+
+	/* Handle NULL dimension name */
+	fprintf(test_log, "Handle NULL dimension name (SMIOL_define_dim): ");
+	ierr = SMIOL_define_dim(file, NULL, 42);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	}
+	else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was returned, when an error was expected\n");
+		errcount++;
+	}
+
+	/* Everything OK for SMIOL_define_dim, unlimited dimension */
+	fprintf(test_log, "Everything OK - unlimited dimension (SMIOL_define_dim): ");
+	ierr = SMIOL_define_dim(file, "Time", -1);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	}
+	else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+
+	/* Everything OK for SMIOL_define_dim, small non-record dimension */
+	fprintf(test_log, "Everything OK - small non-record dimension (SMIOL_define_dim): ");
+	ierr = SMIOL_define_dim(file, "nCells", 40962);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	}
+	else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+
+	/* Everything OK for SMIOL_define_dim, large non-record dimension */
+	fprintf(test_log, "Everything OK - large non-record dimension (SMIOL_define_dim): ");
+	ierr = SMIOL_define_dim(file, "nElements", 99999999999);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	}
+	else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+
+	/* Close the SMIOL file */
+	ierr = SMIOL_close_file(&file);
+	if (ierr != SMIOL_SUCCESS || file != NULL) {
+		fprintf(test_log, "Failed to close SMIOL file...\n");
+		return -1;
+	}
+
+	/* Free the SMIOL context */
+	ierr = SMIOL_finalize(&context);
+	if (ierr != SMIOL_SUCCESS || context != NULL) {
+		fprintf(test_log, "Failed to free SMIOL context...\n");
+		return -1;
 	}
 
 	fflush(test_log);

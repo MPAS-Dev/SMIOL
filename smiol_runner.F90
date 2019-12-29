@@ -59,6 +59,20 @@ program smiol_runner
         write(test_log,'(a)') ''
     end if
 
+
+    !
+    ! Unit tests for dimensions
+    !
+    ierr = test_dimensions(test_log)
+    if (ierr == 0) then
+        write(test_log,'(a)') 'All tests PASSED!'
+        write(test_log,'(a)') ''
+    else
+        write(test_log,'(i3,a)') ierr, ' tests FAILED!'
+        write(test_log,'(a)') ''
+    end if
+
+
     !
     ! Unit tests for SMIOL_create_decomp and SMIOL_free_decomp
     !
@@ -603,5 +617,105 @@ contains
 
     end function test_decomp
 
+
+    function test_dimensions(test_log) result(ierrcount)
+
+        implicit none
+
+        integer, intent(in) :: test_log
+        integer :: ierrcount
+        type (SMIOLf_context), pointer :: context
+        type (SMIOLf_file), pointer :: file
+#if 0
+        type (SMIOLf_file), pointer :: null_file
+#endif
+
+        write(test_log,'(a)') '********************************************************************************'
+        write(test_log,'(a)') '************ SMIOL_define_dim unit tests ***************************************'
+        write(test_log,'(a)') ''
+
+        ierrcount = 0
+
+
+        ! Create a SMIOL context for testing file dimension routines
+        nullify(context)
+        ierr = SMIOLf_init(MPI_COMM_WORLD, context)
+        if (ierr /= SMIOL_SUCCESS .or. .not. associated(context)) then
+            write(test_log,'(a)') 'Failed to create SMIOL context...'
+            ierrcount = -1
+            return
+        end if
+
+        ! Create a SMIOL file for testing dimension routines
+        nullify(file)
+        ierr = SMIOLf_open_file(context, 'test_dims_fortran.nc', SMIOL_FILE_CREATE, file)
+        if (ierr /= SMIOL_SUCCESS .or. .not. associated(file)) then
+            write(test_log,'(a)') 'Failed to create SMIOL file...'
+            ierrcount = -1
+            return
+        end if
+
+#if 0
+        ! Handle unassociated file handle
+        write(test_log,'(a)',advance='no') 'Handle unassociated file handle (SMIOLf_define_dim): '
+        nullify(null_file)
+        ierr = SMIOLf_define_dim(null_file, 'invalid_dim', 42_SMIOL_offset_kind)
+        if (ierr /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was returned, when an error was expected'
+            ierrcount = ierrcount + 1
+        end if
+#endif
+
+        ! Everything OK for SMIOL_define_dim, unlimited dimension
+        write(test_log,'(a)',advance='no') 'Everything OK - unlimited dimension (SMIOLf_define_dim): '
+        ierr = SMIOLf_define_dim(file, 'Time', -1_SMIOL_offset_kind)
+        if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Everything OK for SMIOL_define_dim, small non-record dimension
+        write(test_log,'(a)',advance='no') 'Everything OK - small non-record dimension (SMIOLf_define_dim): '
+        ierr = SMIOLf_define_dim(file, 'nCells', 40962_SMIOL_offset_kind)
+        if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Everything OK for SMIOL_define_dim, large non-record dimension
+        write(test_log,'(a)',advance='no') 'Everything OK - large non-record dimension (SMIOLf_define_dim): '
+        ierr = SMIOLf_define_dim(file, 'nElements', 99999999999_SMIOL_offset_kind)
+        if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Close the SMIOL file
+        ierr = SMIOLf_close_file(file)
+        if (ierr /= SMIOL_SUCCESS .or. associated(file)) then
+            write(test_log,'(a)') 'Failed to close SMIOL file...'
+            ierrcount = -1
+            return
+        end if
+
+        ! Free the SMIOL context
+        ierr = SMIOLf_finalize(context)
+        if (ierr /= SMIOL_SUCCESS .or. associated(context)) then
+            write(test_log,'(a)') 'Failed to free SMIOL context...'
+            ierrcount = -1
+            return
+        end if
+
+        write(test_log,'(a)') ''
+
+    end function test_dimensions
 
 end program smiol_runner
