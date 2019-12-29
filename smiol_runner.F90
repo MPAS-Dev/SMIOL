@@ -108,13 +108,18 @@ program smiol_runner
         stop 1
     endif
 
-    if (SMIOLf_close_file(file) /= SMIOL_SUCCESS) then
-        write(test_log,'(a)') "ERROR: 'SMIOLf_close_file' was not called successfully"
+    if (SMIOLf_define_dim(file, 'Time', -1_SMIOL_offset_kind) /= SMIOL_SUCCESS) then
+        write(test_log,'(a)') "ERROR: 'SMIOLf_define_dim' was not called successfully"
         stop 1
     endif
 
-    if (SMIOLf_define_dim() /= SMIOL_SUCCESS) then 
+    if (SMIOLf_define_dim(file, 'nCells', 40962_SMIOL_offset_kind) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_define_dim' was not called successfully"
+        stop 1
+    endif
+
+    if (SMIOLf_close_file(file) /= SMIOL_SUCCESS) then
+        write(test_log,'(a)') "ERROR: 'SMIOLf_close_file' was not called successfully"
         stop 1
     endif
 

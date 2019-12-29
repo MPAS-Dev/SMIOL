@@ -301,11 +301,32 @@ int SMIOL_close_file(struct SMIOL_file **file)
  *
  * Defines a new dimension in a file.
  *
- * Detailed description.
+ * Defines a dimension with the specified name and size in the file associated
+ * with the file handle. If a negative value is provided for the size argument,
+ * the dimension will be defined as an unlimited or record dimension.
+ *
+ * Upon successful completion, SMIOL_SUCCESS is returned; otherwise, an error
+ * code is returned.
  *
  ********************************************************************************/
-int SMIOL_define_dim(void)
+int SMIOL_define_dim(struct SMIOL_file *file, const char *dimname, int64_t dimsize)
 {
+	/*
+	 * Check that file handle is valid
+	 */
+	if (file == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	/*
+	 * Check that dimension name is valid
+	 */
+	if (dimname == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	fprintf(stderr, "Defining dimension %s = %li\n", dimname, (long int)dimsize);
+
 	return SMIOL_SUCCESS;
 }
 

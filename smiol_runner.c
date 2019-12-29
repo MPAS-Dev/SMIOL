@@ -128,15 +128,18 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if ((ierr = SMIOL_close_file(&file)) != SMIOL_SUCCESS) {
-		fprintf(test_log, "ERROR: SMIOL_close_file: %s ",
-			SMIOL_error_string(ierr));
+	if ((ierr = SMIOL_define_dim(file, "Time", -1)) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_define_dim: %s ", SMIOL_error_string(ierr));
 		return 1;
 	}
 
-	if ((ierr = SMIOL_define_dim()) != SMIOL_SUCCESS) {
-		fprintf(test_log, "ERROR: SMIOL_define_dim: %s ",
-			SMIOL_error_string(ierr));
+	if ((ierr = SMIOL_define_dim(file, "nCells", 40962)) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_define_dim: %s ", SMIOL_error_string(ierr));
+		return 1;
+	}
+
+	if ((ierr = SMIOL_close_file(&file)) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_close_file: %s ", SMIOL_error_string(ierr));
 		return 1;
 	}
 
