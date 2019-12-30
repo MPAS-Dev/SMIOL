@@ -2,12 +2,18 @@
 
 program smiol_runner
 
+    use iso_c_binding, only : c_size_t, c_int64_t
     use SMIOLf
     use mpi
 
     implicit none
 
     integer :: ierr
+    integer(c_size_t) :: n_compute_elements = 1
+    integer(c_size_t) :: n_io_elements = 1
+    integer(c_int64_t), dimension(:), pointer :: compute_elements
+    integer(c_int64_t), dimension(:), pointer :: io_elements
+    type (SMIOLf_decomp), pointer :: decomp => null()
     type (SMIOLf_context), pointer :: context => null()
 
     call MPI_Init(ierr)
@@ -34,6 +40,17 @@ program smiol_runner
         write(0,*) 'Error: SMIOLf_init returned an unassociated context'
         stop 1
     end if
+
+    allocate(compute_elements(n_compute_elements))
+    allocate(io_elements(n_io_elements))
+
+    if (SMIOLf_create_decomp(n_compute_elements, n_io_elements, compute_elements, io_elements, decomp) /= SMIOL_SUCCESS) then
+        write(0,*) "Error: SMIOLf_create_decomp was not called succesfully"
+        stop 1
+    endif
+
+    deallocate(compute_elements)
+    deallocate(io_elements)
 
     if (SMIOLf_inquire() /= SMIOL_SUCCESS) then
         write(0,*) "ERROR: 'SMIOLf_inquire' was not called successfully"
