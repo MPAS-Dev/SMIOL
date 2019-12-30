@@ -518,11 +518,41 @@ contains
     !>  Detailed description of what this routine does.
     !
     !-----------------------------------------------------------------------
-    integer function SMIOLf_free_decomp() result(ierr)
+    integer function SMIOLf_free_decomp(decomp) result(ierr)
+
+        use iso_c_binding, only : c_ptr, c_loc, c_associated, c_null_ptr
 
         implicit none
 
-        ierr = 0
+        type(SMIOLF_decomp), pointer, intent(inout) :: decomp
+        type(c_ptr) :: c_decomp = c_null_ptr
+
+        interface
+            function SMIOL_free_decomp(decomp) result(ierr) bind(C, name='SMIOL_free_decomp')
+                use iso_c_binding, only : c_ptr, c_int
+                type(c_ptr) :: decomp
+                integer(kind=c_int) :: ierr
+            end function
+        end interface
+
+        ierr = SMIOL_SUCCESS
+
+        if (associated(decomp)) then
+            c_decomp = c_loc(decomp)
+        endif
+        ierr = SMIOL_free_decomp(c_decomp)
+
+        if (ierr == SMIOL_SUCCESS) then
+            if (c_associated(c_decomp)) then
+                ierr = SMIOL_FORTRAN_ERROR
+            else
+                nullify(decomp)
+            end if
+        else
+            if (.not. c_associated(c_decomp)) then
+                nullify(decomp)
+            end if
+        end if
 
     end function SMIOLf_free_decomp
 

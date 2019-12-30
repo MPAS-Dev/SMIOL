@@ -52,6 +52,11 @@ program smiol_runner
     deallocate(compute_elements)
     deallocate(io_elements)
 
+    if (SMIOLf_free_decomp(decomp) /= SMIOL_SUCCESS) then
+        write(0,*) "Error: SMIOLf_free_decomp was not called succesfully"
+        stop 1
+    endif
+
     if (SMIOLf_inquire() /= SMIOL_SUCCESS) then
         write(0,*) "ERROR: 'SMIOLf_inquire' was not called successfully"
         stop 1
