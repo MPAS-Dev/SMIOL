@@ -5,7 +5,7 @@
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 module SMIOLf
 
-    use iso_c_binding, only : c_int
+    use iso_c_binding, only : c_int, c_size_t, c_ptr
 
     private
 
@@ -43,7 +43,10 @@ module SMIOLf
     end type SMIOLf_file
 
     type, bind(C) :: SMIOLf_decomp
-        integer(c_int) :: i
+        integer(c_size_t) :: n_compute_elements
+        integer(c_size_t) :: n_io_elements
+        type(c_ptr) :: compute_elements
+        type(c_ptr) :: io_elements
     end type SMIOLf_decomp
 
 
