@@ -6,15 +6,82 @@
 
 /********************************************************************************
  *
+ * SMIOL_fortran_init
+ *
+ * Initialize a SMIOL context from Fortran.
+ *
+ * This function is a simply a wrapper for the SMOIL_init routine that is intended
+ * to be called from Fortran. Accordingly, the first argument is of type MPI_Fint
+ * (a Fortran integer) rather than MPI_Comm.
+ *
+ ********************************************************************************/
+int SMIOL_fortran_init(MPI_Fint comm, struct SMIOL_context **context)
+{
+	return SMIOL_init(MPI_Comm_f2c(comm), context);
+}
+
+
+/********************************************************************************
+ *
  * SMIOL_init
  *
  * Initialize a SMIOL context.
  *
- * Detailed description.
+ * Initializes a SMIOL context, within which decompositions may be defined and
+ * files may be read and written. At present, the only input argument is an MPI
+ * communicator.
+ *
+ * Upon successful return the context argument points to a valid SMIOL context;
+ * otherwise, it is NULL and an error code other than MPI_SUCCESS is returned.
+ *
+ * Note: It is assumed that MPI_Init has been called prior to this routine, so
+ *       that any use of the provided MPI communicator will be valid.
  *
  ********************************************************************************/
-int SMIOL_init(void)
+int SMIOL_init(MPI_Comm comm, struct SMIOL_context **context)
 {
+	/*
+	 * Before dereferencing context below, ensure that the pointer
+	 * the context pointer is not NULL
+	 */
+	if (context == NULL) {
+		return -999;    /* Should we define an error code for this? */
+	}
+
+	/*
+	 * We cannot check for every possible invalid argument for comm, but
+	 * at least we can verify that the communicator is not MPI_COMM_NULL
+	 */
+	if (comm == MPI_COMM_NULL) {
+		/* Nullifying (*context) here may result in a memory leak, but this
+		 * seems better than disobeying the stated behavior of returning
+		 * a NULL context upon failure
+		 */
+		(*context) = NULL;
+
+		return -999;    /* Should we define an error code for this? */
+	}
+
+	*context = (struct SMIOL_context *)malloc(sizeof(struct SMIOL_context));
+	if ((*context) == NULL) {
+		return SMIOL_MALLOC_FAILURE;
+	}
+
+	/* TODO: should we MPI_Comm_dup ? */
+	(*context)->fcomm = MPI_Comm_c2f(comm);
+
+	if (MPI_Comm_size(comm, &((*context)->comm_size)) != MPI_SUCCESS) {
+		free((*context));
+		(*context) = NULL;
+		return -998;    /* Should we define an error code for this? */
+	}
+
+	if (MPI_Comm_rank(comm, &((*context)->comm_rank)) != MPI_SUCCESS) {
+		free((*context));
+		(*context) = NULL;
+		return -998;    /* Should we define an error code for this? */
+	}
+
 	return SMIOL_SUCCESS;
 }
 
@@ -25,11 +92,24 @@ int SMIOL_init(void)
  *
  * Finalize a SMIOL context.
  *
- * Detailed description.
+ * Finalizes a SMIOL context and frees all memory in the SMIOL_context instance.
+ * After this routine is called, no other SMIOL routines that make reference to
+ * the finalized context should be called.
  *
  ********************************************************************************/
-int SMIOL_finalize(void)
+int SMIOL_finalize(struct SMIOL_context **context)
 {
+	/*
+	 * If the pointer to the context pointer is NULL, assume we have nothing
+	 * to do and declare success
+	 */
+	if (context == NULL) {
+		return SMIOL_SUCCESS;
+	}
+
+	free((*context));
+	(*context) = NULL;
+
 	return SMIOL_SUCCESS;
 }
 

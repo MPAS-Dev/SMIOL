@@ -9,7 +9,9 @@
  * Types
  */
 struct SMIOL_context {
-	int foo;
+	MPI_Fint fcomm; /* Fortran handle to MPI communicator */
+	int comm_size;  /* Size of MPI communicator */
+	int comm_rank;  /* Rank within MPI communicator */
 };
 
 struct SMIOL_file {
@@ -31,8 +33,9 @@ struct SMIOL_decomp {
 /*
  * Library methods
  */
-int SMIOL_init(void);
-int SMIOL_finalize(void);
+int SMIOL_fortran_init(MPI_Fint comm, struct SMIOL_context **context);
+int SMIOL_init(MPI_Comm comm, struct SMIOL_context **context);
+int SMIOL_finalize(struct SMIOL_context **context);
 int SMIOL_inquire(void);
 
 /*
