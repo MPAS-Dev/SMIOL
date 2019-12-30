@@ -632,6 +632,7 @@ contains
         type (SMIOLf_file), pointer :: null_file
 #endif
         integer(kind=SMIOL_offset_kind) :: dimsize
+        integer(kind=SMIOL_offset_kind) :: expected_dimsize
 
         write(test_log,'(a)') '********************************************************************************'
         write(test_log,'(a)') '************ SMIOL_define_dim / SMIOL_inquire_dim unit tests *******************'
@@ -704,22 +705,32 @@ contains
         ! Handle undefined dimension
         write(test_log,'(a)',advance='no') 'Handle undefined dimension (SMIOLf_inquire_dim): '
         ierr = SMIOLf_inquire_dim(file, 'foobar', dimsize)
-        if (ierr /= SMIOL_SUCCESS) then
-            write(test_log,'(a)') 'PASS'
+#ifdef SMIOL_PNETCDF
+        if (ierr == SMIOL_LIBRARY_ERROR) then
+            write(test_log,'(a)') 'PASS ('//trim(SMIOLf_lib_error_string(context))//')'
         else
-            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was returned, when an error was expected'
+            write(test_log,'(a)') 'FAIL - SMIOL_LIBRARY_ERROR was not returned'
             ierrcount = ierrcount + 1
         end if
+#else
+        if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned for no-op implementation of SMIOLf_inquire_dim'
+            ierrcount = ierrcount + 1
+        end if
+#endif
 
         ! Everything OK for SMIOL_inquire_dim, unlimited dimension
         write(test_log,'(a)',advance='no') 'Everything OK - unlimited dimension (SMIOLf_inquire_dim): '
         dimsize = 0_SMIOL_offset_kind
         ierr = SMIOLf_inquire_dim(file, 'Time', dimsize)
         if (ierr == SMIOL_SUCCESS) then
-            if (dimsize == 1_SMIOL_offset_kind) then
+            if (dimsize == 0_SMIOL_offset_kind) then
                 write(test_log,'(a)') 'PASS'
             else
-                write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was returned, but the dimension size is wrong'
+                write(test_log,'(a,a,i11,a,i11)') 'FAIL - SMIOL_SUCCESS was returned, but the dimension size is wrong', &
+                               ' (got ', dimsize, ', expected ', 0_SMIOL_offset_kind, ')'
                 ierrcount = ierrcount + 1
             end if
         else
@@ -730,12 +741,18 @@ contains
         ! Everything OK for SMIOL_inquire_dim, small non-record dimension
         write(test_log,'(a)',advance='no') 'Everything OK - small non-record dimension (SMIOLf_inquire_dim): '
         dimsize = 0_SMIOL_offset_kind
+#ifdef SMIOL_PNETCDF
+        expected_dimsize = 40962_SMIOL_offset_kind
+#else
+        expected_dimsize = 0_SMIOL_offset_kind
+#endif
         ierr = SMIOLf_inquire_dim(file, 'nCells', dimsize)
         if (ierr == SMIOL_SUCCESS) then
-            if (dimsize == 1_SMIOL_offset_kind) then
+            if (dimsize == expected_dimsize) then
                 write(test_log,'(a)') 'PASS'
             else
-                write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was returned, but the dimension size is wrong'
+                write(test_log,'(a,a,i11,a,i11)') 'FAIL - SMIOL_SUCCESS was returned, but the dimension size is wrong', &
+                               ' (got ', dimsize, ', expected ', expected_dimsize, ')'
                 ierrcount = ierrcount + 1
             end if
         else
@@ -746,12 +763,18 @@ contains
         ! Everything OK for SMIOL_inquire_dim, large non-record dimension
         write(test_log,'(a)',advance='no') 'Everything OK - large non-record dimension (SMIOLf_inquire_dim): '
         dimsize = 0_SMIOL_offset_kind
+#ifdef SMIOL_PNETCDF
+        expected_dimsize = 99999999999_SMIOL_offset_kind
+#else
+        expected_dimsize = 0_SMIOL_offset_kind
+#endif
         ierr = SMIOLf_inquire_dim(file, 'nElements', dimsize)
         if (ierr == SMIOL_SUCCESS) then
-            if (dimsize == 1_SMIOL_offset_kind) then
+            if (dimsize == expected_dimsize) then
                 write(test_log,'(a)') 'PASS'
             else
-                write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was returned, but the dimension size is wrong'
+                write(test_log,'(a,a,i11,a,i11)') 'FAIL - SMIOL_SUCCESS was returned, but the dimension size is wrong', &
+                               ' (got ', dimsize, ', expected ', expected_dimsize, ')'
                 ierrcount = ierrcount + 1
             end if
         else
