@@ -31,6 +31,15 @@ program smiol_runner
         write(0,*) ''
     end if
 
+    ierr = test_decomp()
+    if (ierr == 0) then
+        write(0,*) 'All tests PASSED!'
+        write(0,*) ''
+    else
+        write(0,*) ierr, ' tests FAILED!'
+        write(0,*) ''
+    endif
+
     if (SMIOLf_init(MPI_COMM_WORLD, context) /= SMIOL_SUCCESS) then
         write(0,*) "ERROR: 'SMIOLf_init' was not called successfully"
         stop 1
@@ -45,7 +54,7 @@ program smiol_runner
     allocate(io_elements(n_io_elements))
 
     if (SMIOLf_create_decomp(n_compute_elements, n_io_elements, compute_elements, io_elements, decomp) /= SMIOL_SUCCESS) then
-        write(0,*) "Error: SMIOLf_create_decomp was not called succesfully"
+        write(0,*) "Error: SMIOLf_create_decomp was not called successfully"
         stop 1
     endif
 
@@ -53,7 +62,7 @@ program smiol_runner
     deallocate(io_elements)
 
     if (SMIOLf_free_decomp(decomp) /= SMIOL_SUCCESS) then
-        write(0,*) "Error: SMIOLf_free_decomp was not called succesfully"
+        write(0,*) "Error: SMIOLf_free_decomp was not called successfully"
         stop 1
     endif
 
@@ -233,5 +242,141 @@ contains
         write(0,'(a)') ''
 
     end function test_init_finalize
+
+
+    function test_decomp() result(ierrcount)
+
+        use iso_c_binding, only : c_size_t, c_int64_t
+
+        implicit none
+
+        integer :: ierrcount
+        integer(c_size_t) :: n_compute_elements
+        integer(c_size_t) :: n_io_elements
+        integer(c_int64_t), dimension(:), pointer :: compute_elements
+        integer(c_int64_t), dimension(:), pointer :: io_elements
+        type (SMIOLf_decomp), pointer :: decomp => null()
+
+        write(0,'(a)') '********************************************************************************'
+        write(0,'(a)') '************ SMIOLf_create_decomp / SMIOLf_free_decomp tests *******************'
+        write(0,'(a)') ''
+
+        ierrcount = 0
+
+        ! Test with 0 elements
+        write(0,'(a)',advance='no') 'Everything OK for SMIOLf_create_decomp with 0 elements: '
+        n_compute_elements = 0
+        n_io_elements = 0
+        allocate(compute_elements(n_compute_elements))
+        allocate(io_elements(n_io_elements))
+        ierr = SMIOLf_create_decomp(n_compute_elements, n_io_elements, compute_elements, io_elements, decomp)
+        if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
+            write(0,'(a)') "PASS"
+        else if (ierr /= SMIOL_SUCCESS .and. .not. associated(decomp)) then
+            write(0,'(a)') "FAIL - SMIOLf_create_decomp returned an error and decomp was not associated"
+            ierrcount = ierrcount + 1
+        else if (ierr == SMIOL_SUCCESS .and. .not. associated(decomp)) then
+            write(0,'(a)') "FAIL - ierr returned success but decomp was NOT associated when it should have been"
+            ierrcount = ierrcount + 1
+        endif
+
+        deallocate(compute_elements)
+        deallocate(io_elements)
+
+        ! Free Decomp
+        write(0,'(a)',advance='no') 'Everything OK for SMIOLf_free_decomp with 0 elements: '
+        ierr = SMIOLf_free_decomp(decomp)
+        if (ierr == SMIOL_SUCCESS .and. .not. associated(decomp)) then
+            write(0,'(a)') "PASS"
+        else if (ierr /= SMIOL_SUCCESS .and. associated(decomp)) then
+            write(0,'(a)') "FAIL - ierr did not return SMIOL_SUCCESS, and decomp was still associated"
+            ierrcount = ierrcount + 1
+        else if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
+            write(0,'(a)') "FAIL - ierr returned SMIOL_SUCCESS but the decomp was associated"
+            ierrcount = ierrcount + 1
+        endif
+
+        ! Small number of Compute and IO Elements
+        write(0,'(a)',advance='no') 'Everything OK for SMIOLf_create_decomp 1 element: '
+        n_compute_elements = 1
+        n_io_elements = 1
+        allocate(compute_elements(n_compute_elements))
+        allocate(io_elements(n_io_elements))
+        ierr = SMIOLf_create_decomp(n_compute_elements, n_io_elements, compute_elements, io_elements, decomp)
+        if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
+            write(0,'(a)') "PASS"
+        else if (ierr /= SMIOL_SUCCESS .and. .not. associated(decomp)) then
+            write(0,'(a)') "FAIL - SMIOLf_create_decomp returned an error and decomp was not associated"
+            ierrcount = ierrcount + 1
+        else if (ierr == SMIOL_SUCCESS .and. .not. associated(decomp)) then
+            write(0,'(a)') "FAIL - ierr returned success but decomp was NOT associated when it should have been"
+            ierrcount = ierrcount + 1
+        endif
+
+        deallocate(compute_elements)
+        deallocate(io_elements)
+
+        ! Free Decomp
+        write(0,'(a)',advance='no') 'Everything OK for SMIOLf_free_decomp with 1 element: '
+        ierr = SMIOLf_free_decomp(decomp)
+        if (ierr == SMIOL_SUCCESS .and. .not. associated(decomp)) then
+            write(0,'(a)') "PASS"
+        else if (ierr /= SMIOL_SUCCESS .and. associated(decomp)) then
+            write(0,'(a)') "FAIL - ierr did not return SMIOL_SUCCESS, and decomp was still associated"
+            ierrcount = ierrcount + 1
+        else if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
+            write(0,'(a)') "FAIL - ierr returned SMIOL_SUCCESS but the decomp was associated"
+            ierrcount = ierrcount + 1
+        endif
+
+        ! Large number of Compute and IO Elements
+        write(0,'(a)',advance='no') 'Everything OK for SMIOLf_create_decomp large number of elements: '
+        n_compute_elements = 10000000
+        n_io_elements = 10000000
+        allocate(compute_elements(n_compute_elements))
+        allocate(io_elements(n_io_elements))
+        ierr = SMIOLf_create_decomp(n_compute_elements, n_io_elements, compute_elements, io_elements, decomp)
+        if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
+            write(0,'(a)') "PASS"
+        else if (ierr /= SMIOL_SUCCESS .and. .not. associated(decomp)) then
+            write(0,'(a)') "FAIL - SMIOLf_create_decomp returned an error and decomp was not associated"
+            ierrcount = ierrcount + 1
+        else if (ierr == SMIOL_SUCCESS .and. .not. associated(decomp)) then
+            write(0,'(a)') "FAIL - ierr returned success but decomp was NOT associated when it should have been"
+            ierrcount = ierrcount + 1
+        endif
+
+        deallocate(compute_elements)
+        deallocate(io_elements)
+
+        ! Free Decomp
+        write(0,'(a)',advance='no') 'Everything OK for SMIOLf_free_decomp large number of elements: '
+        ierr = SMIOLf_free_decomp(decomp)
+        if (ierr == SMIOL_SUCCESS .and. .not. associated(decomp)) then
+            write(0,'(a)') "PASS"
+        else if (ierr /= SMIOL_SUCCESS .and. associated(decomp)) then
+            write(0,'(a)') "FAIL - ierr did not return SMIOL_SUCCESS, and decomp was still associated"
+            ierrcount = ierrcount + 1
+        else if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
+            write(0,'(a)') "FAIL - ierr returned SMIOL_SUCCESS but the decomp was associated"
+            ierrcount = ierrcount + 1
+        endif
+
+        ! Pass SMIOLf_free_decomp a decomp that has already been freed
+        write(0,'(a)',advance='no') 'Everything OK for SMIOLf_free_decomp on an unassociated decomp: '
+        ierr = SMIOLf_free_decomp(decomp)
+        if (ierr == SMIOL_SUCCESS .and. .not. associated(decomp)) then
+            write(0,'(a)') "PASS"
+        else if (ierr /= SMIOL_SUCCESS .and. associated(decomp)) then
+            write(0,'(a)') "FAIL - ierr did not return SMIOL_SUCCESS, and decomp became associated..."
+            ierrcount = ierrcount + 1
+        else if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
+            write(0,'(a)') "FAIL - ierr returned SMIOL_SUCCESS, but the decomp became associated..."
+            ierrcount = ierrcount + 1
+        endif
+
+        write(0,'(a)') ''
+
+    end function test_decomp
 
 end program smiol_runner
