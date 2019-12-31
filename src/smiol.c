@@ -347,8 +347,8 @@ int SMIOL_set_option(void)
  *
  ********************************************************************************/
 struct SMIOL_decomp *SMIOL_create_decomp(size_t n_compute_elements,
-		size_t n_io_elements, uint64_t *compute_elements,
-		uint64_t *io_elements)
+		size_t n_io_elements, int64_t *compute_elements,
+		int64_t *io_elements)
 {
 	struct SMIOL_decomp *d;
 	size_t i;
@@ -357,13 +357,13 @@ struct SMIOL_decomp *SMIOL_create_decomp(size_t n_compute_elements,
 	d->n_compute_elements = n_compute_elements;
 	d->n_io_elements = n_io_elements;
 
-	d->compute_elements = malloc(sizeof(uint64_t) * d->n_compute_elements);
+	d->compute_elements = malloc(sizeof(int64_t) * d->n_compute_elements);
 	if (d->compute_elements == NULL) {
 		fprintf(stderr, "ERROR: Could not malloc space for d->compute_elements\n");
 		return NULL;
 	}
 
-	d->io_elements = malloc(sizeof(uint64_t) * d->n_io_elements);
+	d->io_elements = malloc(sizeof(int64_t) * d->n_io_elements);
 	if (d->io_elements == NULL) {
 		fprintf(stderr, "ERROR: Could not malloc space for d->io_elements\n");
 		return NULL;
