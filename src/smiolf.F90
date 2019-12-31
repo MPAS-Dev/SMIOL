@@ -103,7 +103,7 @@ contains
         if (ierr == SMIOL_SUCCESS) then
             if (.not. c_associated(c_context)) then
                 nullify(context)
-                ierr = -997     ! TODO: define an error code for this. The c_context should not be null...
+                ierr = SMIOL_FORTRAN_ERROR
             else
                 call c_f_pointer(c_context, context)
             end if
@@ -111,7 +111,7 @@ contains
             if (.not. c_associated(c_context)) then
                 nullify(context)
             else
-                ierr = -997     ! TODO: define an error code for this. The c_context should be null...
+                ierr = SMIOL_FORTRAN_ERROR
             end if
         end if
 
@@ -157,7 +157,7 @@ contains
 
         if (ierr == SMIOL_SUCCESS) then
             if (c_associated(c_context)) then
-                ierr = -997     ! TODO: define an error code for this. The c_context should be null...
+                ierr = SMIOL_FORTRAN_ERROR
             else
                 nullify(context)
             end if
@@ -251,7 +251,7 @@ contains
         if (ierr == SMIOL_SUCCESS) then
             if (.not. c_associated(c_file)) then
                 nullify(file)
-                ierr = -997     ! TODO: define an error code for this. The c_file should not be null...
+                ierr = SMIOL_FORTRAN_ERROR
             else
                 call c_f_pointer(c_file, file)
             end if
@@ -259,7 +259,7 @@ contains
             if (.not. c_associated(c_file)) then
                 nullify(file)
             else
-                ierr = -997     ! TODO: define an error code for this. The c_file should be null...
+                ierr = SMIOL_FORTRAN_ERROR
             end if
         end if
 
@@ -304,7 +304,7 @@ contains
 
         if (ierr == SMIOL_SUCCESS) then
             if (c_associated(c_file)) then
-                ierr = -997     ! TODO: define an error code for this. The c_file should be null...
+                ierr = SMIOL_FORTRAN_ERROR
             else
                 nullify(file)
             end if

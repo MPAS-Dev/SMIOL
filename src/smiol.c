@@ -51,7 +51,7 @@ int SMIOL_init(MPI_Comm comm, struct SMIOL_context **context)
 	 * the context pointer is not NULL
 	 */
 	if (context == NULL) {
-		return -999;    /* Should we define an error code for this? */
+		return SMIOL_INVALID_ARGUMENT;
 	}
 
 	/*
@@ -65,7 +65,7 @@ int SMIOL_init(MPI_Comm comm, struct SMIOL_context **context)
 		 */
 		(*context) = NULL;
 
-		return -999;    /* Should we define an error code for this? */
+		return SMIOL_INVALID_ARGUMENT;
 	}
 
 	*context = (struct SMIOL_context *)malloc(sizeof(struct SMIOL_context));
@@ -79,20 +79,20 @@ int SMIOL_init(MPI_Comm comm, struct SMIOL_context **context)
 	if (MPI_Comm_dup(comm, &smiol_comm) != MPI_SUCCESS) {
 		free((*context));
 		(*context) = NULL;
-		return -998;    /* Should we define an error code for this? */
+		return SMIOL_MPI_ERROR;
 	}
 	(*context)->fcomm = MPI_Comm_c2f(smiol_comm);
 
 	if (MPI_Comm_size(smiol_comm, &((*context)->comm_size)) != MPI_SUCCESS) {
 		free((*context));
 		(*context) = NULL;
-		return -998;    /* Should we define an error code for this? */
+		return SMIOL_MPI_ERROR;
 	}
 
 	if (MPI_Comm_rank(smiol_comm, &((*context)->comm_rank)) != MPI_SUCCESS) {
 		free((*context));
 		(*context) = NULL;
-		return -998;    /* Should we define an error code for this? */
+		return SMIOL_MPI_ERROR;
 	}
 
 	return SMIOL_SUCCESS;
@@ -130,7 +130,7 @@ int SMIOL_finalize(struct SMIOL_context **context)
 	if (MPI_Comm_free(&smiol_comm) != MPI_SUCCESS) {
 		free((*context));
 		(*context) = NULL;
-		return -998;
+		return SMIOL_MPI_ERROR;
 	}
 
 	free((*context));
@@ -176,14 +176,14 @@ int SMIOL_open_file(struct SMIOL_context *context, const char *filename, struct 
 	 * the file pointer is not NULL
 	 */
 	if (file == NULL) {
-		return -999;    /* Should we define an error code for this? */
+		return SMIOL_INVALID_ARGUMENT;
 	}
 
 	/*
 	 * Check that context is valid
 	 */
 	if (context == NULL) {
-		return -999;    /* Should we define an error code for this? */
+		return SMIOL_INVALID_ARGUMENT;
 	}
 
 	*file = (struct SMIOL_file *)malloc(sizeof(struct SMIOL_file));
@@ -201,7 +201,7 @@ int SMIOL_open_file(struct SMIOL_context *context, const char *filename, struct 
 				MPI_INFO_NULL, &((*file)->ncidp)) != NC_NOERR) {
 		free((*file));
 		(*file) = NULL;
-		return -996;
+		return -996;    /* TODO: we still need a way to handle library-specific errors */
 	}
 #endif
 
@@ -235,7 +235,7 @@ int SMIOL_close_file(struct SMIOL_file **file)
 	if (ncmpi_close((*file)->ncidp) != NC_NOERR) {
 		free((*file));
 		(*file) = NULL;
-		return -996;
+		return -996;    /* TODO: we still need a way to handle library-specific errors */
 	}
 #endif
 
