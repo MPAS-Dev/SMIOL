@@ -552,7 +552,10 @@ contains
     !
     !> \brief Creates a mapping between compute elements and I/O elements
     !> \details
-    !>  Detailed description of what this routine does.
+    !>  Allocate a SMIOLf_decomp and copy compute_elements and io_elements into 
+    !>  it. On success, SMIOL_SUCCESS is returned and decomp will point to a 
+    !>  valid SMIOL decomp. On error, decomp will be unassociated and a SMIOL 
+    !>  error code will be returned.
     !
     !-----------------------------------------------------------------------
     integer function SMIOLf_create_decomp(n_compute_elements, n_io_elements, compute_elements, io_elements, decomp) result(ierr)
@@ -609,7 +612,10 @@ contains
     !
     !> \brief Frees a mapping between compute elements and I/O elements
     !> \details
-    !>  Detailed description of what this routine does.
+    !>  Frees all memory of a SMIOLf_decomp and returns SMIOL_SUCCESS. If 
+    !>  decomp is unassociated, nothing will be done and SMIOL_SUCCESS will 
+    !>  be returned. After this function has been called, no other SMIOL 
+    !>  routines should use the freed SMIOL_decomp.
     !
     !-----------------------------------------------------------------------
     integer function SMIOLf_free_decomp(decomp) result(ierr)
