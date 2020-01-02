@@ -1,5 +1,5 @@
 default:
-	@echo "Please provide a compiler name (llvm, gnu, intel, pgi, xi, nag)"
+	@echo "Please provide a compiler name (llvm, gnu, intel, pgi, xi, nag, cray)"
 	exit 1
 
 llvm:
@@ -61,6 +61,16 @@ nag:
 	 "FCINCLUDES = " \
 	 "CC_PARALLEL = mpicc" \
 	 "FC_PARALLEL = mpifort" )
+
+cray:
+	( $(MAKE) smiol \
+	 "CC = cc" \
+	 "CFLAGS = -G 0 -h conform -h nomessage=193 -h msglevel_0 -h bounds -h dir_check" \
+	 "FC = ftn" \
+	 "FFLAGS = -G 0 -m 0 -h dir_check -R bps -O 0 -e nI -N 132" \
+	 "FCINCLUDES = " \
+	 "CC_PARALLEL = cc" \
+	 "FC_PARALLEL = ftn" )
 
 
 ifneq "$(PNETCDF)" ""
