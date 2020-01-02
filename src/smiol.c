@@ -430,7 +430,8 @@ int SMIOL_set_option(void)
  *
  * Creates a mapping between compute elements and I/O elements.
  *
- * Detailed description.
+ * Allocate a SMIOL_decomp and copy compute and I/O elements into it. Upon
+ * success, return a valid SMIOL decomp; otherwise return NULL.
  *
  ********************************************************************************/
 struct SMIOL_decomp *SMIOL_create_decomp(size_t n_compute_elements,
@@ -476,7 +477,9 @@ struct SMIOL_decomp *SMIOL_create_decomp(size_t n_compute_elements,
  *
  * Frees a mapping between compute elements and I/O elements.
  *
- * Detailed description.
+ * Free all memory of a SMIOL_decomp and returns SMIOL_SUCCESS. If decomp
+ * points to NULL, then do nothing and return SMIOL_SUCCESS. After this routine
+ * is called, no other SMIOL routines should use the freed SMIOL_decomp.
  *
  ********************************************************************************/
 int SMIOL_free_decomp(struct SMIOL_decomp **d)
