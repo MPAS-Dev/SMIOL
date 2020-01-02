@@ -7,6 +7,7 @@
  *******************************************************************************/
 
 int test_init_finalize(void);
+int test_open_close(void);
 
 int main(int argc, char **argv)
 {
@@ -17,6 +18,7 @@ int main(int argc, char **argv)
 	uint64_t *io_elements;
 	struct SMIOL_decomp *decomp = NULL;
 	struct SMIOL_context *context = NULL;
+	struct SMIOL_file *file = NULL;
 
 	if (argc == 2) {
 		n_compute_elements = (size_t) atoi(argv[1]);
@@ -38,6 +40,19 @@ int main(int argc, char **argv)
 	else {
 		fprintf(stderr, "%i tests FAILED!\n\n", ierr);
 	}
+
+
+	/*
+	 * Unit tests for SMIOL_open_file and SMIOL_close_file
+	 */
+	ierr = test_open_close();
+	if (ierr == 0) {
+		fprintf(stderr, "All tests PASSED!\n\n");
+	}
+	else {
+		fprintf(stderr, "%i tests FAILED!\n\n", ierr);
+	}
+
 
 	if ((ierr = SMIOL_init(MPI_COMM_WORLD, &context)) != SMIOL_SUCCESS) {
 		printf("ERROR: SMIOL_init: %s ", SMIOL_error_string(ierr));
@@ -79,12 +94,12 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if ((ierr = SMIOL_open_file()) != SMIOL_SUCCESS) {
+	if ((ierr = SMIOL_open_file(context, "blah.nc", &file)) != SMIOL_SUCCESS) {
 		printf("ERROR: SMIOL_open_file: %s ", SMIOL_error_string(ierr));
 		return 1;
 	}
 
-	if ((ierr = SMIOL_close_file()) != SMIOL_SUCCESS) {
+	if ((ierr = SMIOL_close_file(&file)) != SMIOL_SUCCESS) {
 		printf("ERROR: SMIOL_close_file: %s ", SMIOL_error_string(ierr));
 		return 1;
 	}
@@ -264,6 +279,64 @@ int test_init_finalize(void)
 	else {
 		fprintf(stderr, "FAIL - context is NULL as expected, but SMIOL_SUCCESS was not returned\n");
 		errcount++;
+	}
+
+	fflush(stderr);
+	ierr = MPI_Barrier(MPI_COMM_WORLD);
+
+	fprintf(stderr, "\n");
+
+	return errcount;
+}
+
+int test_open_close(void)
+{
+	int ierr;
+	int errcount;
+	struct SMIOL_context *context;
+	struct SMIOL_file *file;
+
+	fprintf(stderr, "********************************************************************************\n");
+	fprintf(stderr, "************ SMIOL_open_file / SMIOL_close_file unit tests *********************\n");
+	fprintf(stderr, "\n");
+
+	errcount = 0;
+
+	/* Create a SMIOL context for testing file open/close routines */
+	ierr = SMIOL_init(MPI_COMM_WORLD, &context);
+	if (ierr != SMIOL_SUCCESS || context == NULL) {
+		fprintf(stderr, "Failed to create SMIOL context...\n");
+		return -1;
+	}
+
+	/* Everything OK (SMIOL_open_file) */
+	fprintf(stderr, "Everything OK (SMIOL_open_file): ");
+	file = NULL;
+	ierr = SMIOL_open_file(context, "test.nc", &file);
+	if (ierr == SMIOL_SUCCESS && file != NULL) {
+		fprintf(stderr, "PASS\n");
+	}
+	else {
+		fprintf(stderr, "FAIL - context is NULL or SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+
+	/* Everything OK (SMIOL_close_file) */
+	fprintf(stderr, "Everything OK (SMIOL_close_file): ");
+	ierr = SMIOL_close_file(&file);
+	if (ierr == SMIOL_SUCCESS && file == NULL) {
+		fprintf(stderr, "PASS\n");
+	}
+	else {
+		fprintf(stderr, "FAIL - context is not NULL or SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+
+	/* Free the SMIOL context */
+	ierr = SMIOL_finalize(&context);
+	if (ierr != SMIOL_SUCCESS || context != NULL) {
+		fprintf(stderr, "Failed to free SMIOL context...\n");
+		return -1;
 	}
 
 	fflush(stderr);

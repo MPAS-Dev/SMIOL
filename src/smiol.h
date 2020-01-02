@@ -15,7 +15,10 @@ struct SMIOL_context {
 };
 
 struct SMIOL_file {
-	int foo;
+	struct SMIOL_context *context; /* Context for this file */
+#ifdef SMIOL_PNETCDF
+	int ncidp; /* parallel-netCDF file handle */
+#endif
 };
 
 struct SMIOL_decomp {
@@ -41,8 +44,8 @@ int SMIOL_inquire(void);
 /*
  * File methods
  */
-int SMIOL_open_file(void);
-int SMIOL_close_file(void);
+int SMIOL_open_file(struct SMIOL_context *context, const char *filename, struct SMIOL_file **file);
+int SMIOL_close_file(struct SMIOL_file **file);
 
 /*
  * Dimension methods

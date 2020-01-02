@@ -3,6 +3,10 @@
 #include <stdio.h>
 #include "smiol.h"
 
+#ifdef SMIOL_PNETCDF
+#include "pnetcdf.h"
+#endif
+
 
 /********************************************************************************
  *
@@ -157,11 +161,50 @@ int SMIOL_inquire(void)
  *
  * Opens a file within a SMIOL context.
  *
- * Detailed description.
+ * Creates or opens the file specified by filename within the provided SMIOL
+ * context.
+ *
+ * Upon successful completion, SMIOL_SUCCESS is returned, and the file handle argument
+ * will point to a valid file handle. Otherwise, the file handle is NULL and an error
+ * code other than SMIOL_SUCCESS is returned.
  *
  ********************************************************************************/
-int SMIOL_open_file(void)
+int SMIOL_open_file(struct SMIOL_context *context, const char *filename, struct SMIOL_file **file)
 {
+	/*
+	 * Before dereferencing file below, ensure that the pointer
+	 * the file pointer is not NULL
+	 */
+	if (file == NULL) {
+		return -999;    /* Should we define an error code for this? */
+	}
+
+	/*
+	 * Check that context is valid
+	 */
+	if (context == NULL) {
+		return -999;    /* Should we define an error code for this? */
+	}
+
+	*file = (struct SMIOL_file *)malloc(sizeof(struct SMIOL_file));
+	if ((*file) == NULL) {
+		return SMIOL_MALLOC_FAILURE;
+	}
+
+	/*
+	 * Save pointer to context for this file
+	 */
+	(*file)->context = context;
+
+#ifdef SMIOL_PNETCDF
+	if (ncmpi_create(MPI_Comm_f2c(context->fcomm), filename, NC_NOCLOBBER,
+				MPI_INFO_NULL, &((*file)->ncidp)) != NC_NOERR) {
+		free((*file));
+		(*file) = NULL;
+		return -996;
+	}
+#endif
+
 	return SMIOL_SUCCESS;
 }
 
@@ -172,11 +215,33 @@ int SMIOL_open_file(void)
  *
  * Closes a file within a SMIOL context.
  *
- * Detailed description.
+ * Closes the file associated with the provided file handle. Upon successful
+ * completion, SMIOL_SUCCESS is returned, the file will be closed, and all memory
+ * that is uniquely associated with the file handle will be deallocated.
+ * Otherwise, an error code other than SMIOL_SUCCESS will be returned.
  *
  ********************************************************************************/
-int SMIOL_close_file(void)
+int SMIOL_close_file(struct SMIOL_file **file)
 {
+	/*
+	 * If the pointer to the file pointer is NULL, assume we have nothing
+	 * to do and declare success
+	 */
+	if (file == NULL) {
+		return SMIOL_SUCCESS;
+	}
+
+#ifdef SMIOL_PNETCDF
+	if (ncmpi_close((*file)->ncidp) != NC_NOERR) {
+		free((*file));
+		(*file) = NULL;
+		return -996;
+	}
+#endif
+
+	free((*file));
+	(*file) = NULL;
+
 	return SMIOL_SUCCESS;
 }
 
