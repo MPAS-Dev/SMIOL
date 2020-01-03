@@ -8,6 +8,7 @@
 
 int test_init_finalize(FILE *test_log);
 int test_open_close(FILE *test_log);
+int test_decomp(FILE *test_log);
 
 int main(int argc, char **argv)
 {
@@ -67,6 +68,17 @@ int main(int argc, char **argv)
 		fprintf(test_log, "%i tests FAILED!\n\n", ierr);
 	}
 
+
+	/*
+	 * Unit tests for SMIOL_create_decomp and SMIOL_free_decomp
+	 */
+	ierr = test_decomp(test_log);
+	if (ierr == 0) {
+		fprintf(stderr, "All tests PASSED!\n\n");
+	}
+	else {
+		fprintf(stderr, "%i tests FAILED!\n\n", ierr);
+	}
 
 	if ((ierr = SMIOL_init(MPI_COMM_WORLD, &context)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_init: %s ", SMIOL_error_string(ierr));
@@ -371,6 +383,167 @@ int test_open_close(FILE *test_log)
 	if (ierr != SMIOL_SUCCESS || context != NULL) {
 		fprintf(test_log, "Failed to free SMIOL context...\n");
 		return -1;
+	}
+
+	fflush(test_log);
+	ierr = MPI_Barrier(MPI_COMM_WORLD);
+
+	fprintf(test_log, "\n");
+
+	return errcount;
+}
+
+int test_decomp(FILE *test_log)
+{
+	int ierr;
+	int errcount = 0;
+	size_t n_compute_elements, n_io_elements;
+	int64_t *compute_elements = NULL, *io_elements = NULL;
+	struct SMIOL_decomp *decomp = NULL;
+
+	fprintf(test_log, "********************************************************************************\n");
+	fprintf(test_log, "************ SMIOL_create_decomp / SMIOL_free_decomp unit tests ****************\n");
+	fprintf(test_log, "\n");
+
+	/* Create decomp with io_elements and compute_elements == NULL */
+	fprintf(test_log, "Everything OK (SMIOL_create_decomp) with NULL elements: ");
+	n_compute_elements = 0;
+	n_io_elements = 0;
+	decomp = SMIOL_create_decomp(n_compute_elements, n_io_elements,
+					compute_elements, io_elements);
+	if (decomp != NULL) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - decomp was returned as NULL\n");
+	}
+
+	fprintf(test_log, "Everything OK (SMIOL_free_decomp) with NULL elements: ");
+	ierr = SMIOL_free_decomp(&decomp);
+	if (ierr == SMIOL_SUCCESS && decomp == NULL) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr == SMIOL_SUCCESS && decomp != NULL) {
+		fprintf(test_log, "FAIL - Returned SMIOL_SUCCESS but, decomp was not NULL\n");
+		errcount++;
+	} else if (ierr != SMIOL_SUCCESS && decomp == NULL) {
+		fprintf(test_log, "FAIL - decomp was NULL but did not returned SMIOL_SUCCESS\n");
+		errcount++;
+	}
+
+
+	/* Create and Free Decomp with elements == 0 */
+	fprintf(test_log, "Everything OK (SMIOL_create_decomp) with 0 elements: ");
+	n_compute_elements = 0;
+	n_io_elements = 0;
+	compute_elements = malloc(sizeof(int64_t) * n_compute_elements);
+	io_elements = malloc(sizeof(int64_t) * n_io_elements);
+	decomp = SMIOL_create_decomp(n_compute_elements, n_io_elements,
+				compute_elements, io_elements);
+	if (decomp != NULL) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - decomp was returned as null\n");
+		errcount++;
+	}
+	free(compute_elements);
+	free(io_elements);
+
+	fprintf(test_log, "Everything OK (SMIOL_free_decomp) with 0 elements: ");
+	ierr = SMIOL_free_decomp(&decomp);
+	if (ierr == SMIOL_SUCCESS && decomp == NULL) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr == SMIOL_SUCCESS && decomp != NULL) {
+		fprintf(test_log, "FAIL - Returned SMIOL_SUCCESS but, decomp was not NULL\n");
+		errcount++;
+	} else if (ierr != SMIOL_SUCCESS && decomp == NULL) {
+		fprintf(test_log, "FAIL - decomp was NULL but did not returned SMIOL_SUCCESS\n");
+		errcount++;
+	}
+
+	/* In case an error occured above, free the decomp to continue testing */
+	if (decomp != NULL) {
+		free(decomp);
+		decomp = NULL;
+	}
+
+	/* Create and Free Decomp with elements == 1 */
+	fprintf(test_log, "Everything OK (SMIOL_create_decomp) with 1 elements: ");
+	n_compute_elements = 1;
+	n_io_elements = 1;
+	compute_elements = malloc(sizeof(int64_t) * n_compute_elements);
+	io_elements = malloc(sizeof(int64_t) * n_io_elements);
+	decomp = SMIOL_create_decomp(n_compute_elements, n_io_elements,
+	                             compute_elements, io_elements);
+	if (decomp != NULL) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - decomp was returned as NULL\n");
+		errcount++;
+	}
+	free(compute_elements);
+	free(io_elements);
+
+	fprintf(test_log, "Everything OK (SMIOL_free_decomp) with 1 elements: ");
+	ierr = SMIOL_free_decomp(&decomp);
+	if (ierr == SMIOL_SUCCESS && decomp == NULL) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr == SMIOL_SUCCESS && decomp != NULL) {
+		fprintf(test_log, "FAIL - Returned SMIOL_SUCCESS but, decomp was not NULL\n");
+		errcount++;
+	} else if (ierr != SMIOL_SUCCESS && decomp == NULL) {
+		fprintf(test_log, "FAIL - decomp was NULL but did not returned SMIOL_SUCCESS\n");
+		errcount++;
+	}
+
+	if (decomp != NULL) {
+		free(decomp);
+		decomp = NULL;
+	}
+
+	/* Create and Free Decomp with large amount of elements */
+	fprintf(test_log, "Everything OK (SMIOL_create_decomp) with large amount of elements: ");
+	n_compute_elements = 100000000;
+	n_io_elements = 100000000;
+	compute_elements = malloc(sizeof(int64_t) * n_compute_elements);
+	io_elements = malloc(sizeof(int64_t) * n_io_elements);
+	decomp = SMIOL_create_decomp(n_compute_elements, n_io_elements,
+	                             compute_elements, io_elements);
+	if (decomp != NULL) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - decomp was returned as NULL\n");
+		errcount++;
+	}
+	free(compute_elements);
+	free(io_elements);
+
+	fprintf(test_log, "Everything OK (SMIOL_free_decomp) with large amount of elements: ");
+	ierr = SMIOL_free_decomp(&decomp);
+	if (ierr == SMIOL_SUCCESS && decomp == NULL) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr == SMIOL_SUCCESS && decomp != NULL) {
+		fprintf(test_log, "FAIL - Returned SMIOL_SUCCESS but, decomp was not NULL\n");
+		errcount++;
+	} else if (ierr != SMIOL_SUCCESS && decomp == NULL) {
+		fprintf(test_log, "FAIL - decomp was NULL but did not returned SMIOL_SUCCESS\n");
+		errcount++;
+	}
+
+	if (decomp != NULL) {
+		free(decomp);
+		decomp = NULL;
+	}
+
+	/* Free a decomp that has already been freed */
+	fprintf(test_log, "Everything OK (SMIOL_free_decomp) freeing a NULL decomp: ");
+	ierr = SMIOL_free_decomp(&decomp);
+	if (ierr == SMIOL_SUCCESS && decomp == NULL) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr == SMIOL_SUCCESS && decomp != NULL) {
+		fprintf(test_log, "FAIL - Returned SMIOL_SUCCESS but, decomp was not NULL\n");
+		errcount++;
+	} else if (ierr != SMIOL_SUCCESS && decomp == NULL) {
+		fprintf(test_log, "FAIL - decomp was NULL but did not returned SMIOL_SUCCESS\n");
+		errcount++;
 	}
 
 	fflush(test_log);
