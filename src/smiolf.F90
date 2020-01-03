@@ -5,11 +5,12 @@
 !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 module SMIOLf
 
-    use iso_c_binding, only : c_int, c_ptr
+    use iso_c_binding, only : c_int, c_size_t, c_ptr
 
     private
 
     public :: SMIOLf_context, &
+              SMIOLf_decomp, &
               SMIOLf_file
 
     public :: SMIOLf_init, &
@@ -46,7 +47,10 @@ module SMIOLf
     end type SMIOLf_file
 
     type, bind(C) :: SMIOLf_decomp
-        integer(c_int) :: i
+        integer(c_size_t) :: n_compute_elements
+        integer(c_size_t) :: n_io_elements
+        type(c_ptr) :: compute_elements
+        type(c_ptr) :: io_elements
     end type SMIOLf_decomp
 
 
@@ -551,11 +555,51 @@ contains
     !>  Detailed description of what this routine does.
     !
     !-----------------------------------------------------------------------
-    integer function SMIOLf_create_decomp() result(ierr)
+    integer function SMIOLf_create_decomp(n_compute_elements, n_io_elements, compute_elements, io_elements, decomp) result(ierr)
+
+        use iso_c_binding, only : c_size_t, c_int64_t
+        use iso_c_binding, only : c_ptr, c_null_ptr, c_loc, c_f_pointer, c_associated
 
         implicit none
 
-        ierr = 0
+        integer(c_size_t), intent(in) :: n_compute_elements
+        integer(c_size_t), intent(in) :: n_io_elements
+        integer(c_int64_t), dimension(n_compute_elements), target, intent(in) :: compute_elements
+        integer(c_int64_t), dimension(n_io_elements), target, intent(in) :: io_elements
+        type(SMIOLf_decomp), pointer, intent(inout) :: decomp
+
+        type(c_ptr) :: c_compute_elements = c_null_ptr
+        type(c_ptr) :: c_io_elements = c_null_ptr
+        type(c_ptr) :: c_decomp = c_null_ptr
+        
+        interface
+            function SMIOL_create_decomp(n_compute_elements, n_io_elements, compute_elements, io_elements) & 
+                                            result(decomp) bind(C, name='SMIOL_create_decomp')
+                use iso_c_binding, only : c_size_t, c_ptr
+                integer(c_size_t), value :: n_compute_elements
+                integer(c_size_t), value :: n_io_elements
+                type(c_ptr), value :: compute_elements
+                type(c_ptr), value :: io_elements
+                type(c_ptr) :: decomp
+            end function
+        end interface
+
+        ierr = SMIOL_SUCCESS
+
+        ! Translate Fortran types into C interoperable types
+        c_compute_elements = c_loc(compute_elements)
+        c_io_elements = c_loc(io_elements)
+
+        ! Create SMIOL_decomp type via c SMIOL_create_decomp
+        c_decomp = SMIOL_create_decomp(n_compute_elements, n_io_elements, c_compute_elements, c_io_elements)
+
+        ! Error check and translate c_decomp ptr into Fortran SMIOLf_decomp 
+        if (.not. c_associated(c_decomp)) then
+            nullify(decomp)
+            ierr = SMIOL_FORTRAN_ERROR
+        else
+            call c_f_pointer(c_decomp, decomp)
+        endif
 
     end function SMIOLf_create_decomp
 
@@ -568,11 +612,41 @@ contains
     !>  Detailed description of what this routine does.
     !
     !-----------------------------------------------------------------------
-    integer function SMIOLf_free_decomp() result(ierr)
+    integer function SMIOLf_free_decomp(decomp) result(ierr)
+
+        use iso_c_binding, only : c_ptr, c_loc, c_associated, c_null_ptr
 
         implicit none
 
-        ierr = 0
+        type(SMIOLF_decomp), pointer, intent(inout) :: decomp
+        type(c_ptr) :: c_decomp = c_null_ptr
+
+        interface
+            function SMIOL_free_decomp(decomp) result(ierr) bind(C, name='SMIOL_free_decomp')
+                use iso_c_binding, only : c_ptr, c_int
+                type(c_ptr) :: decomp
+                integer(kind=c_int) :: ierr
+            end function
+        end interface
+
+        ierr = SMIOL_SUCCESS
+
+        if (associated(decomp)) then
+            c_decomp = c_loc(decomp)
+        endif
+        ierr = SMIOL_free_decomp(c_decomp)
+
+        if (ierr == SMIOL_SUCCESS) then
+            if (c_associated(c_decomp)) then
+                ierr = SMIOL_FORTRAN_ERROR
+            else
+                nullify(decomp)
+            end if
+        else
+            if (.not. c_associated(c_decomp)) then
+                nullify(decomp)
+            end if
+        end if
 
     end function SMIOLf_free_decomp
 

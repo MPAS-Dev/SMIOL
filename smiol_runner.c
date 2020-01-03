@@ -14,8 +14,8 @@ int main(int argc, char **argv)
 	int ierr;
 	size_t n_compute_elements = 1;
 	size_t n_io_elements = 1;
-	uint64_t *compute_elements;
-	uint64_t *io_elements;
+	int64_t *compute_elements;
+	int64_t *io_elements;
 	struct SMIOL_decomp *decomp = NULL;
 	struct SMIOL_context *context = NULL;
 	struct SMIOL_file *file = NULL;
@@ -65,8 +65,8 @@ int main(int argc, char **argv)
 	}
 
 	// Create elements
-	compute_elements = malloc(sizeof(uint64_t) * n_compute_elements);
-	io_elements = malloc(sizeof(uint64_t) * n_io_elements);
+	compute_elements = malloc(sizeof(int64_t) * n_compute_elements);
+	io_elements = malloc(sizeof(int64_t) * n_io_elements);
 
 	decomp = SMIOL_create_decomp(n_compute_elements, n_io_elements,
 				compute_elements, io_elements);

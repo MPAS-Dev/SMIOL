@@ -24,8 +24,8 @@ struct SMIOL_file {
 struct SMIOL_decomp {
 	size_t n_compute_elements;
 	size_t n_io_elements;
-	uint64_t *compute_elements;
-	uint64_t *io_elements;
+	int64_t *compute_elements;
+	int64_t *io_elements;
 };
 
 /*
@@ -78,6 +78,6 @@ int SMIOL_set_option(void);
  * Decomposition methods
  */
 struct SMIOL_decomp *SMIOL_create_decomp(size_t n_compute_elements,
-		size_t n_io_elements, uint64_t *compute_elements,
-		uint64_t *io_elements);
+		size_t n_io_elements, int64_t *compute_elements,
+		int64_t *io_elements);
 int SMIOL_free_decomp(struct SMIOL_decomp **d);
