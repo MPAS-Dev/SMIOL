@@ -1,5 +1,5 @@
 default:
-	@echo "Please provide a compiler name (llvm, gnu, intel, pgi, xi, nag, cray)"
+	@echo "Please provide a compiler name (llvm, gnu, intel, pgi, xl, nag, cray)"
 	exit 1
 
 llvm:
