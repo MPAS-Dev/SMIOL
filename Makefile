@@ -8,7 +8,6 @@ llvm:
 	 "CFLAGS = -g -Weverything" \
 	 "FC = flang" \
 	 "FFLAGS = -g -Mbounds -Mchkptr -Mstandard" \
-	 "FCINCLUDES = " \
 	 "CC_PARALLEL = mpicc" \
 	 "FC_PARALLEL = mpifort" )
 
@@ -18,7 +17,6 @@ gnu:
 	 "CFLAGS = -g -Wall -pedantic" \
 	 "FC = gfortran"\
 	 "FFLAGS = -g -Wall -fcheck=all -pedantic -std=f2003 -fbacktrace" \
-	 "FCINCLUDES = " \
 	 "CC_PARALLEL = mpicc" \
 	 "FC_PARALLEL = mpif90" )
 
@@ -28,7 +26,6 @@ intel:
 	 "CFLAGS = -g -Wall -traceback" \
 	 "FC = ifort " \
 	 "FFLAGS = -g -warn all -check all -traceback" \
-	 "FCINCLUDES = " \
 	 "CC_PARALLEL = mpicc" \
 	 "FC_PARALLEL = mpif90" )
 
@@ -38,7 +35,6 @@ pgi:
 	 "CFLAGS = -g -traceback" \
 	 "FC = pgfortran" \
 	 "FFLAGS = -g -Mbounds -Mchkptr -traceback" \
-	 "FCINCLUDES = " \
 	 "CC_PARALLEL = mpicc" \
 	 "FC_PARALLEL = mpif90" )
 
@@ -48,7 +44,6 @@ xl:
 	 "CFLAGS = -g" \
 	 "FC = xlf2003_r" \
 	 "FFLAGS = -g -C" \
-	 "FCINCLUDES = " \
 	 "CC_PARALLEL = mpicc" \
 	 "FC_PARALLEL = mpifort" )
 
@@ -58,7 +53,6 @@ nag:
 	 "CFLAGS = -g -Wall -pedantic" \
 	 "FC = nagfor" \
 	 "FFLAGS = -f2003 -g -C=all" \
-	 "FCINCLUDES = " \
 	 "CC_PARALLEL = mpicc" \
 	 "FC_PARALLEL = mpifort" )
 
