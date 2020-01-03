@@ -1,8 +1,8 @@
 all: smiol
 
 smiol:
-	$(CC) $(CPPINCLUDES) $(CFLAGS) $(LDFLAGS) -c smiol.c
-	$(FC) $(CPPINCLUDES) $(FFLAGS) $(LDFLAGS) -c smiolf.F90
+	$(CC) $(CPPINCLUDES) $(CFLAGS) -c smiol.c
+	$(FC) $(CPPINCLUDES) $(FFLAGS) -c smiolf.F90
 	ar cr ../libsmiol.a smiol.o
 	ar cr ../libsmiolf.a smiolf.o
 

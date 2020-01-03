@@ -75,8 +75,8 @@ endif
 smiol:
 
 	$(MAKE) -C ./src CC=$(CC_PARALLEL) FC=$(FC_PARALLEL) CPPINCLUDES="$(CPPINCLUDES)"
-	$(CC_PARALLEL) -I./src/ $(CPPINCLUDES) $(CFLAGS) -L./ $(LDFLAGS) -o smiol_runner_c smiol_runner.c -lsmiol $(LIBS)
-	$(FC_PARALLEL) -I./src/ $(CPPINCLUDES) $(FFLAGS) -L./ $(LDFLAGS) -o smiol_runner_f smiol_runner.F90 -lsmiolf -lsmiol $(LIBS)
+	$(CC_PARALLEL) -I./src/ $(CPPINCLUDES) $(CFLAGS) -L./ -o smiol_runner_c smiol_runner.c -lsmiol $(LIBS)
+	$(FC_PARALLEL) -I./src/ $(CPPINCLUDES) $(FFLAGS) -L./ -o smiol_runner_f smiol_runner.F90 -lsmiolf -lsmiol $(LIBS)
 
 
 test:
