@@ -22,13 +22,13 @@ program smiol_runner
 
     call MPI_Init(ierr)
     if (ierr /= MPI_SUCCESS) then
-        write(0,*) 'Error: MPI_Init failed'
+        write(0,'(a)') 'Error: MPI_Init failed'
         stop 1
     end if
 
     call MPI_Comm_rank(MPI_COMM_WORLD, my_proc_id, ierr)
     if (ierr /= MPI_SUCCESS) then
-        write(0,*) 'Error: MPI_Comm_rank failed'
+        write(0,'(a)') 'Error: MPI_Comm_rank failed'
         stop 1
     end if
 
@@ -40,11 +40,11 @@ program smiol_runner
     !
     ierr = test_init_finalize(test_log)
     if (ierr == 0) then
-        write(test_log,*) 'All tests PASSED!'
-        write(test_log,*) ''
+        write(test_log,'(a)') 'All tests PASSED!'
+        write(test_log,'(a)') ''
     else
-        write(test_log,*) ierr, ' tests FAILED!'
-        write(test_log,*) ''
+        write(test_log,'(a)') ierr, ' tests FAILED!'
+        write(test_log,'(a)') ''
     end if
 
     !
@@ -52,11 +52,11 @@ program smiol_runner
     !
     ierr = test_open_close(test_log)
     if (ierr == 0) then
-        write(test_log,*) 'All tests PASSED!'
-        write(test_log,*) ''
+        write(test_log,'(a)') 'All tests PASSED!'
+        write(test_log,'(a)') ''
     else
-        write(test_log,*) ierr, ' tests FAILED!'
-        write(test_log,*) ''
+        write(test_log,'(a)') ierr, ' tests FAILED!'
+        write(test_log,'(a)') ''
     end if
 
     !
@@ -64,21 +64,21 @@ program smiol_runner
     !
     ierr = test_decomp(test_log)
     if (ierr == 0) then
-        write(test_log,*) 'All tests PASSED!'
-        write(test_log,*) ''
+        write(test_log,'(a)') 'All tests PASSED!'
+        write(test_log,'(a)') ''
     else
-        write(test_log,*) ierr, ' tests FAILED!'
-        write(test_log,*) ''
+        write(test_log,'(a)') ierr, ' tests FAILED!'
+        write(test_log,'(a)') ''
     endif
 
 
     if (SMIOLf_init(MPI_COMM_WORLD, context) /= SMIOL_SUCCESS) then
-        write(test_log,*) "ERROR: 'SMIOLf_init' was not called successfully"
+        write(test_log,'(a)') "ERROR: 'SMIOLf_init' was not called successfully"
         stop 1
     endif 
 
     if (.not. associated(context)) then
-        write(test_log,*) 'Error: SMIOLf_init returned an unassociated context'
+        write(test_log,'(a)') 'Error: SMIOLf_init returned an unassociated context'
         stop 1
     end if
 
@@ -86,7 +86,7 @@ program smiol_runner
     allocate(io_elements(n_io_elements))
 
     if (SMIOLf_create_decomp(n_compute_elements, n_io_elements, compute_elements, io_elements, decomp) /= SMIOL_SUCCESS) then
-        write(test_log,*) "Error: SMIOLf_create_decomp was not called successfully"
+        write(test_log,'(a)') "Error: SMIOLf_create_decomp was not called successfully"
         stop 1
     endif
 
@@ -94,72 +94,72 @@ program smiol_runner
     deallocate(io_elements)
 
     if (SMIOLf_free_decomp(decomp) /= SMIOL_SUCCESS) then
-        write(test_log,*) "Error: SMIOLf_free_decomp was not called successfully"
+        write(test_log,'(a)') "Error: SMIOLf_free_decomp was not called successfully"
         stop 1
     endif
 
     if (SMIOLf_inquire() /= SMIOL_SUCCESS) then
-        write(test_log,*) "ERROR: 'SMIOLf_inquire' was not called successfully"
+        write(test_log,'(a)') "ERROR: 'SMIOLf_inquire' was not called successfully"
         stop 1
     endif
 
     if (SMIOLf_open_file(context, "blahf.nc", file) /= SMIOL_SUCCESS) then
-        write(test_log,*) "ERROR: 'SMIOLf_open_file' was not called successfully"
+        write(test_log,'(a)') "ERROR: 'SMIOLf_open_file' was not called successfully"
         stop 1
     endif
 
     if (SMIOLf_close_file(file) /= SMIOL_SUCCESS) then
-        write(test_log,*) "ERROR: 'SMIOLf_close_file' was not called successfully"
+        write(test_log,'(a)') "ERROR: 'SMIOLf_close_file' was not called successfully"
         stop 1
     endif
 
     if (SMIOLf_define_dim() /= SMIOL_SUCCESS) then 
-        write(test_log,*) "ERROR: 'SMIOLf_define_dim' was not called successfully"
+        write(test_log,'(a)') "ERROR: 'SMIOLf_define_dim' was not called successfully"
         stop 1
     endif
 
     if (SMIOLf_inquire_dim() /= SMIOL_SUCCESS) then
-        write(test_log,*) "ERROR: 'SMIOLf_inquire_dim' was not called successfully"
+        write(test_log,'(a)') "ERROR: 'SMIOLf_inquire_dim' was not called successfully"
         stop 1
     endif
 
     if (SMIOLf_define_var() /= SMIOL_SUCCESS) then
-        write(test_log,*) "ERROR: 'SMIOLf_define_var' was not called successfully"
+        write(test_log,'(a)') "ERROR: 'SMIOLf_define_var' was not called successfully"
         stop 1
     endif
 
     if (SMIOLf_inquire_var() /= SMIOL_SUCCESS) then
-        write(test_log,*) "ERROR: 'SMIOLf_inquire_var' was not called successfully"
+        write(test_log,'(a)') "ERROR: 'SMIOLf_inquire_var' was not called successfully"
         stop 1
     endif
 
     if (SMIOLf_put_var() /= SMIOL_SUCCESS) then
-        write(test_log,*) "ERROR: 'SMIOLf_put_var' was not called successfully"
+        write(test_log,'(a)') "ERROR: 'SMIOLf_put_var' was not called successfully"
         stop 1
     endif
 
     if (SMIOLf_get_var() /= SMIOL_SUCCESS) then
-        write(test_log,*) "ERROR: 'SMIOLf_get_var' was not called successfully"
+        write(test_log,'(a)') "ERROR: 'SMIOLf_get_var' was not called successfully"
         stop 1
     endif
 
     if (SMIOLf_define_att() /= SMIOL_SUCCESS) then
-        write(test_log,*) "ERROR: 'SMIOLf_define_att' was not called successfully"
+        write(test_log,'(a)') "ERROR: 'SMIOLf_define_att' was not called successfully"
         stop 1
     endif
 
     if (SMIOLf_inquire_att() /= SMIOL_SUCCESS) then
-        write(test_log,*) "ERROR: 'SMIOLf_inquire_att' was not called successfully"
+        write(test_log,'(a)') "ERROR: 'SMIOLf_inquire_att' was not called successfully"
         stop 1
     endif
 
     if (SMIOLf_file_sync() /= SMIOL_SUCCESS) then
-        write(test_log,*) "ERROR: 'SMIOLf_file_sync' was not called successfully"
+        write(test_log,'(a)') "ERROR: 'SMIOLf_file_sync' was not called successfully"
         stop 1
     endif
 
     if (SMIOLf_set_option() /= SMIOL_SUCCESS) then
-        write(test_log,*) "ERROR: 'SMIOLf_set_option' was not called successfully"
+        write(test_log,'(a)') "ERROR: 'SMIOLf_set_option' was not called successfully"
         stop 1
     endif
 
@@ -176,12 +176,12 @@ program smiol_runner
     write(test_log,'(a)') "SUCCESS"
 
     if (SMIOLf_finalize(context) /= SMIOL_SUCCESS) then
-        write(test_log,*) "ERROR: 'SMIOLf_finalize' was not called successfully"
+        write(test_log,'(a)') "ERROR: 'SMIOLf_finalize' was not called successfully"
         stop 1
     endif
 
     if (associated(context)) then
-        write(test_log,*) 'Error: SMIOLf_finalize returned an associated context'
+        write(test_log,'(a)') 'Error: SMIOLf_finalize returned an associated context'
         stop 1
     end if
 
@@ -189,7 +189,7 @@ program smiol_runner
 
     call MPI_Finalize(ierr)
     if (ierr /= MPI_SUCCESS) then
-        write(0,*) 'Error: MPI_Finalize failed'
+        write(0,'(a)') 'Error: MPI_Finalize failed'
         stop 1
     end if
 
