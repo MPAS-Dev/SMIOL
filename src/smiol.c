@@ -77,7 +77,7 @@ int SMIOL_init(MPI_Comm comm, struct SMIOL_context **context)
 	 * Initialize context
 	 */
 	(*context)->lib_ierr = 0;
-	(*context)->lib_type = 0;
+	(*context)->lib_type = SMIOL_LIBRARY_UNKNOWN;
 
 	/*
 	 * Make a duplicate of the MPI communicator for use by SMIOL
@@ -177,6 +177,10 @@ int SMIOL_inquire(void)
  ********************************************************************************/
 int SMIOL_open_file(struct SMIOL_context *context, const char *filename, struct SMIOL_file **file)
 {
+#ifdef SMIOL_PNETCDF
+	int ierr;
+#endif
+
 	/*
 	 * Before dereferencing file below, ensure that the pointer
 	 * the file pointer is not NULL
@@ -203,11 +207,13 @@ int SMIOL_open_file(struct SMIOL_context *context, const char *filename, struct 
 	(*file)->context = context;
 
 #ifdef SMIOL_PNETCDF
-	if (ncmpi_create(MPI_Comm_f2c(context->fcomm), filename, NC_NOCLOBBER,
-				MPI_INFO_NULL, &((*file)->ncidp)) != NC_NOERR) {
+	if ((ierr = ncmpi_create(MPI_Comm_f2c(context->fcomm), filename, NC_NOCLOBBER,
+				 MPI_INFO_NULL, &((*file)->ncidp))) != NC_NOERR) {
 		free((*file));
 		(*file) = NULL;
-		return -996;    /* TODO: we still need a way to handle library-specific errors */
+		context->lib_type = SMIOL_LIBRARY_PNETCDF;
+		context->lib_ierr = ierr;
+		return SMIOL_LIBRARY_ERROR;
 	}
 #endif
 
@@ -229,6 +235,10 @@ int SMIOL_open_file(struct SMIOL_context *context, const char *filename, struct 
  ********************************************************************************/
 int SMIOL_close_file(struct SMIOL_file **file)
 {
+#ifdef SMIOL_PNETCDF
+	int ierr;
+#endif
+
 	/*
 	 * If the pointer to the file pointer is NULL, assume we have nothing
 	 * to do and declare success
@@ -238,10 +248,12 @@ int SMIOL_close_file(struct SMIOL_file **file)
 	}
 
 #ifdef SMIOL_PNETCDF
-	if (ncmpi_close((*file)->ncidp) != NC_NOERR) {
+	if ((ierr = ncmpi_close((*file)->ncidp)) != NC_NOERR) {
+		((*file)->context)->lib_type = SMIOL_LIBRARY_PNETCDF;
+		((*file)->context)->lib_ierr = ierr;
 		free((*file));
 		(*file) = NULL;
-		return -996;    /* TODO: we still need a way to handle library-specific errors */
+		return SMIOL_LIBRARY_ERROR;
 	}
 #endif
 
@@ -433,6 +445,10 @@ const char *SMIOL_lib_error_string(struct SMIOL_context *context)
 	}
 
 	switch (context->lib_type) {
+#ifdef SMIOL_PNETCDF
+	case SMIOL_LIBRARY_PNETCDF:
+		return ncmpi_strerror(context->lib_ierr);
+#endif
 	default:
 		return "Could not find matching library for the source of the error";
 	}
