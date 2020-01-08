@@ -28,6 +28,7 @@ module SMIOLf
               SMIOLf_inquire_att, &
               SMIOLf_file_sync, &
               SMIOLf_error_string, &
+              SMIOLf_lib_error_string, &
               SMIOLf_set_option, &
               SMIOLf_create_decomp, &
               SMIOLf_free_decomp
@@ -37,6 +38,9 @@ module SMIOLf
         integer :: fcomm             ! Fortran handle to MPI communicator; MPI_Fint on the C side, which is supposed to match a Fortran integer
         integer(c_int) :: comm_size  ! Size of MPI communicator
         integer(c_int) :: comm_rank  ! Rank within MPI communicator
+
+        integer(c_int) :: lib_ierr   ! Library-specific error code
+        integer(c_int) :: lib_type   ! From which library the error code originated
     end type SMIOLf_context
 
     type, bind(C) :: SMIOLf_file
@@ -528,6 +532,53 @@ contains
         err_mesg = err_mesg(1:i)
 
     end function SMIOLf_error_string
+
+
+    !-----------------------------------------------------------------------
+    !  routine SMIOLf_lib_error_string
+    !
+    !> \brief Returns an error string for a specified error code
+    !> \details
+    !>  Detailed description of what this routine does.
+    !
+    !-----------------------------------------------------------------------
+    character(len=128) function SMIOLf_lib_error_string(context) result(err_mesg)
+
+        use iso_c_binding, only : c_ptr, c_null_ptr, c_char, c_null_char, c_f_pointer, c_loc
+
+        implicit none
+
+        type (SMIOLf_context), target :: context
+
+        type (c_ptr) :: c_context = c_null_ptr
+        type (c_ptr) :: c_mesg_ptr = c_null_ptr
+        character(kind=c_char), dimension(:), pointer :: c_mesg => null()
+        integer :: i
+
+        ! C interface definitions
+        interface
+            function SMIOL_lib_error_string(context) result(err_mesg) bind(C, name='SMIOL_lib_error_string')
+                use iso_c_binding, only : c_ptr
+                type(c_ptr), value :: context
+                type (c_ptr) :: err_mesg
+            end function
+        end interface
+
+        c_context = c_loc(context)
+
+        c_mesg_ptr = SMIOL_lib_error_string(c_context)
+        call c_f_pointer(c_mesg_ptr, c_mesg, shape=[len(err_mesg)])
+
+        do i=1,len(err_mesg)
+            if (c_mesg(i) == c_null_char) exit
+        end do
+
+        i = i - 1
+
+        err_mesg(1:i) = transfer(c_mesg(1:i), err_mesg)
+        err_mesg = err_mesg(1:i)
+
+    end function SMIOLf_lib_error_string
 
 
     !-----------------------------------------------------------------------

@@ -12,6 +12,9 @@ struct SMIOL_context {
 	MPI_Fint fcomm; /* Fortran handle to MPI communicator */
 	int comm_size;  /* Size of MPI communicator */
 	int comm_rank;  /* Rank within MPI communicator */
+
+	int lib_ierr;   /* Library-specific error code */
+	int lib_type;   /* From which library the error code originated */
 };
 
 struct SMIOL_file {
@@ -72,6 +75,7 @@ int SMIOL_inquire_att(void);
  */
 int SMIOL_file_sync(void);
 const char *SMIOL_error_string(int errno);
+const char *SMIOL_lib_error_string(struct SMIOL_context *context);
 int SMIOL_set_option(void);
 
 /*

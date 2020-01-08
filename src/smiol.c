@@ -74,6 +74,12 @@ int SMIOL_init(MPI_Comm comm, struct SMIOL_context **context)
 	}
 
 	/*
+	 * Initialize context
+	 */
+	(*context)->lib_ierr = 0;
+	(*context)->lib_type = 0;
+
+	/*
 	 * Make a duplicate of the MPI communicator for use by SMIOL
 	 */
 	if (MPI_Comm_dup(comm, &smiol_comm) != MPI_SUCCESS) {
@@ -407,6 +413,28 @@ const char *SMIOL_error_string(int errno)
 		return "bad return code from a library call";
 	default:
 		return "Unknown error";
+	}
+}
+
+
+/********************************************************************************
+ *
+ * SMIOL_lib_error_string
+ *
+ * Returns an error string for a specified error code.
+ *
+ * Detailed description.
+ *
+ ********************************************************************************/
+const char *SMIOL_lib_error_string(struct SMIOL_context *context)
+{
+	if (context == NULL) {
+		return "SMIOL_context argument is a NULL pointer";
+	}
+
+	switch (context->lib_type) {
+	default:
+		return "Could not find matching library for the source of the error";
 	}
 }
 
