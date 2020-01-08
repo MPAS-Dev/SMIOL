@@ -283,6 +283,9 @@ contains
 
 
     function test_open_close(test_log) result(ierrcount)
+#if 0
+        use iso_c_binding, only : c_loc
+#endif
 
         implicit none
 
@@ -305,6 +308,40 @@ contains
             ierrcount = -1
             return
         end if
+
+#ifdef SMIOL_PNETCDF
+        ! Try to create a file for which we should not have sufficient permissions
+        write(test_log,'(a)',advance='no') 'Try to create a file with insufficient permissions: '
+        nullify(file)
+        ierr = SMIOLf_open_file(context, '/smiol_test.nc', file)
+        if (ierr == SMIOL_LIBRARY_ERROR) then
+            write(test_log,'(a)') 'PASS ('//trim(SMIOLf_lib_error_string(context))//')'
+        else
+            write(test_log,'(a)') 'FAIL - expected error code of SMIOL_LIBRARY_ERROR not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+#if 0
+!
+! This test will not work under most compilers:
+! * The flang compiler complains that file % context requires a reference to a TYPE(C_PTR)
+! * The Intel compiler generates a double-free error when SMIOL_close_file tries to free
+!   the 'file' allocated by Fortran
+!
+        ! Try to close a file that was never opened
+        write(test_log,'(a)',advance='no') 'Try to close a file that was never opened: '
+        allocate(file)
+        file % context = c_loc(context)
+        ierr = SMIOLf_close_file(file)
+        if (associated(file)) deallocate(file)
+        if (ierr == SMIOL_LIBRARY_ERROR) then
+            write(test_log,'(a)') 'PASS ('//trim(SMIOLf_lib_error_string(context))//')'
+        else
+            write(test_log,'(a)') 'FAIL - expected error code of SMIOL_LIBRARY_ERROR not returned'
+            ierrcount = ierrcount + 1
+        end if
+#endif
+#endif
 
         ! Everything OK (SMIOLf_open_file)
         write(test_log,'(a)',advance='no') 'Everything OK (SMIOLf_open_file): '
