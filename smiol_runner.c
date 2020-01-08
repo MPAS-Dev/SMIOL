@@ -200,6 +200,8 @@ int main(int argc, char **argv)
 		SMIOL_error_string(SMIOL_MPI_ERROR));
 	fprintf(test_log, "SMIOL_error_string test 'Fortran wrapper detected an inconsistency in C return values': %s\n",
 		SMIOL_error_string(SMIOL_FORTRAN_ERROR));
+	fprintf(test_log, "SMIOL_error_string test 'bad return code from a library call': %s\n",
+		SMIOL_error_string(SMIOL_LIBRARY_ERROR));
 
 	if ((ierr = SMIOL_finalize(&context)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_finalize: %s ", SMIOL_error_string(ierr));

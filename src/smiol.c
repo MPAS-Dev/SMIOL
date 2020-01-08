@@ -403,6 +403,8 @@ const char *SMIOL_error_string(int errno)
 		return "internal MPI call failed";
 	case SMIOL_FORTRAN_ERROR:
 		return "Fortran wrapper detected an inconsistency in C return values";
+	case SMIOL_LIBRARY_ERROR:
+		return "bad return code from a library call";
 	default:
 		return "Unknown error";
 	}

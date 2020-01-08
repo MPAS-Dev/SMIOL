@@ -173,6 +173,8 @@ program smiol_runner
                trim(SMIOLf_error_string(SMIOL_MPI_ERROR))
     write(test_log,'(a)') "Testing SMIOL_error_string test Fortran wrapper detected an inconsistency in C return values: ", &
                trim(SMIOLf_error_string(SMIOL_FORTRAN_ERROR))
+    write(test_log,'(a)') "Testing SMIOL_error_string: bad return code from a library call: ", &
+               trim(SMIOLf_error_string(SMIOL_LIBRARY_ERROR))
     write(test_log,'(a)') "SUCCESS"
 
     if (SMIOLf_finalize(context) /= SMIOL_SUCCESS) then
