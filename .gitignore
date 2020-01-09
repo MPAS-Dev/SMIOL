@@ -2,6 +2,10 @@
 smiol_runner_c
 smiol_runner_f
 
+#SMIOL test logs
+smiol.????.test
+smiolf.????.test
+
 # All object and library files
 *.o
 *.a
