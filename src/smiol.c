@@ -429,17 +429,43 @@ int SMIOL_inquire_att(void)
  *
  * Forces all in-memory data to be flushed to disk.
  *
- * Detailed description.
+ * Upon success, all in-memory data for the file associatd with the file
+ * handle will be flushed to the file system and SMIOL_SUCCESS will be
+ * returned; otherwise, an error code is returned.
  *
  ********************************************************************************/
 int SMIOL_file_sync(struct SMIOL_file *file)
 {
+#ifdef SMIOL_PNETCDF
+	int ierr;
+#endif
+
 	/*
 	 * Check that file is valid
 	 */
 	if (file == NULL) {
 		return SMIOL_INVALID_ARGUMENT;
 	}
+
+#ifdef SMIOL_PNETCDF
+	/*
+	 * If the file is in define mode then switch it into data mode
+	 */
+	if (file->state == PNETCDF_DEFINE_MODE) {
+		if ((ierr = ncmpi_enddef(file->ncidp)) != NC_NOERR) {
+			file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+			file->context->lib_ierr = ierr;
+			return SMIOL_LIBRARY_ERROR;
+		}
+		file->state = PNETCDF_DATA_MODE;
+	}
+
+	if ((ierr = ncmpi_sync(file->ncidp)) != NC_NOERR) {
+		file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+		file->context->lib_ierr = ierr;
+		return SMIOL_LIBRARY_ERROR;
+	}
+#endif
 
 	return SMIOL_SUCCESS;
 }
