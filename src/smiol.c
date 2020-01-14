@@ -434,6 +434,13 @@ int SMIOL_inquire_att(void)
  ********************************************************************************/
 int SMIOL_file_sync(struct SMIOL_file *file)
 {
+	/*
+	 * Check that file is valid
+	 */
+	if (file == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
 	return SMIOL_SUCCESS;
 }
 

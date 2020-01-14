@@ -484,15 +484,35 @@ contains
     !
     !> \brief Forces all in-memory data to be flushed to disk
     !> \details
-    !>  Detailed description of what this routine does.
+    !> Upon success, all in-memory data for the file associatd with the file
+    !> handle will be flushed to the file system and SMIOL_SUCCESS will be
+    !> returned; otherwise, an error code is returned.
     !
     !-----------------------------------------------------------------------
     integer function SMIOLf_file_sync(file) result(ierr)
 
-        implicit none
-        type (SMIOLf_file), pointer :: file
+        use iso_c_binding, only : c_ptr, c_loc, c_null_ptr
 
-        ierr = SMIOL_SUCCESS
+        implicit none
+
+        type (SMIOLf_file), pointer :: file
+        type (c_ptr) :: c_file
+
+        interface
+            function SMIOL_file_sync(file) result(ierr) bind(C, name='SMIOL_file_sync')
+                use iso_c_binding, only : c_ptr, c_int
+                type(c_ptr), value :: file
+                integer(kind=c_int) :: ierr
+            end function
+        end interface
+
+        c_file = c_null_ptr
+
+        if (associated(file)) then
+            c_file = c_loc(file)
+        end if
+
+        ierr = SMIOL_file_sync(c_file)
 
     end function SMIOLf_file_sync
 
