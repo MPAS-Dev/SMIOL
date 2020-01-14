@@ -74,10 +74,10 @@ int main(int argc, char **argv)
 	 */
 	ierr = test_decomp(test_log);
 	if (ierr == 0) {
-		fprintf(stderr, "All tests PASSED!\n\n");
+		fprintf(test_log, "All tests PASSED!\n\n");
 	}
 	else {
-		fprintf(stderr, "%i tests FAILED!\n\n", ierr);
+		fprintf(test_log, "%i tests FAILED!\n\n", ierr);
 	}
 
 	if ((ierr = SMIOL_init(MPI_COMM_WORLD, &context)) != SMIOL_SUCCESS) {
