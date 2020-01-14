@@ -128,6 +128,12 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+	if ((ierr = SMIOL_file_sync(file)) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_file_sync: %s ",
+			SMIOL_error_string(ierr));
+		return 1;
+	}
+
 	if ((ierr = SMIOL_close_file(&file)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_close_file: %s ",
 			SMIOL_error_string(ierr));
@@ -176,12 +182,6 @@ int main(int argc, char **argv)
 		return 1;
 	}
 	
-	if ((ierr = SMIOL_file_sync()) != SMIOL_SUCCESS) {
-		fprintf(test_log, "ERROR: SMIOL_file_sync: %s ",
-			SMIOL_error_string(ierr));
-		return 1;
-	}
-
 	if ((ierr = SMIOL_set_option()) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_set_option: %s ",
 			SMIOL_error_string(ierr));

@@ -432,7 +432,7 @@ int SMIOL_inquire_att(void)
  * Detailed description.
  *
  ********************************************************************************/
-int SMIOL_file_sync(void)
+int SMIOL_file_sync(struct SMIOL_file *file)
 {
 	return SMIOL_SUCCESS;
 }

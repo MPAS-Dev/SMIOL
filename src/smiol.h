@@ -74,7 +74,7 @@ int SMIOL_inquire_att(void);
 /*
  * Control methods
  */
-int SMIOL_file_sync(void);
+int SMIOL_file_sync(struct SMIOL_file *file);
 const char *SMIOL_error_string(int errno);
 const char *SMIOL_lib_error_string(struct SMIOL_context *context);
 int SMIOL_set_option(void);

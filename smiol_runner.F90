@@ -108,6 +108,11 @@ program smiol_runner
         stop 1
     endif
 
+    if (SMIOLf_file_sync(file) /= SMIOL_SUCCESS) then
+        write(test_log,'(a)') "ERROR: 'SMIOLf_file_sync' was not called successfully"
+        stop 1
+    endif
+
     if (SMIOLf_close_file(file) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_close_file' was not called successfully"
         stop 1
@@ -150,11 +155,6 @@ program smiol_runner
 
     if (SMIOLf_inquire_att() /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_inquire_att' was not called successfully"
-        stop 1
-    endif
-
-    if (SMIOLf_file_sync() /= SMIOL_SUCCESS) then
-        write(test_log,'(a)') "ERROR: 'SMIOLf_file_sync' was not called successfully"
         stop 1
     endif
 

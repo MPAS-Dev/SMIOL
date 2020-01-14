@@ -487,11 +487,12 @@ contains
     !>  Detailed description of what this routine does.
     !
     !-----------------------------------------------------------------------
-    integer function SMIOLf_file_sync() result(ierr)
+    integer function SMIOLf_file_sync(file) result(ierr)
 
         implicit none
+        type (SMIOLf_file), pointer :: file
 
-        ierr = 0
+        ierr = SMIOL_SUCCESS
 
     end function SMIOLf_file_sync
 
