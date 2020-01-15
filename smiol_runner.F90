@@ -309,15 +309,38 @@ contains
             return
         end if
 
+        ! Try to open a file with an invalid mode
+        write(test_log,'(a)',advance='no') 'Try to open a file with an invalid mode: '
+        nullify(file)
+        ierr = SMIOLf_open_file(context, 'smiol_invalid.nc', &
+                                not(ior(ior(SMIOL_FILE_CREATE, SMIOL_FILE_WRITE), SMIOL_FILE_READ)), file)
+        if (ierr == SMIOL_INVALID_ARGUMENT .and. .not. associated(file)) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - expected error code of SMIOL_INVALID_ARGUMENT not returned, or file handle is associated'
+            ierrcount = ierrcount + 1
+        end if
+
 #ifdef SMIOL_PNETCDF
         ! Try to create a file for which we should not have sufficient permissions
         write(test_log,'(a)',advance='no') 'Try to create a file with insufficient permissions: '
         nullify(file)
         ierr = SMIOLf_open_file(context, '/smiol_test.nc', SMIOL_FILE_CREATE, file)
-        if (ierr == SMIOL_LIBRARY_ERROR) then
+        if (ierr == SMIOL_LIBRARY_ERROR .and. .not. associated(file)) then
             write(test_log,'(a)') 'PASS ('//trim(SMIOLf_lib_error_string(context))//')'
         else
-            write(test_log,'(a)') 'FAIL - expected error code of SMIOL_LIBRARY_ERROR not returned'
+            write(test_log,'(a)') 'FAIL - expected error code of SMIOL_LIBRARY_ERROR not returned, or file handle is associated'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Try to open a file that does not exist
+        write(test_log,'(a)',advance='no') 'Try to open a non-existent file: '
+        nullify(file)
+        ierr = SMIOLf_open_file(context, '/smiol_foobar.nc', SMIOL_FILE_READ, file)
+        if (ierr == SMIOL_LIBRARY_ERROR .and. .not. associated(file)) then
+            write(test_log,'(a)') 'PASS ('//trim(SMIOLf_lib_error_string(context))//')'
+        else
+            write(test_log,'(a)') 'FAIL - expected error code of SMIOL_LIBRARY_ERROR not returned, or file handle is associated'
             ierrcount = ierrcount + 1
         end if
 
@@ -341,6 +364,69 @@ contains
             ierrcount = ierrcount + 1
         end if
 #endif
+
+        ! Create a file to be closed and opened again
+        write(test_log,'(a)',advance='no') 'Create a file to be closed and later re-opened: '
+        nullify(file)
+        ierr = SMIOLf_open_file(context, 'pnetcdf_test_f.nc', SMIOL_FILE_CREATE, file)
+        if (ierr == SMIOL_SUCCESS .and. associated(file)) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL ('//trim(SMIOLf_lib_error_string(context))//') - failed to create a new file'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Close the file that was just created
+        write(test_log,'(a)',advance='no') 'Close the file that was just created: '
+        ierr = SMIOLf_close_file(file)
+        if (ierr == SMIOL_SUCCESS .and. .not. associated(file)) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - file handle is associated or SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Re-open the file with read access
+        write(test_log,'(a)',advance='no') 'Re-open file with read access: '
+        nullify(file)
+        ierr = SMIOLf_open_file(context, 'pnetcdf_test_f.nc', SMIOL_FILE_READ, file)
+        if (ierr == SMIOL_SUCCESS .and. associated(file)) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL ('//trim(SMIOLf_lib_error_string(context))//') - failed to re-open existing file'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Close the file
+        write(test_log,'(a)',advance='no') 'Close the file: '
+        ierr = SMIOLf_close_file(file)
+        if (ierr == SMIOL_SUCCESS .and. .not. associated(file)) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - file handle is associated or SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Re-open the file with write access
+        write(test_log,'(a)',advance='no') 'Re-open file with write access: '
+        nullify(file)
+        ierr = SMIOLf_open_file(context, 'pnetcdf_test_f.nc', SMIOL_FILE_WRITE, file)
+        if (ierr == SMIOL_SUCCESS .and. associated(file)) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL ('//trim(SMIOLf_lib_error_string(context))//') - failed to re-open existing file'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Close the file
+        write(test_log,'(a)',advance='no') 'Close the file: '
+        ierr = SMIOLf_close_file(file)
+        if (ierr == SMIOL_SUCCESS .and. .not. associated(file)) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - file handle is associated or SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        end if
 #endif
 
         ! Everything OK (SMIOLf_open_file)

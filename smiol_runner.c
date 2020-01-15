@@ -360,16 +360,40 @@ int test_open_close(FILE *test_log)
 		return -1;
 	}
 
+	/* Try to open a file with an invalid mode */
+	fprintf(test_log, "Try to open a file with an invalid mode: ");
+	file = NULL;
+	ierr = SMIOL_open_file(context, "smiol_invalid.nc", ~(SMIOL_FILE_CREATE | SMIOL_FILE_WRITE | SMIOL_FILE_READ), &file);
+	if (ierr == SMIOL_INVALID_ARGUMENT && file == NULL) {
+		fprintf(test_log, "PASS\n");
+	}
+	else {
+		fprintf(test_log, "FAIL - expected error code of SMIOL_INVALID_ARGUMENT not returned, or file not NULL\n");
+		errcount++;
+	}
+
 #ifdef SMIOL_PNETCDF
 	/* Try to create a file for which we should not have sufficient permissions */
 	fprintf(test_log, "Try to create a file with insufficient permissions: ");
 	file = NULL;
 	ierr = SMIOL_open_file(context, "/smiol_test.nc", SMIOL_FILE_CREATE, &file);
-	if (ierr == SMIOL_LIBRARY_ERROR) {
+	if (ierr == SMIOL_LIBRARY_ERROR && file == NULL) {
 		fprintf(test_log, "PASS (%s)\n", SMIOL_lib_error_string(context));
 	}
 	else {
-		fprintf(test_log, "FAIL - expected error code of SMIOL_LIBRARY_ERROR not returned\n");
+		fprintf(test_log, "FAIL - expected error code of SMIOL_LIBRARY_ERROR not returned, or file not NULL\n");
+		errcount++;
+	}
+
+	/* Try to open a file that does not exist */
+	fprintf(test_log, "Try to open a non-existent file: ");
+	file = NULL;
+	ierr = SMIOL_open_file(context, "/smiol_foobar.nc", SMIOL_FILE_READ, &file);
+	if (ierr == SMIOL_LIBRARY_ERROR && file == NULL) {
+		fprintf(test_log, "PASS (%s)\n", SMIOL_lib_error_string(context));
+	}
+	else {
+		fprintf(test_log, "FAIL - expected error code of SMIOL_LIBRARY_ERROR not returned, or file not NULL\n");
 		errcount++;
 	}
 
@@ -384,6 +408,75 @@ int test_open_close(FILE *test_log)
 	}
 	else {
 		fprintf(test_log, "FAIL - expected error code of SMIOL_LIBRARY_ERROR not returned\n");
+		errcount++;
+	}
+
+	/* Create a file to be closed and opened again */
+	fprintf(test_log, "Create a file to be closed and later re-opened: ");
+	file = NULL;
+	ierr = SMIOL_open_file(context, "pnetcdf_test_c.nc", SMIOL_FILE_CREATE, &file);
+	if (ierr == SMIOL_SUCCESS && file != NULL) {
+		fprintf(test_log, "PASS\n");
+	}
+	else {
+		fprintf(test_log, "FAIL (%s) - failed to create a new file\n", SMIOL_lib_error_string(context));
+		errcount++;
+	}
+
+	/* Close the file that was just created */
+	fprintf(test_log, "Close the file that was just created: ");
+	ierr = SMIOL_close_file(&file);
+	if (ierr == SMIOL_SUCCESS && file == NULL) {
+		fprintf(test_log, "PASS\n");
+	}
+	else {
+		fprintf(test_log, "FAIL - context is not NULL or SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+
+	/* Re-open the file with read access */
+	fprintf(test_log, "Re-open file with read access: ");
+	file = NULL;
+	ierr = SMIOL_open_file(context, "pnetcdf_test_c.nc", SMIOL_FILE_READ, &file);
+	if (ierr == SMIOL_SUCCESS && file != NULL) {
+		fprintf(test_log, "PASS\n");
+	}
+	else {
+		fprintf(test_log, "FAIL (%s) - failed to re-open existing file\n", SMIOL_lib_error_string(context));
+		errcount++;
+	}
+
+	/* Close the file */
+	fprintf(test_log, "Close the file: ");
+	ierr = SMIOL_close_file(&file);
+	if (ierr == SMIOL_SUCCESS && file == NULL) {
+		fprintf(test_log, "PASS\n");
+	}
+	else {
+		fprintf(test_log, "FAIL - context is not NULL or SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+
+	/* Re-open the file with write access */
+	fprintf(test_log, "Re-open file with write access: ");
+	file = NULL;
+	ierr = SMIOL_open_file(context, "pnetcdf_test_c.nc", SMIOL_FILE_WRITE, &file);
+	if (ierr == SMIOL_SUCCESS && file != NULL) {
+		fprintf(test_log, "PASS\n");
+	}
+	else {
+		fprintf(test_log, "FAIL (%s) - failed to re-open existing file\n", SMIOL_lib_error_string(context));
+		errcount++;
+	}
+
+	/* Close the file */
+	fprintf(test_log, "Close the file: ");
+	ierr = SMIOL_close_file(&file);
+	if (ierr == SMIOL_SUCCESS && file == NULL) {
+		fprintf(test_log, "PASS\n");
+	}
+	else {
+		fprintf(test_log, "FAIL - context is not NULL or SMIOL_SUCCESS was not returned\n");
 		errcount++;
 	}
 #endif
