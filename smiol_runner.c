@@ -122,7 +122,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if ((ierr = SMIOL_open_file(context, "blah.nc", &file)) != SMIOL_SUCCESS) {
+	if ((ierr = SMIOL_open_file(context, "blah.nc", SMIOL_FILE_CREATE, &file)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_open_file: %s ",
 			SMIOL_error_string(ierr));
 		return 1;
@@ -364,7 +364,7 @@ int test_open_close(FILE *test_log)
 	/* Try to create a file for which we should not have sufficient permissions */
 	fprintf(test_log, "Try to create a file with insufficient permissions: ");
 	file = NULL;
-	ierr = SMIOL_open_file(context, "/smiol_test.nc", &file);
+	ierr = SMIOL_open_file(context, "/smiol_test.nc", SMIOL_FILE_CREATE, &file);
 	if (ierr == SMIOL_LIBRARY_ERROR) {
 		fprintf(test_log, "PASS (%s)\n", SMIOL_lib_error_string(context));
 	}
@@ -391,7 +391,7 @@ int test_open_close(FILE *test_log)
 	/* Everything OK (SMIOL_open_file) */
 	fprintf(test_log, "Everything OK (SMIOL_open_file): ");
 	file = NULL;
-	ierr = SMIOL_open_file(context, "test.nc", &file);
+	ierr = SMIOL_open_file(context, "test.nc", SMIOL_FILE_CREATE, &file);
 	if (ierr == SMIOL_SUCCESS && file != NULL) {
 		fprintf(test_log, "PASS\n");
 	}

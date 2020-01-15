@@ -103,7 +103,7 @@ program smiol_runner
         stop 1
     endif
 
-    if (SMIOLf_open_file(context, "blahf.nc", file) /= SMIOL_SUCCESS) then
+    if (SMIOLf_open_file(context, "blahf.nc", SMIOL_FILE_CREATE, file) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_open_file' was not called successfully"
         stop 1
     endif
@@ -313,7 +313,7 @@ contains
         ! Try to create a file for which we should not have sufficient permissions
         write(test_log,'(a)',advance='no') 'Try to create a file with insufficient permissions: '
         nullify(file)
-        ierr = SMIOLf_open_file(context, '/smiol_test.nc', file)
+        ierr = SMIOLf_open_file(context, '/smiol_test.nc', SMIOL_FILE_CREATE, file)
         if (ierr == SMIOL_LIBRARY_ERROR) then
             write(test_log,'(a)') 'PASS ('//trim(SMIOLf_lib_error_string(context))//')'
         else
@@ -346,7 +346,7 @@ contains
         ! Everything OK (SMIOLf_open_file)
         write(test_log,'(a)',advance='no') 'Everything OK (SMIOLf_open_file): '
         nullify(file)
-        ierr = SMIOLf_open_file(context, 'test_fortran.nc', file)
+        ierr = SMIOLf_open_file(context, 'test_fortran.nc', SMIOL_FILE_CREATE, file)
         if (ierr == SMIOL_SUCCESS .and. associated(file)) then
             write(test_log,'(a)') 'PASS'
         else

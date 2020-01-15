@@ -47,7 +47,7 @@ int SMIOL_inquire(void);
 /*
  * File methods
  */
-int SMIOL_open_file(struct SMIOL_context *context, const char *filename, struct SMIOL_file **file);
+int SMIOL_open_file(struct SMIOL_context *context, const char *filename, int mode, struct SMIOL_file **file);
 int SMIOL_close_file(struct SMIOL_file **file);
 
 /*

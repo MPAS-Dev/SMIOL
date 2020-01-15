@@ -200,15 +200,15 @@ contains
     !
     !> \brief Opens a file within a SMIOL context
     !> \details
-    !>  Creates or opens the file specified by filename within the provided SMIOL
-    !>  context.
+    !>  Depending on the specified file mode, creates or opens the file specified
+    !>  by filename within the provided SMIOL context.
     !>
     !>  Upon successful completion, SMIOL_SUCCESS is returned, and the file handle argument
     !>  will point to a valid file handle. Otherwise, the file handle is not associated
     !>  and an error code other than SMIOL_SUCCESS is returned.
     !
     !-----------------------------------------------------------------------
-    integer function SMIOLf_open_file(context, filename, file) result(ierr)
+    integer function SMIOLf_open_file(context, filename, mode, file) result(ierr)
 
         use iso_c_binding, only : c_loc, c_ptr, c_null_ptr, c_char, c_null_char, c_associated, c_f_pointer
 
@@ -216,20 +216,23 @@ contains
 
         type (SMIOLf_context), pointer :: context
         character(len=*), intent(in) :: filename
+        integer, intent(in) :: mode
         type (SMIOLf_file), pointer :: file
 
         type (c_ptr) :: c_context = c_null_ptr
         type (c_ptr) :: c_file = c_null_ptr
+        integer(kind=c_int) :: c_mode
         character(kind=c_char), dimension(:), pointer :: c_filename => null()
 
         integer :: i
 
         ! C interface definitions
         interface
-            function SMIOL_open_file(context, filename, file) result(ierr) bind(C, name='SMIOL_open_file')
+            function SMIOL_open_file(context, filename, mode, file) result(ierr) bind(C, name='SMIOL_open_file')
                 use iso_c_binding, only : c_char, c_ptr, c_int
                 type (c_ptr), value :: context
                 character(kind=c_char), dimension(*) :: filename
+                integer(kind=c_int), value :: mode
                 type (c_ptr) :: file
                 integer(kind=c_int) :: ierr
             end function
@@ -248,7 +251,9 @@ contains
         end do
         c_filename(i) = c_null_char
 
-        ierr = SMIOL_open_file(c_context, c_filename, c_file)
+        c_mode = mode
+
+        ierr = SMIOL_open_file(c_context, c_filename, c_mode, c_file)
 
         deallocate(c_filename)
 
