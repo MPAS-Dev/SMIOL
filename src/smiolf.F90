@@ -46,6 +46,7 @@ module SMIOLf
     type, bind(C) :: SMIOLf_file
         type (c_ptr) :: context      ! Pointer to (struct SMIOL_context); the context within which the file was opened
 #ifdef SMIOL_PNETCDF
+        integer(c_int) :: state      ! parallel-netCDF file state (i.e. Define or data mode)
         integer(c_int) :: ncidp      ! parallel-netCDF file handle
 #endif
     end type SMIOLf_file

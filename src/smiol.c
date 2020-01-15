@@ -5,6 +5,8 @@
 
 #ifdef SMIOL_PNETCDF
 #include "pnetcdf.h"
+#define PNETCDF_DEFINE_MODE 0
+#define PNETCDF_DATA_MODE 1
 #endif
 
 
@@ -215,6 +217,8 @@ int SMIOL_open_file(struct SMIOL_context *context, const char *filename, int mod
 			context->lib_type = SMIOL_LIBRARY_PNETCDF;
 			context->lib_ierr = ierr;
 			return SMIOL_LIBRARY_ERROR;
+		} else {
+			(*file)->state = PNETCDF_DEFINE_MODE;
 		}
 #endif
 	}
@@ -227,6 +231,8 @@ int SMIOL_open_file(struct SMIOL_context *context, const char *filename, int mod
 			context->lib_type = SMIOL_LIBRARY_PNETCDF;
 			context->lib_ierr = ierr;
 			return SMIOL_LIBRARY_ERROR;
+		} else {
+			(*file)->state = PNETCDF_DATA_MODE;
 		}
 #endif
 	}
@@ -239,6 +245,8 @@ int SMIOL_open_file(struct SMIOL_context *context, const char *filename, int mod
 			context->lib_type = SMIOL_LIBRARY_PNETCDF;
 			context->lib_ierr = ierr;
 			return SMIOL_LIBRARY_ERROR;
+		} else {
+			(*file)->state = PNETCDF_DATA_MODE;
 		}
 #endif
 	}
