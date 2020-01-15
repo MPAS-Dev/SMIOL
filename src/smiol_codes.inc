@@ -5,5 +5,9 @@
 #define SMIOL_FORTRAN_ERROR     (-4)
 #define SMIOL_LIBRARY_ERROR     (-5)
 
+#define SMIOL_FILE_CREATE       (1)
+#define SMIOL_FILE_READ         (2)
+#define SMIOL_FILE_WRITE        (4)
+
 #define SMIOL_LIBRARY_UNKNOWN (1000)
 #define SMIOL_LIBRARY_PNETCDF (1001)
