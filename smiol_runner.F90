@@ -173,7 +173,10 @@ program smiol_runner
                trim(SMIOLf_error_string(SMIOL_MPI_ERROR))
     write(test_log,'(a)') "Testing SMIOL_error_string test Fortran wrapper detected an inconsistency in C return values: ", &
                trim(SMIOLf_error_string(SMIOL_FORTRAN_ERROR))
-    write(test_log,'(a)') "SUCCESS"
+    write(test_log,'(a)') "Testing SMIOL_error_string: bad return code from a library call: ", &
+               trim(SMIOLf_error_string(SMIOL_LIBRARY_ERROR))
+    write(test_log,'(a)') "Testing SMIOL_lib_error_string: Could not find matching library for the source of the error: ", &
+               trim(SMIOLf_lib_error_string(context))
 
     if (SMIOLf_finalize(context) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_finalize' was not called successfully"
@@ -280,6 +283,9 @@ contains
 
 
     function test_open_close(test_log) result(ierrcount)
+#if 0
+        use iso_c_binding, only : c_loc
+#endif
 
         implicit none
 
@@ -302,6 +308,40 @@ contains
             ierrcount = -1
             return
         end if
+
+#ifdef SMIOL_PNETCDF
+        ! Try to create a file for which we should not have sufficient permissions
+        write(test_log,'(a)',advance='no') 'Try to create a file with insufficient permissions: '
+        nullify(file)
+        ierr = SMIOLf_open_file(context, '/smiol_test.nc', file)
+        if (ierr == SMIOL_LIBRARY_ERROR) then
+            write(test_log,'(a)') 'PASS ('//trim(SMIOLf_lib_error_string(context))//')'
+        else
+            write(test_log,'(a)') 'FAIL - expected error code of SMIOL_LIBRARY_ERROR not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+#if 0
+!
+! This test will not work under most compilers:
+! * The flang compiler complains that file % context requires a reference to a TYPE(C_PTR)
+! * The Intel compiler generates a double-free error when SMIOL_close_file tries to free
+!   the 'file' allocated by Fortran
+!
+        ! Try to close a file that was never opened
+        write(test_log,'(a)',advance='no') 'Try to close a file that was never opened: '
+        allocate(file)
+        file % context = c_loc(context)
+        ierr = SMIOLf_close_file(file)
+        if (associated(file)) deallocate(file)
+        if (ierr == SMIOL_LIBRARY_ERROR) then
+            write(test_log,'(a)') 'PASS ('//trim(SMIOLf_lib_error_string(context))//')'
+        else
+            write(test_log,'(a)') 'FAIL - expected error code of SMIOL_LIBRARY_ERROR not returned'
+            ierrcount = ierrcount + 1
+        end if
+#endif
+#endif
 
         ! Everything OK (SMIOLf_open_file)
         write(test_log,'(a)',advance='no') 'Everything OK (SMIOLf_open_file): '

@@ -200,6 +200,11 @@ int main(int argc, char **argv)
 		SMIOL_error_string(SMIOL_MPI_ERROR));
 	fprintf(test_log, "SMIOL_error_string test 'Fortran wrapper detected an inconsistency in C return values': %s\n",
 		SMIOL_error_string(SMIOL_FORTRAN_ERROR));
+	fprintf(test_log, "SMIOL_error_string test 'bad return code from a library call': %s\n",
+		SMIOL_error_string(SMIOL_LIBRARY_ERROR));
+
+	fprintf(test_log, "SMIOL_lib_error_string 'Could not find matching library for the source of the error': %s\n",
+		SMIOL_lib_error_string(context));
 
 	if ((ierr = SMIOL_finalize(&context)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_finalize: %s ", SMIOL_error_string(ierr));
@@ -354,6 +359,34 @@ int test_open_close(FILE *test_log)
 		fprintf(test_log, "Failed to create SMIOL context...\n");
 		return -1;
 	}
+
+#ifdef SMIOL_PNETCDF
+	/* Try to create a file for which we should not have sufficient permissions */
+	fprintf(test_log, "Try to create a file with insufficient permissions: ");
+	file = NULL;
+	ierr = SMIOL_open_file(context, "/smiol_test.nc", &file);
+	if (ierr == SMIOL_LIBRARY_ERROR) {
+		fprintf(test_log, "PASS (%s)\n", SMIOL_lib_error_string(context));
+	}
+	else {
+		fprintf(test_log, "FAIL - expected error code of SMIOL_LIBRARY_ERROR not returned\n");
+		errcount++;
+	}
+
+	/* Try to close a file that was never opened */
+	fprintf(test_log, "Try to close a file that was never opened: ");
+	file = (struct SMIOL_file *)malloc(sizeof(struct SMIOL_file));
+	file->context = context;
+	ierr = SMIOL_close_file(&file);
+	free(file);
+	if (ierr == SMIOL_LIBRARY_ERROR) {
+		fprintf(test_log, "PASS (%s)\n", SMIOL_lib_error_string(context));
+	}
+	else {
+		fprintf(test_log, "FAIL - expected error code of SMIOL_LIBRARY_ERROR not returned\n");
+		errcount++;
+	}
+#endif
 
 	/* Everything OK (SMIOL_open_file) */
 	fprintf(test_log, "Everything OK (SMIOL_open_file): ");
