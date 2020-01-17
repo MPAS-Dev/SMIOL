@@ -71,6 +71,17 @@ program smiol_runner
         write(test_log,'(a)') ''
     endif
 
+    !
+    ! Unit tests for SMIOL_file_sync
+    !
+    ierr = test_file_sync(test_log)
+    if (ierr == 0) then
+        write(test_log,'(a)') 'All tests PASSED!'
+        write(test_log,'(a)') ''
+    else
+        write(test_log,'(i3,a)') ierr, ' tests FAILED!'
+        write(test_log,'(a)') ''
+    endif
 
     if (SMIOLf_init(MPI_COMM_WORLD, context) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_init' was not called successfully"
@@ -598,5 +609,167 @@ contains
 
     end function test_decomp
 
+
+    function test_file_sync(test_log) result(ierrcount)
+
+        implicit none
+
+        integer, intent(in) :: test_log
+        integer :: ierr
+        integer :: ierrcount
+        type (SMIOLf_context), pointer :: context => null()
+        type (SMIOLf_file), pointer :: file => null()
+
+        write(test_log,'(a)') '********************************************************************************'
+        write(test_log,'(a)') '************************* SMIOLf_file_sync tests *******************************'
+        write(test_log,'(a)') ''
+
+        ierrcount = 0
+
+        ! Create a SMIOL context for testing SMIOL_file_sync
+        ierr = SMIOLf_init(MPI_COMM_WORLD, context)
+        if (ierr /= SMIOL_SUCCESS .or. .not. associated(context)) then
+            write(test_log,'(a)') 'Failed to initalize a SMIOL context'
+            ierrcount = -1
+            return
+        end if
+
+        ! Test sync file on a file that was created with SMIOL_FILE_CREATE
+        ierr = SMIOLf_open_file(context, 'smiolf_sync_file.nc', SMIOL_FILE_CREATE, file)
+        if (ierr /= SMIOL_SUCCESS .or. .not. associated(file)) then
+            write(test_log,'(a)') "Failed to open the file 'smiolf_sync_file.nc' with SMIOL_FILE_CREATE"
+            ierrcount = -1
+            return
+        end if
+
+        ! Everything OK (SMIOLf_file_sync)
+        write(test_log,'(a)',advance='no') 'Everything OK (SMIOLf_file_sync) with SMIOL_FILE_CREATE: '
+        ierr = SMIOLf_file_sync(file)
+        if (ierr == SMIOL_SUCCESS .and. associated(file)) then
+            write(test_log,'(a)') 'PASS'
+        else if (ierr /= SMIOL_SUCCESS .and. associated(file)) then
+            write(test_log,'(a)') 'FAIL - File was associated but SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        else if (ierr == SMIOL_SUCCESS .and. .not. associated(file)) then
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was returned but file was not associated'
+            ierrcount = ierrcount + 1
+        else if (ierr == SMIOL_LIBRARY_ERROR) then
+            write(test_log,'(a)') 'FAIL - ('//trim(SMIOLf_lib_error_string(context))//')'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Close file
+        ierr = SMIOLf_close_file(file)
+        if (ierr /= SMIOL_SUCCESS .or. associated(file)) then
+            write(test_log, '(a)') "Failed to close `smiolf_sync_file.nc'"
+            ierrcount = -1
+            return
+        endif
+
+        ! Test sync file on a file that was created with SMIOL_FILE_WRITE
+        ierr = SMIOLf_open_file(context, 'smiolf_sync_file.nc', SMIOL_FILE_WRITE, file)
+        if (ierr /= SMIOL_SUCCESS .or. .not. associated(file)) then
+            write(test_log,'(a)') "Failed to open the file 'smiolf_sync_file.nc' with SMIOL_FILE_WRITE"
+            ierrcount = -1
+            return
+        end if
+
+        ! Everything OK (SMIOLf_file_sync)
+        write(test_log,'(a)',advance='no') 'Everything OK (SMIOLf_file_sync) with SMIOL_FILE_WRITE: '
+        ierr = SMIOLf_file_sync(file)
+        if (ierr == SMIOL_SUCCESS .and. associated(file)) then
+            write(test_log,'(a)') 'PASS'
+        else if (ierr /= SMIOL_SUCCESS .and. associated(file)) then
+            write(test_log,'(a)') 'FAIL - File was associated but SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        else if (ierr == SMIOL_SUCCESS .and. .not. associated(file)) then
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was returned but file was not associated'
+            ierrcount = ierrcount + 1
+        else if (ierr == SMIOL_LIBRARY_ERROR) then
+            write(test_log,'(a)') 'FAIL - ('//trim(SMIOLf_lib_error_string(context))//')'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Close file
+        ierr = SMIOLf_close_file(file)
+        if (ierr /= SMIOL_SUCCESS .or. associated(file)) then
+            write(test_log, '(a)') "Failed to close `smiolf_sync_file.nc'"
+            ierrcount = -1
+            return
+        endif
+
+        ! Test sync file on a file that was created with SMIOL_FILE_READ
+        ierr = SMIOLf_open_file(context, 'smiolf_sync_file.nc', SMIOL_FILE_READ, file)
+        if (ierr /= SMIOL_SUCCESS .or. .not. associated(file)) then
+            write(test_log,'(a)') "Failed to open the file 'smiolf_sync_file.nc' with SMIOL_FILE_READ"
+            ierrcount = -1
+            return
+        end if
+
+        ! Everything OK (SMIOLf_file_sync)
+        write(test_log,'(a)',advance='no') 'Everything OK (SMIOLf_file_sync) with SMIOL_FILE_READ: '
+        ierr = SMIOLf_file_sync(file)
+        if (ierr == SMIOL_SUCCESS .and. associated(file)) then
+            write(test_log,'(a)') 'PASS'
+        else if (ierr /= SMIOL_SUCCESS .and. associated(file)) then
+            write(test_log,'(a)') 'FAIL - File was associated but SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        else if (ierr == SMIOL_SUCCESS .and. .not. associated(file)) then
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was returned but file was not associated'
+            ierrcount = ierrcount + 1
+        else if (ierr == SMIOL_LIBRARY_ERROR) then
+            write(test_log,'(a)') 'FAIL - ('//trim(SMIOLf_lib_error_string(context))//')'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Close file
+        ierr = SMIOLf_close_file(file)
+        if (ierr /= SMIOL_SUCCESS .or. associated(file)) then
+            write(test_log, '(a)') "Failed to close `smiolf_sync_file.nc'"
+            ierrcount = -1
+            return
+        endif
+
+#if 0
+! This test will work for most compilers, but it wont work for the PGI and (most likely)
+! the Flang compiler. It fails at file % contect = c_loc(context).
+#ifdef SMIOL_PNETCDF
+        ! Try to sync a file that was never opened
+        write(test_log,'(a)',advance='no') 'Try to sync a file that was never opened: '
+        allocate(file)
+        file % context = c_loc(context)
+        file % state = -42 ! Erroneous, currently unused file state
+        ierr = SMIOLf_file_sync(file)
+        if (ierr == SMIOL_LIBRARY_ERROR .or. .not. associated(file)) then
+            write(test_log, '(a)') 'PASS ('//trim(SMIOLf_lib_error_string(context))//')'
+        else
+            write(test_log, '(a)') 'FAIL - Expected error code of SMIOL_LIBRARY_ERROR not returned or file was NULL'
+            ierrcount = ierrcount + 1
+        end if
+        deallocate(file)
+#endif
+#endif
+
+        nullify(file)
+        ! SMIOL_file_sync with an unassociated file
+        write(test_log,'(a)',advance='no') 'Testing SMIOLf_file_sync with NULL file handle: '
+        ierr = SMIOLf_file_sync(file)
+        if (ierr == SMIOL_INVALID_ARGUMENT .and. .not. associated(file)) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(0,*) ierr
+            write(test_log, '(a)') 'FAIL - Expected error code of SMIOL_INVALID_ARGUMENT not returned or file was associated'
+        endif
+
+        ! Free the SMIOL context
+        ierr = SMIOLf_finalize(context)
+        if (ierr /= SMIOL_SUCCESS .or. associated(context)) then
+            ierrcount = -1
+            return
+        end if
+
+        write(test_log,'(a)') ''
+
+    end function test_file_sync
 
 end program smiol_runner
