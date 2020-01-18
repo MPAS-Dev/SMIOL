@@ -457,8 +457,40 @@ int SMIOL_inquire_dim(struct SMIOL_file *file, const char *dimname, SMIOL_Offset
  * Detailed description.
  *
  ********************************************************************************/
-int SMIOL_define_var(void)
+int SMIOL_define_var(struct SMIOL_file *file, const char *varname, int vartype, int ndims, const char **dimnames)
 {
+int i;
+	/*
+	 * Check that file handle is valid
+	 */
+	if (file == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	/*
+	 * Check that variable name is valid
+	 */
+	if (varname == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+if (vartype != 0) {
+	return SMIOL_INVALID_ARGUMENT;
+}
+
+	/*
+	 * Check that variable dimension names are valid
+	 */
+	if (dimnames == NULL && ndims > 0) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+fprintf(stderr, "> Defining variable %s\n", varname);
+fprintf(stderr, "> Variable type is %i\n", vartype);
+for (i=0; i<ndims; i++) {
+	fprintf(stderr, "> Dimension %i is %s\n", i, dimnames[i]);
+}
+
 	return SMIOL_SUCCESS;
 }
 

@@ -26,6 +26,7 @@ int main(int argc, char **argv)
 	struct SMIOL_file *file = NULL;
 	char log_fname[17];
 	FILE *test_log = NULL;
+	char **dimnames;
 
 	if (argc == 2) {
 		n_compute_elements = (size_t) atoi(argv[1]);
@@ -182,14 +183,21 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if ((ierr = SMIOL_close_file(&file)) != SMIOL_SUCCESS) {
-		fprintf(test_log, "ERROR: SMIOL_close_file: %s ", SMIOL_error_string(ierr));
+	dimnames = (char **)malloc((size_t)2 * sizeof(char *));
+	dimnames[0] = (char *)malloc((size_t)64 * sizeof(char));
+	dimnames[1] = (char *)malloc((size_t)64 * sizeof(char));
+	snprintf(dimnames[0], 64, "Time");
+	snprintf(dimnames[1], 64, "nCells");
+	if ((ierr = SMIOL_define_var(file, "theta", 0, 2, (const char**)dimnames)) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_define_var: %s ", SMIOL_error_string(ierr));
 		return 1;
 	}
+	free(dimnames[0]);
+	free(dimnames[1]);
+	free(dimnames);
 
-	if ((ierr = SMIOL_define_var()) != SMIOL_SUCCESS) {
-		fprintf(test_log, "ERROR: SMIOL_define_var: %s ",
-			SMIOL_error_string(ierr));
+	if ((ierr = SMIOL_close_file(&file)) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_close_file: %s ", SMIOL_error_string(ierr));
 		return 1;
 	}
 

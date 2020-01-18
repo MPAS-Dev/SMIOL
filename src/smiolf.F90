@@ -469,11 +469,97 @@ contains
     !>  Detailed description of what this routine does.
     !
     !-----------------------------------------------------------------------
-    integer function SMIOLf_define_var() result(ierr)
+    integer function SMIOLf_define_var(file, varname, vartype, ndims, dimnames) result(ierr)
+
+        use iso_c_binding, only : c_int, c_char, c_null_char, c_ptr, c_loc
 
         implicit none
 
-        ierr = 0
+        type (SMIOLf_file), target :: file
+        character(len=*), intent(in) :: varname
+        integer, intent(in) :: vartype
+        integer, intent(in) :: ndims
+        character(len=*), dimension(:), intent(in) :: dimnames
+
+        type (c_ptr) :: c_file
+        character(kind=c_char), dimension(:), pointer :: c_varname
+        integer(kind=c_int) :: c_vartype
+        integer(kind=c_int) :: c_ndims
+
+!        character(kind=c_char), dimension(:), allocatable, target :: c_dimname
+        type (c_ptr), dimension(:), allocatable, target :: c_dimnames
+
+        integer :: i, j
+
+        ! C interface definitions
+        interface
+            function SMIOL_define_var(file, varname, vartype, ndims, dimnames) result(ierr) bind(C, name='SMIOL_define_var')
+                use iso_c_binding, only : c_ptr, c_char, c_int
+                type (c_ptr), value :: file
+                character(kind=c_char), dimension(*) :: varname
+                integer(kind=c_int), value :: vartype
+                integer(kind=c_int), value :: ndims
+                type (c_ptr), value :: dimnames
+                integer(kind=c_int) :: ierr
+            end function
+        end interface
+
+        ! Used to store an array of pointers to character arrays
+        type string_ptr
+            character(kind=c_char), dimension(:), allocatable :: str
+        end type string_ptr
+
+        type (string_ptr), dimension(:), pointer :: strings
+
+! TODO: basic checks, e.g., that len(dimnames) >= ndims
+
+        ! Get C address of file; there is no need to worry about an unassociated file here,
+        ! since the file argument is not a pointer
+        c_file = c_loc(file)
+
+        !
+        ! Convert Fortran string to C character array
+        !
+        allocate(c_varname(len_trim(varname) + 1))
+        do i=1,len_trim(varname)
+            c_varname(i) = varname(i:i)
+        end do
+        c_varname(i) = c_null_char
+
+        !
+        ! Convert vartype and ndims
+        !
+        c_vartype = vartype
+        c_ndims = ndims
+
+        !
+        ! Convert dimnames
+        !
+        allocate(c_dimnames(ndims))
+        allocate(strings(ndims))
+
+        do j=1,ndims
+            allocate(strings(j) % str(len_trim(dimnames(j))+1))
+
+            ! Save a pointer to this c_filename for later deallocation
+!            strings(j) % str => c_filename
+
+            do i=1,len_trim(dimnames(j))
+                strings(j) % str(i) = dimnames(j)(i:i)
+            end do
+            strings(j) % str(i) = c_null_char
+            c_dimnames(j) = c_loc(strings(j) % str)
+        end do
+
+        ierr = SMIOL_define_var(c_file, c_varname, c_vartype, c_ndims, c_loc(c_dimnames))
+
+        do j=1,ndims
+            deallocate(strings(j) % str)
+        end do
+
+        deallocate(c_varname)
+        deallocate(strings)
+        deallocate(c_dimnames)
 
     end function SMIOLf_define_var
 

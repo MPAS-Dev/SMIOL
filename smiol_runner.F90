@@ -19,6 +19,7 @@ program smiol_runner
     type (SMIOLf_context), pointer :: context => null()
     type (SMIOLf_file), pointer :: file => null()
     character(len=16) :: log_fname
+    character(len=32), dimension(2) :: dimnames
     integer(kind=SMIOL_offset_kind) :: dimsize
 
     call MPI_Init(ierr)
@@ -160,13 +161,15 @@ program smiol_runner
         stop 1
     endif
 
-    if (SMIOLf_close_file(file) /= SMIOL_SUCCESS) then
-        write(test_log,'(a)') "ERROR: 'SMIOLf_close_file' was not called successfully"
+    dimnames(1) = 'Time'
+    dimnames(2) = 'nCells'
+    if (SMIOLf_define_var(file, 'theta', 0, 2, dimnames) /= SMIOL_SUCCESS) then
+        write(test_log,'(a)') "ERROR: 'SMIOLf_define_var' was not called successfully"
         stop 1
     endif
 
-    if (SMIOLf_define_var() /= SMIOL_SUCCESS) then
-        write(test_log,'(a)') "ERROR: 'SMIOLf_define_var' was not called successfully"
+    if (SMIOLf_close_file(file) /= SMIOL_SUCCESS) then
+        write(test_log,'(a)') "ERROR: 'SMIOLf_close_file' was not called successfully"
         stop 1
     endif
 
