@@ -509,7 +509,7 @@ contains
             character(kind=c_char), dimension(:), allocatable :: str
         end type string_ptr
 
-        type (string_ptr), dimension(:), pointer :: strings
+        type (string_ptr), dimension(:), allocatable, target :: strings
 
 ! TODO: basic checks, e.g., that len(dimnames) >= ndims
 
