@@ -72,7 +72,7 @@ program smiol_runner
     endif
 
     !
-    ! Unit tests for SMIOL_file_sync
+    ! Unit tests for SMIOL_sync_file
     !
     ierr = test_file_sync(test_log)
     if (ierr == 0) then
@@ -119,8 +119,8 @@ program smiol_runner
         stop 1
     endif
 
-    if (SMIOLf_file_sync(file) /= SMIOL_SUCCESS) then
-        write(test_log,'(a)') "ERROR: 'SMIOLf_file_sync' was not called successfully"
+    if (SMIOLf_sync_file(file) /= SMIOL_SUCCESS) then
+        write(test_log,'(a)') "ERROR: 'SMIOLf_sync_file' was not called successfully"
         stop 1
     endif
 
@@ -621,12 +621,12 @@ contains
         type (SMIOLf_file), pointer :: file => null()
 
         write(test_log,'(a)') '********************************************************************************'
-        write(test_log,'(a)') '************************* SMIOLf_file_sync tests *******************************'
+        write(test_log,'(a)') '************************* SMIOLf_sync_file tests *******************************'
         write(test_log,'(a)') ''
 
         ierrcount = 0
 
-        ! Create a SMIOL context for testing SMIOL_file_sync
+        ! Create a SMIOL context for testing SMIOL_sync_file
         ierr = SMIOLf_init(MPI_COMM_WORLD, context)
         if (ierr /= SMIOL_SUCCESS .or. .not. associated(context)) then
             write(test_log,'(a)') 'Failed to initalize a SMIOL context'
@@ -642,9 +642,9 @@ contains
             return
         end if
 
-        ! Everything OK (SMIOLf_file_sync)
-        write(test_log,'(a)',advance='no') 'Everything OK (SMIOLf_file_sync) with SMIOL_FILE_CREATE: '
-        ierr = SMIOLf_file_sync(file)
+        ! Everything OK (SMIOLf_sync_file)
+        write(test_log,'(a)',advance='no') 'Everything OK (SMIOLf_sync_file) with SMIOL_FILE_CREATE: '
+        ierr = SMIOLf_sync_file(file)
         if (ierr == SMIOL_SUCCESS .and. associated(file)) then
             write(test_log,'(a)') 'PASS'
         else if (ierr /= SMIOL_SUCCESS .and. associated(file)) then
@@ -674,9 +674,9 @@ contains
             return
         end if
 
-        ! Everything OK (SMIOLf_file_sync)
-        write(test_log,'(a)',advance='no') 'Everything OK (SMIOLf_file_sync) with SMIOL_FILE_WRITE: '
-        ierr = SMIOLf_file_sync(file)
+        ! Everything OK (SMIOLf_sync_file)
+        write(test_log,'(a)',advance='no') 'Everything OK (SMIOLf_sync_file) with SMIOL_FILE_WRITE: '
+        ierr = SMIOLf_sync_file(file)
         if (ierr == SMIOL_SUCCESS .and. associated(file)) then
             write(test_log,'(a)') 'PASS'
         else if (ierr /= SMIOL_SUCCESS .and. associated(file)) then
@@ -706,9 +706,9 @@ contains
             return
         end if
 
-        ! Everything OK (SMIOLf_file_sync)
-        write(test_log,'(a)',advance='no') 'Everything OK (SMIOLf_file_sync) with SMIOL_FILE_READ: '
-        ierr = SMIOLf_file_sync(file)
+        ! Everything OK (SMIOLf_sync_file)
+        write(test_log,'(a)',advance='no') 'Everything OK (SMIOLf_sync_file) with SMIOL_FILE_READ: '
+        ierr = SMIOLf_sync_file(file)
         if (ierr == SMIOL_SUCCESS .and. associated(file)) then
             write(test_log,'(a)') 'PASS'
         else if (ierr /= SMIOL_SUCCESS .and. associated(file)) then
@@ -751,9 +751,9 @@ contains
 #endif
 
         nullify(file)
-        ! SMIOL_file_sync with an unassociated file
-        write(test_log,'(a)',advance='no') 'Testing SMIOLf_file_sync with NULL file handle: '
-        ierr = SMIOLf_file_sync(file)
+        ! SMIOL_sync_file with an unassociated file
+        write(test_log,'(a)',advance='no') 'Testing SMIOLf_sync_file with NULL file handle: '
+        ierr = SMIOLf_sync_file(file)
         if (ierr == SMIOL_INVALID_ARGUMENT .and. .not. associated(file)) then
             write(test_log,'(a)') 'PASS'
         else

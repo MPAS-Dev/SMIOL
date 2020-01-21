@@ -137,8 +137,8 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if ((ierr = SMIOL_file_sync(file)) != SMIOL_SUCCESS) {
-		fprintf(test_log, "ERROR: SMIOL_file_sync: %s ",
+	if ((ierr = SMIOL_sync_file(file)) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_sync_file: %s ",
 			SMIOL_error_string(ierr));
 		return 1;
 	}
@@ -697,7 +697,7 @@ int test_file_sync(FILE *test_log)
 	struct SMIOL_file *file = NULL;
 
 	fprintf(test_log, "********************************************************************************\n");
-	fprintf(test_log, "************************ SMIOL_file_sync unit tests ****************************\n");
+	fprintf(test_log, "************************ SMIOL_sync_file unit tests ****************************\n");
 	fprintf(test_log, "\n");
 
 	errcount = 0;
@@ -717,9 +717,9 @@ int test_file_sync(FILE *test_log)
 		return -1;
 	}
 
-	/* Testing SMIOL_file_sync on a file opened with SMIOL_FILE_CREATE*/
-	fprintf(test_log, "Everything OK (SMIOL_file_sync) with SMIOL_FILE_CREATE: ");
-	ierr = SMIOL_file_sync(file);
+	/* Testing SMIOL_sync_file on a file opened with SMIOL_FILE_CREATE*/
+	fprintf(test_log, "Everything OK (SMIOL_sync_file) with SMIOL_FILE_CREATE: ");
+	ierr = SMIOL_sync_file(file);
 	if (ierr == SMIOL_SUCCESS && file != NULL) {
 		fprintf(test_log, "PASS\n");
 	} else if (ierr != SMIOL_SUCCESS && file != NULL) {
@@ -741,16 +741,16 @@ int test_file_sync(FILE *test_log)
 	}
 
 
-	/* Testing SMIOL_file_sync on a file opened with SMIOL_FILE_WRITE */
+	/* Testing SMIOL_sync_file on a file opened with SMIOL_FILE_WRITE */
 	ierr = SMIOL_open_file(context, "smiol_sync_file.nc", SMIOL_FILE_WRITE, &file);
 	if (ierr != SMIOL_SUCCESS || file == NULL) {
 		fprintf(test_log, "Failed to open `smiol_sync_file.nc in write mode\n");
 		return -1;
 	}
 
-	/* Testing SMIOL_file_sync */
-	fprintf(test_log, "Everything OK (SMIOL_file_sync) with SMIOL_FILE_WRITE: ");
-	ierr = SMIOL_file_sync(file);
+	/* Testing SMIOL_sync_file */
+	fprintf(test_log, "Everything OK (SMIOL_sync_file) with SMIOL_FILE_WRITE: ");
+	ierr = SMIOL_sync_file(file);
 	if (ierr == SMIOL_SUCCESS && file != NULL) {
 		fprintf(test_log, "PASS\n");
 	} else if (ierr != SMIOL_SUCCESS && file != NULL) {
@@ -771,16 +771,16 @@ int test_file_sync(FILE *test_log)
 		return -1;
 	}
 
-	/* Testing SMIOL_file_sync on a file opened with SMIOL_FILE_READ*/
+	/* Testing SMIOL_sync_file on a file opened with SMIOL_FILE_READ*/
 	ierr = SMIOL_open_file(context, "smiol_sync_file.nc", SMIOL_FILE_READ, &file);
 	if (ierr != SMIOL_SUCCESS || file == NULL) {
 		fprintf(test_log, "Failed to open `smiol_sync_file.nc with SMIOL_FILE_READ\n");
 		return -1;
 	}
 
-	/* Testing SMIOL_file_sync */
-	fprintf(test_log, "Everything OK (SMIOL_file_sync) with SMIOL_FILE_READ: ");
-	ierr = SMIOL_file_sync(file);
+	/* Testing SMIOL_sync_file */
+	fprintf(test_log, "Everything OK (SMIOL_sync_file) with SMIOL_FILE_READ: ");
+	ierr = SMIOL_sync_file(file);
 	if (ierr == SMIOL_SUCCESS && file != NULL) {
 		fprintf(test_log, "PASS\n");
 	} else if (ierr != SMIOL_SUCCESS && file != NULL) {
@@ -808,7 +808,7 @@ int test_file_sync(FILE *test_log)
 	file = (struct SMIOL_file *)malloc(sizeof(struct SMIOL_file));
 	file->context = context;
 	file->state = -42;	// Erroneous, currently unused, state
-	ierr = SMIOL_file_sync(file);
+	ierr = SMIOL_sync_file(file);
 	if (ierr == SMIOL_LIBRARY_ERROR && file != NULL) {
 		fprintf(test_log, "PASS (%s)\n",
 			SMIOL_lib_error_string(context));
@@ -819,10 +819,10 @@ int test_file_sync(FILE *test_log)
 	free(file);
 #endif
 
-	/* Testing SMIOL_file_sync with a NULL file pointer*/
+	/* Testing SMIOL_sync_file with a NULL file pointer*/
 	file = NULL;
-	fprintf(test_log, "Testing SMIOL_file_sync with a NULL file pointer: ");
-	ierr = SMIOL_file_sync(file);
+	fprintf(test_log, "Testing SMIOL_sync_file with a NULL file pointer: ");
+	ierr = SMIOL_sync_file(file);
 	if (ierr == SMIOL_INVALID_ARGUMENT && file == NULL) {
 		fprintf(test_log, "PASS\n");
 	} else {

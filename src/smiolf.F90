@@ -26,7 +26,7 @@ module SMIOLf
               SMIOLf_get_var, &
               SMIOLf_define_att, &
               SMIOLf_inquire_att, &
-              SMIOLf_file_sync, &
+              SMIOLf_sync_file, &
               SMIOLf_error_string, &
               SMIOLf_lib_error_string, &
               SMIOLf_set_option, &
@@ -480,7 +480,7 @@ contains
     !
 
     !-----------------------------------------------------------------------
-    !  routine SMIOLf_file_sync
+    !  routine SMIOLf_sync_file
     !
     !> \brief Forces all in-memory data to be flushed to disk
     !> \details
@@ -489,7 +489,7 @@ contains
     !> returned; otherwise, an error code is returned.
     !
     !-----------------------------------------------------------------------
-    integer function SMIOLf_file_sync(file) result(ierr)
+    integer function SMIOLf_sync_file(file) result(ierr)
 
         use iso_c_binding, only : c_ptr, c_loc, c_null_ptr
 
@@ -499,7 +499,7 @@ contains
         type (c_ptr) :: c_file
 
         interface
-            function SMIOL_file_sync(file) result(ierr) bind(C, name='SMIOL_file_sync')
+            function SMIOL_sync_file(file) result(ierr) bind(C, name='SMIOL_sync_file')
                 use iso_c_binding, only : c_ptr, c_int
                 type(c_ptr), value :: file
                 integer(kind=c_int) :: ierr
@@ -512,9 +512,9 @@ contains
             c_file = c_loc(file)
         end if
 
-        ierr = SMIOL_file_sync(c_file)
+        ierr = SMIOL_sync_file(c_file)
 
-    end function SMIOLf_file_sync
+    end function SMIOLf_sync_file
 
 
     !-----------------------------------------------------------------------

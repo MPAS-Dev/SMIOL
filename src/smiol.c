@@ -425,7 +425,7 @@ int SMIOL_inquire_att(void)
 
 /********************************************************************************
  *
- * SMIOL_file_sync
+ * SMIOL_sync_file
  *
  * Forces all in-memory data to be flushed to disk.
  *
@@ -434,7 +434,7 @@ int SMIOL_inquire_att(void)
  * returned; otherwise, an error code is returned.
  *
  ********************************************************************************/
-int SMIOL_file_sync(struct SMIOL_file *file)
+int SMIOL_sync_file(struct SMIOL_file *file)
 {
 #ifdef SMIOL_PNETCDF
 	int ierr;
