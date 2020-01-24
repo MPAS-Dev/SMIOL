@@ -32,7 +32,7 @@ program smiol_runner
         stop 1
     end if
 
-    write(log_fname, '(a,I4.4,a)') "smiolf.", my_proc_id, ".test"
+    write(log_fname, '(a,i4.4,a)') "smiolf.", my_proc_id, ".test"
     open(unit=test_log, file=log_fname, status='replace')
 
     !
@@ -43,7 +43,7 @@ program smiol_runner
         write(test_log,'(a)') 'All tests PASSED!'
         write(test_log,'(a)') ''
     else
-        write(test_log,'(a)') ierr, ' tests FAILED!'
+        write(test_log,'(i3,a)') ierr, ' tests FAILED!'
         write(test_log,'(a)') ''
     end if
 
@@ -55,7 +55,7 @@ program smiol_runner
         write(test_log,'(a)') 'All tests PASSED!'
         write(test_log,'(a)') ''
     else
-        write(test_log,'(a)') ierr, ' tests FAILED!'
+        write(test_log,'(i3,a)') ierr, ' tests FAILED!'
         write(test_log,'(a)') ''
     end if
 
@@ -67,7 +67,7 @@ program smiol_runner
         write(test_log,'(a)') 'All tests PASSED!'
         write(test_log,'(a)') ''
     else
-        write(test_log,'(a)') ierr, ' tests FAILED!'
+        write(test_log,'(i3,a)') ierr, ' tests FAILED!'
         write(test_log,'(a)') ''
     endif
 
