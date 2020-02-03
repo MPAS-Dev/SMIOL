@@ -912,6 +912,88 @@ int test_dimensions(FILE *test_log)
 		return -1;
 	}
 
+	/* Re-open the SMIOL file */
+	file = NULL;
+	ierr = SMIOL_open_file(context, "test_dims.nc", SMIOL_FILE_READ, &file);
+	if (ierr != SMIOL_SUCCESS || file == NULL) {
+		fprintf(test_log, "Failed to open existing SMIOL file...\n");
+		return -1;
+	}
+
+	/* Existing file for SMIOL_inquire_dim, unlimited dimension */
+	fprintf(test_log, "Existing file - unlimited dimension (SMIOL_inquire_dim): ");
+	dimsize = (SMIOL_Offset)0;
+	ierr = SMIOL_inquire_dim(file, "Time", &dimsize);
+	if (ierr == SMIOL_SUCCESS) {
+		if (dimsize == (SMIOL_Offset)0) {
+			fprintf(test_log, "PASS\n");
+		}
+		else {
+			fprintf(test_log, "FAIL - SMIOL_SUCCESS was returned, but the dimension size is wrong (got %li, expected %li)\n",
+				(long int)dimsize, (long int)0);
+			errcount++;
+		}
+	}
+	else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+
+	/* Existing file for SMIOL_inquire_dim, small non-record dimension */
+	fprintf(test_log, "Existing file - small non-record dimension (SMIOL_inquire_dim): ");
+	dimsize = (SMIOL_Offset)0;
+#ifdef SMIOL_PNETCDF
+	expected_dimsize = (SMIOL_Offset)40962;
+#else
+	expected_dimsize = (SMIOL_Offset)0;
+#endif
+	ierr = SMIOL_inquire_dim(file, "nCells", &dimsize);
+	if (ierr == SMIOL_SUCCESS) {
+		if (dimsize == expected_dimsize) {
+			fprintf(test_log, "PASS\n");
+		}
+		else {
+			fprintf(test_log, "FAIL - SMIOL_SUCCESS was returned, but the dimension size is wrong (got %li, expected %li)\n",
+				(long int)dimsize, (long int)expected_dimsize);
+			errcount++;
+		}
+	}
+	else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+
+	/* Existing file for SMIOL_inquire_dim, large non-record dimension */
+	fprintf(test_log, "Existing file - large non-record dimension (SMIOL_inquire_dim): ");
+	dimsize = (SMIOL_Offset)0;
+#ifdef SMIOL_PNETCDF
+	expected_dimsize = (SMIOL_Offset)99999999999;
+#else
+	expected_dimsize = (SMIOL_Offset)0;
+#endif
+	ierr = SMIOL_inquire_dim(file, "nElements", &dimsize);
+	if (ierr == SMIOL_SUCCESS) {
+		if (dimsize == expected_dimsize) {
+			fprintf(test_log, "PASS\n");
+		}
+		else {
+			fprintf(test_log, "FAIL - SMIOL_SUCCESS was returned, but the dimension size is wrong (got %li, expected %li)\n",
+				(long int)dimsize, (long int)expected_dimsize);
+			errcount++;
+		}
+	}
+	else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+
+	/* Close the SMIOL file */
+	ierr = SMIOL_close_file(&file);
+	if (ierr != SMIOL_SUCCESS || file != NULL) {
+		fprintf(test_log, "Failed to close SMIOL file...\n");
+		return -1;
+	}
+
 	/* Free the SMIOL context */
 	ierr = SMIOL_finalize(&context);
 	if (ierr != SMIOL_SUCCESS || context != NULL) {

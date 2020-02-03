@@ -790,6 +790,84 @@ contains
             return
         end if
 
+        ! Re-open the SMIOL file
+        nullify(file)
+        ierr = SMIOLf_open_file(context, 'test_dims_fortran.nc', SMIOL_FILE_READ, file)
+        if (ierr /= SMIOL_SUCCESS .or. .not. associated(file)) then
+            write(test_log,'(a)') 'Failed to open existing SMIOL file...'
+            ierrcount = -1
+            return
+        end if
+
+        ! Existing file for SMIOL_inquire_dim, unlimited dimension
+        write(test_log,'(a)',advance='no') 'Existing file - unlimited dimension (SMIOLf_inquire_dim): '
+        dimsize = 0_SMIOL_offset_kind
+        ierr = SMIOLf_inquire_dim(file, 'Time', dimsize)
+        if (ierr == SMIOL_SUCCESS) then
+            if (dimsize == 0_SMIOL_offset_kind) then
+                write(test_log,'(a)') 'PASS'
+            else
+                write(test_log,'(a,a,i11,a,i11)') 'FAIL - SMIOL_SUCCESS was returned, but the dimension size is wrong', &
+                               ' (got ', dimsize, ', expected ', 0_SMIOL_offset_kind, ')'
+                ierrcount = ierrcount + 1
+            end if
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Existing file for SMIOL_inquire_dim, small non-record dimension
+        write(test_log,'(a)',advance='no') 'Existing file - small non-record dimension (SMIOLf_inquire_dim): '
+        dimsize = 0_SMIOL_offset_kind
+#ifdef SMIOL_PNETCDF
+        expected_dimsize = 40962_SMIOL_offset_kind
+#else
+        expected_dimsize = 0_SMIOL_offset_kind
+#endif
+        ierr = SMIOLf_inquire_dim(file, 'nCells', dimsize)
+        if (ierr == SMIOL_SUCCESS) then
+            if (dimsize == expected_dimsize) then
+                write(test_log,'(a)') 'PASS'
+            else
+                write(test_log,'(a,a,i11,a,i11)') 'FAIL - SMIOL_SUCCESS was returned, but the dimension size is wrong', &
+                               ' (got ', dimsize, ', expected ', expected_dimsize, ')'
+                ierrcount = ierrcount + 1
+            end if
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Existing file for SMIOL_inquire_dim, large non-record dimension
+        write(test_log,'(a)',advance='no') 'Existing file - large non-record dimension (SMIOLf_inquire_dim): '
+        dimsize = 0_SMIOL_offset_kind
+#ifdef SMIOL_PNETCDF
+        expected_dimsize = 99999999999_SMIOL_offset_kind
+#else
+        expected_dimsize = 0_SMIOL_offset_kind
+#endif
+        ierr = SMIOLf_inquire_dim(file, 'nElements', dimsize)
+        if (ierr == SMIOL_SUCCESS) then
+            if (dimsize == expected_dimsize) then
+                write(test_log,'(a)') 'PASS'
+            else
+                write(test_log,'(a,a,i11,a,i11)') 'FAIL - SMIOL_SUCCESS was returned, but the dimension size is wrong', &
+                               ' (got ', dimsize, ', expected ', expected_dimsize, ')'
+                ierrcount = ierrcount + 1
+            end if
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Close the SMIOL file
+        ierr = SMIOLf_close_file(file)
+        if (ierr /= SMIOL_SUCCESS .or. associated(file)) then
+            write(test_log,'(a)') 'Failed to close SMIOL file...'
+            ierrcount = -1
+            return
+        end if
+
         ! Free the SMIOL context
         ierr = SMIOLf_finalize(context)
         if (ierr /= SMIOL_SUCCESS .or. associated(context)) then
