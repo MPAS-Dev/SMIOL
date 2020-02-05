@@ -11,3 +11,8 @@
 
 #define SMIOL_LIBRARY_UNKNOWN (1000)
 #define SMIOL_LIBRARY_PNETCDF (1001)
+
+#define SMIOL_REAL32          (2000)
+#define SMIOL_REAL64          (2001)
+#define SMIOL_INT32           (2002)
+#define SMIOL_CHAR            (2003)

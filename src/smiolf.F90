@@ -466,7 +466,13 @@ contains
     !
     !> \brief Defines a new variable in a file
     !> \details
-    !>  Detailed description of what this routine does.
+    !>  Defines a variable with the specified name, type, and dimensions in an open
+    !>  file pointed to by the file argument. The varname and dimnames arguments
+    !>  are expected to be null-terminated strings, except if the variable has
+    !>  zero dimensions, in which case the dimnames argument is ignored.
+    !>
+    !>  Upon successful completion, SMIOL_SUCCESS is returned; otherwise, an error
+    !>  code is returned.
     !
     !-----------------------------------------------------------------------
     integer function SMIOLf_define_var(file, varname, vartype, ndims, dimnames) result(ierr)
@@ -486,7 +492,6 @@ contains
         integer(kind=c_int) :: c_vartype
         integer(kind=c_int) :: c_ndims
 
-!        character(kind=c_char), dimension(:), allocatable, target :: c_dimname
         type (c_ptr), dimension(:), allocatable, target :: c_dimnames
 
         integer :: i, j
@@ -511,7 +516,13 @@ contains
 
         type (string_ptr), dimension(:), allocatable, target :: strings
 
-! TODO: basic checks, e.g., that len(dimnames) >= ndims
+        !
+        ! Check that the 'dimnames' array has at least ndims elements
+        !
+        if (size(dimnames) < ndims) then
+            ierr = SMIOL_FORTRAN_ERROR
+            return
+        end if
 
         ! Get C address of file; there is no need to worry about an unassociated file here,
         ! since the file argument is not a pointer
@@ -540,9 +551,6 @@ contains
 
         do j=1,ndims
             allocate(strings(j) % str(len_trim(dimnames(j))+1))
-
-            ! Save a pointer to this c_filename for later deallocation
-!            strings(j) % str => c_filename
 
             do i=1,len_trim(dimnames(j))
                 strings(j) % str(i) = dimnames(j)(i:i)

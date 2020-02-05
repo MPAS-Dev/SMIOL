@@ -454,12 +454,25 @@ int SMIOL_inquire_dim(struct SMIOL_file *file, const char *dimname, SMIOL_Offset
  *
  * Defines a new variable in a file.
  *
- * Detailed description.
+ * Defines a variable with the specified name, type, and dimensions in an open
+ * file pointed to by the file argument. The varname and dimnames arguments
+ * are expected to be null-terminated strings, except if the variable has zero
+ * dimensions, in which case the dimnames argument may be a NULL pointer.
+ *
+ * Upon successful completion, SMIOL_SUCCESS is returned; otherwise, an error
+ * code is returned.
  *
  ********************************************************************************/
 int SMIOL_define_var(struct SMIOL_file *file, const char *varname, int vartype, int ndims, const char **dimnames)
 {
-int i;
+#ifdef SMIOL_PNETCDF
+	int *dimids;
+	int ierr;
+	int i;
+	nc_type xtype;
+	int varidp;
+#endif
+
 	/*
 	 * Check that file handle is valid
 	 */
@@ -474,9 +487,9 @@ int i;
 		return SMIOL_INVALID_ARGUMENT;
 	}
 
-if (vartype != 0) {
-	return SMIOL_INVALID_ARGUMENT;
-}
+	/*
+	 * Check that the variable type is valid - handled below in a library-specific way...
+	 */
 
 	/*
 	 * Check that variable dimension names are valid
@@ -485,11 +498,69 @@ if (vartype != 0) {
 		return SMIOL_INVALID_ARGUMENT;
 	}
 
-fprintf(stderr, "> Defining variable %s\n", varname);
-fprintf(stderr, "> Variable type is %i\n", vartype);
-for (i=0; i<ndims; i++) {
-	fprintf(stderr, "> Dimension %i is %s\n", i, dimnames[i]);
-}
+#ifdef SMIOL_PNETCDF
+	dimids = (int *)malloc(sizeof(int) * (size_t)ndims);
+	if (dimids == NULL) {
+		return SMIOL_MALLOC_FAILURE;
+	}
+
+	/*
+	 * Build a list of dimension IDs
+	 */
+	for (i=0; i<ndims; i++) {
+		if ((ierr = ncmpi_inq_dimid(file->ncidp, dimnames[i], &dimids[i])) != NC_NOERR) {
+			free(dimids);
+			file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+			file->context->lib_ierr = ierr;
+			return SMIOL_LIBRARY_ERROR;
+		}
+	}
+
+	/*
+	 * Translate SMIOL variable type to parallel-netcdf type
+	 */
+	switch(vartype) {
+		case SMIOL_REAL32:
+			xtype = NC_FLOAT;
+			break;
+		case SMIOL_REAL64:
+			xtype = NC_DOUBLE;
+			break;
+		case SMIOL_INT32:
+			xtype = NC_INT;
+			break;
+		case SMIOL_CHAR:
+			xtype = NC_CHAR;
+			break;
+		default:
+			free(dimids);
+			return SMIOL_INVALID_ARGUMENT;
+	}
+
+	/*
+	 * If the file is in data mode, then switch it to define mode
+	 */
+	if (file->state == PNETCDF_DATA_MODE) {
+		if ((ierr = ncmpi_redef(file->ncidp)) != NC_NOERR) {
+			file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+			file->context->lib_ierr = ierr;
+			return SMIOL_LIBRARY_ERROR;
+		}
+		file->state = PNETCDF_DEFINE_MODE;
+	}
+
+	/*
+	 * Define the variable
+	 */
+	if ((ierr = ncmpi_def_var(file->ncidp, varname, xtype, ndims, dimids, &varidp)) != NC_NOERR) {
+		free(dimids);
+		file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+		file->context->lib_ierr = ierr;
+		return SMIOL_LIBRARY_ERROR;
+	}
+
+	free(dimids);
+#endif
 
 	return SMIOL_SUCCESS;
 }

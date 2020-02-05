@@ -76,6 +76,19 @@ program smiol_runner
 
 
     !
+    ! Unit tests for variables
+    !
+    ierr = test_variables(test_log)
+    if (ierr == 0) then
+        write(test_log,'(a)') 'All tests PASSED!'
+        write(test_log,'(a)') ''
+    else
+        write(test_log,'(i3,a)') ierr, ' tests FAILED!'
+        write(test_log,'(a)') ''
+    end if
+
+
+    !
     ! Unit tests for SMIOL_create_decomp and SMIOL_free_decomp
     !
     ierr = test_decomp(test_log)
@@ -163,7 +176,7 @@ program smiol_runner
 
     dimnames(1) = 'Time'
     dimnames(2) = 'nCells'
-    if (SMIOLf_define_var(file, 'theta', 0, 2, dimnames) /= SMIOL_SUCCESS) then
+    if (SMIOLf_define_var(file, 'theta', SMIOL_REAL32, 2, dimnames) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_define_var' was not called successfully"
         stop 1
     endif
@@ -898,6 +911,57 @@ contains
 
     end function test_dimensions
 
+
+    function test_variables(test_log) result(ierrcount)
+
+        implicit none
+
+        integer, intent(in) :: test_log
+
+        integer :: ierrcount
+        type (SMIOLf_context), pointer :: context
+        type (SMIOLf_file), pointer :: file
+
+        write(test_log,'(a)') '********************************************************************************'
+        write(test_log,'(a)') '************ SMIOL_define_var / SMIOL_inquire_var unit tests *******************'
+        write(test_log,'(a)') ''
+
+        ierrcount = 0
+
+
+        ! Create a SMIOL context for testing file variable routines
+        nullify(context)
+        ierr = SMIOLf_init(MPI_COMM_WORLD, context)
+        if (ierr /= SMIOL_SUCCESS .or. .not. associated(context)) then
+            ierrcount = -1
+            return
+        end if
+
+        ! Create a SMIOL file for testing variable routines
+        nullify(file)
+        ierr = SMIOLf_open_file(context, 'test_vars_fortran.nc', SMIOL_FILE_CREATE, file)
+        if (ierr /= SMIOL_SUCCESS .or. .not. associated(file)) then
+            ierrcount = -1
+            return
+        end if
+
+        ! Close the SMIOL file
+        ierr = SMIOLf_close_file(file)
+        if (ierr /= SMIOL_SUCCESS .or. associated(file)) then
+            ierrcount = -1
+            return
+        end if
+
+        ! Free the SMIOL context
+        ierr = SMIOLf_finalize(context)
+        if (ierr /= SMIOL_SUCCESS .or. associated(context)) then
+            ierrcount = -1
+            return
+        end if
+
+        write(test_log,'(a)') ''
+
+    end function test_variables
 
     function test_file_sync(test_log) result(ierrcount)
 

@@ -9,6 +9,7 @@
 int test_init_finalize(FILE *test_log);
 int test_open_close(FILE *test_log);
 int test_dimensions(FILE *test_log);
+int test_variables(FILE *test_log);
 int test_decomp(FILE *test_log);
 int test_file_sync(FILE *test_log);
 
@@ -77,6 +78,18 @@ int main(int argc, char **argv)
 	 * Unit tests for dimensions
 	 */
 	ierr = test_dimensions(test_log);
+	if (ierr == 0) {
+		fprintf(test_log, "All tests PASSED!\n\n");
+	}
+	else {
+		fprintf(test_log, "%i tests FAILED!\n\n", ierr);
+	}
+
+
+	/*
+	 * Unit tests for variables
+	 */
+	ierr = test_variables(test_log);
 	if (ierr == 0) {
 		fprintf(test_log, "All tests PASSED!\n\n");
 	}
@@ -188,7 +201,7 @@ int main(int argc, char **argv)
 	dimnames[1] = (char *)malloc((size_t)64 * sizeof(char));
 	snprintf(dimnames[0], 64, "Time");
 	snprintf(dimnames[1], 64, "nCells");
-	if ((ierr = SMIOL_define_var(file, "theta", 0, 2, (const char**)dimnames)) != SMIOL_SUCCESS) {
+	if ((ierr = SMIOL_define_var(file, "theta", SMIOL_REAL32, 2, (const char**)dimnames)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_define_var: %s ", SMIOL_error_string(ierr));
 		return 1;
 	}
@@ -1010,6 +1023,57 @@ int test_dimensions(FILE *test_log)
 	else {
 		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned\n");
 		errcount++;
+	}
+
+	/* Close the SMIOL file */
+	ierr = SMIOL_close_file(&file);
+	if (ierr != SMIOL_SUCCESS || file != NULL) {
+		fprintf(test_log, "Failed to close SMIOL file...\n");
+		return -1;
+	}
+
+	/* Free the SMIOL context */
+	ierr = SMIOL_finalize(&context);
+	if (ierr != SMIOL_SUCCESS || context != NULL) {
+		fprintf(test_log, "Failed to free SMIOL context...\n");
+		return -1;
+	}
+
+	fflush(test_log);
+	ierr = MPI_Barrier(MPI_COMM_WORLD);
+
+	fprintf(test_log, "\n");
+
+	return errcount;
+}
+
+int test_variables(FILE *test_log)
+{
+	int errcount;
+	int ierr;
+	struct SMIOL_context *context;
+	struct SMIOL_file *file;
+
+	fprintf(test_log, "********************************************************************************\n");
+	fprintf(test_log, "************ SMIOL_define_var / SMIOL_inquire_var ******************************\n");
+	fprintf(test_log, "\n");
+
+	errcount = 0;
+
+	/* Create a SMIOL context for testing variable routines */
+	context = NULL;
+	ierr = SMIOL_init(MPI_COMM_WORLD, &context);
+	if (ierr != SMIOL_SUCCESS || context == NULL) {
+		fprintf(test_log, "Failed to create SMIOL context...\n");
+		return -1;
+	}
+
+	/* Create a SMIOL file for testing variable routines */
+	file = NULL;
+	ierr = SMIOL_open_file(context, "test_vars.nc", SMIOL_FILE_CREATE, &file);
+	if (ierr != SMIOL_SUCCESS || file == NULL) {
+		fprintf(test_log, "Failed to create SMIOL file...\n");
+		return -1;
 	}
 
 	/* Close the SMIOL file */
