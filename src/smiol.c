@@ -209,7 +209,8 @@ int SMIOL_open_file(struct SMIOL_context *context, const char *filename, int mod
 	if (mode & SMIOL_FILE_CREATE) {
 #ifdef SMIOL_PNETCDF
 		if ((ierr = ncmpi_create(MPI_Comm_f2c(context->fcomm), filename,
-				NC_CLOBBER, MPI_INFO_NULL, &((*file)->ncidp))) != NC_NOERR) {
+					(NC_64BIT_DATA | NC_CLOBBER), MPI_INFO_NULL,
+					&((*file)->ncidp))) != NC_NOERR) {
 			free((*file));
 			(*file) = NULL;
 			context->lib_type = SMIOL_LIBRARY_PNETCDF;
@@ -301,11 +302,61 @@ int SMIOL_close_file(struct SMIOL_file **file)
  *
  * Defines a new dimension in a file.
  *
- * Detailed description.
+ * Defines a dimension with the specified name and size in the file associated
+ * with the file handle. If a negative value is provided for the size argument,
+ * the dimension will be defined as an unlimited or record dimension.
+ *
+ * Upon successful completion, SMIOL_SUCCESS is returned; otherwise, an error
+ * code is returned.
  *
  ********************************************************************************/
-int SMIOL_define_dim(void)
+int SMIOL_define_dim(struct SMIOL_file *file, const char *dimname, SMIOL_Offset dimsize)
 {
+#ifdef SMIOL_PNETCDF
+	int dimidp;
+	int ierr;
+	MPI_Offset len;
+#endif
+
+	/*
+	 * Check that file handle is valid
+	 */
+	if (file == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	/*
+	 * Check that dimension name is valid
+	 */
+	if (dimname == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+#ifdef SMIOL_PNETCDF
+	/*
+	 * The parallel-netCDF library does not permit zero-length dimensions
+	 */
+	if (dimsize == (SMIOL_Offset)0) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	/*
+	 * Handle unlimited / record dimension specifications
+	 */
+	if (dimsize < (SMIOL_Offset)0) {
+		len = NC_UNLIMITED;
+	}
+	else {
+		len = (MPI_Offset)dimsize;
+	}
+
+	if ((ierr = ncmpi_def_dim(file->ncidp, dimname, len, &dimidp)) != NC_NOERR) {
+		file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+		file->context->lib_ierr = ierr;
+		return SMIOL_LIBRARY_ERROR;
+	}
+#endif
+
 	return SMIOL_SUCCESS;
 }
 
@@ -316,11 +367,63 @@ int SMIOL_define_dim(void)
  *
  * Inquires about an existing dimension in a file.
  *
- * Detailed description.
+ * Inquires about the size of an existing dimension in a file. For record
+ * dimensions, the current size of the dimension is returned; future writes of
+ * additional records to a file can lead to different return sizes for record
+ * dimensions.
+ *
+ * Upon successful completion, SMIOL_SUCCESS is returned; otherwise, an error
+ * code is returned.
  *
  ********************************************************************************/
-int SMIOL_inquire_dim(void)
+int SMIOL_inquire_dim(struct SMIOL_file *file, const char *dimname, SMIOL_Offset *dimsize)
 {
+#ifdef SMIOL_PNETCDF
+	int dimidp;
+	int ierr;
+	MPI_Offset len;
+#endif
+	/*
+	 * Check that file handle is valid
+	 */
+	if (file == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	/*
+	 * Check that dimension name is valid
+	 */
+	if (dimname == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	/*
+	 * Check that dimension size is not NULL
+	 */
+	if (dimsize == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	(*dimsize) = (int64_t)0;   /* Default dimension size if no library provides a value */
+
+#ifdef SMIOL_PNETCDF
+	if ((ierr = ncmpi_inq_dimid(file->ncidp, dimname, &dimidp)) != NC_NOERR) {
+		(*dimsize) = (SMIOL_Offset)(-1);  /* TODO: should there be a well-defined invalid size? */
+		file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+		file->context->lib_ierr = ierr;
+		return SMIOL_LIBRARY_ERROR;
+	}
+
+	if ((ierr = ncmpi_inq_dimlen(file->ncidp, dimidp, &len)) != NC_NOERR) {
+		(*dimsize) = (SMIOL_Offset)(-1);  /* TODO: should there be a well-defined invalid size? */
+		file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+		file->context->lib_ierr = ierr;
+		return SMIOL_LIBRARY_ERROR;
+	}
+
+	(*dimsize) = (SMIOL_Offset)len;
+#endif
+
 	return SMIOL_SUCCESS;
 }
 

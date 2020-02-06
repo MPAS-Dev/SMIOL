@@ -5,6 +5,11 @@
 #include <stdint.h>
 #include "mpi.h"
 
+
+/* If SMIOL_Offset is redefined, interoperable Fortran types and interfaces must also be updated */
+typedef int64_t SMIOL_Offset;
+
+
 /*
  * Types
  */
@@ -31,10 +36,12 @@ struct SMIOL_decomp {
 	int64_t *io_elements;
 };
 
+
 /*
  * Return error codes
  */
 #include "smiol_codes.inc"
+
 
 /*
  * Library methods
@@ -53,8 +60,8 @@ int SMIOL_close_file(struct SMIOL_file **file);
 /*
  * Dimension methods
  */
-int SMIOL_define_dim(void);
-int SMIOL_inquire_dim(void);
+int SMIOL_define_dim(struct SMIOL_file *file, const char *dimname, SMIOL_Offset dimsize);
+int SMIOL_inquire_dim(struct SMIOL_file *file, const char *dimname, SMIOL_Offset *dimsize);
 
 /*
  * Variable methods
