@@ -10,6 +10,7 @@ int test_init_finalize(FILE *test_log);
 int test_open_close(FILE *test_log);
 int test_dimensions(FILE *test_log);
 int test_decomp(FILE *test_log);
+int test_file_sync(FILE *test_log);
 
 int main(int argc, char **argv)
 {
@@ -94,6 +95,16 @@ int main(int argc, char **argv)
 		fprintf(test_log, "%i tests FAILED!\n\n", ierr);
 	}
 
+	/*
+	 * Unit tests for SMIOL_sync_file
+	 */
+	ierr = test_file_sync(test_log);
+	if (ierr == 0) {
+		fprintf(test_log, "All tests PASSED!\n\n");
+	}
+	else {
+		fprintf(test_log, "%i tests FAILED!\n\n", ierr);
+	}
 
 	if ((ierr = SMIOL_init(MPI_COMM_WORLD, &context)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_init: %s ", SMIOL_error_string(ierr));
@@ -143,11 +154,6 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if ((ierr = SMIOL_define_dim(file, "Time", -1)) != SMIOL_SUCCESS) {
-		fprintf(test_log, "ERROR: SMIOL_define_dim: %s ", SMIOL_error_string(ierr));
-		return 1;
-	}
-
 	if ((ierr = SMIOL_define_dim(file, "nCells", 40962)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_define_dim: %s ", SMIOL_error_string(ierr));
 		return 1;
@@ -158,6 +164,12 @@ int main(int argc, char **argv)
 		return 1;
 	}
 	fprintf(test_log, "Size of nCells dimension is %li\n", (long int)dimsize);
+
+	if ((ierr = SMIOL_sync_file(file)) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_sync_file: %s ",
+			SMIOL_error_string(ierr));
+		return 1;
+	}
 
 	if ((ierr = SMIOL_close_file(&file)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_close_file: %s ", SMIOL_error_string(ierr));
@@ -194,12 +206,6 @@ int main(int argc, char **argv)
 		return 1;
 	}
 	
-	if ((ierr = SMIOL_file_sync()) != SMIOL_SUCCESS) {
-		fprintf(test_log, "ERROR: SMIOL_file_sync: %s ",
-			SMIOL_error_string(ierr));
-		return 1;
-	}
-
 	if ((ierr = SMIOL_set_option()) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_set_option: %s ",
 			SMIOL_error_string(ierr));
@@ -1008,3 +1014,160 @@ int test_dimensions(FILE *test_log)
 
 	return errcount;
 }
+
+int test_file_sync(FILE *test_log)
+{
+	int ierr;
+	int errcount;
+	struct SMIOL_context *context = NULL;
+	struct SMIOL_file *file = NULL;
+
+	fprintf(test_log, "********************************************************************************\n");
+	fprintf(test_log, "************************ SMIOL_sync_file unit tests ****************************\n");
+	fprintf(test_log, "\n");
+
+	errcount = 0;
+
+
+	/* Create a SMIOL context for testing file sync routines */
+	ierr = SMIOL_init(MPI_COMM_WORLD, &context);
+	if (ierr != SMIOL_SUCCESS || context == NULL) {
+		fprintf(test_log, "Failed to create SMIOL context...\n");
+		return -1;
+	}
+
+	/* Open a file for syncing */
+	ierr = SMIOL_open_file(context, "smiol_sync_file.nc", SMIOL_FILE_CREATE, &file);
+	if (ierr != SMIOL_SUCCESS || file == NULL) {
+		fprintf(test_log, "Failed to open `smiol_sycn_file.nc\n");
+		return -1;
+	}
+
+	/* Testing SMIOL_sync_file on a file opened with SMIOL_FILE_CREATE*/
+	fprintf(test_log, "Everything OK (SMIOL_sync_file) with SMIOL_FILE_CREATE: ");
+	ierr = SMIOL_sync_file(file);
+	if (ierr == SMIOL_SUCCESS && file != NULL) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr != SMIOL_SUCCESS && file != NULL) {
+		fprintf(test_log, "FAIL - file was not NULL, but SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	} else if (ierr == SMIOL_SUCCESS && file == NULL) {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was returned, but file was NULL\n");
+		errcount++;
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned and file was NULL\n");
+		errcount++;
+	}
+
+	/* Close the file */
+	ierr = SMIOL_close_file(&file);
+	if (ierr != SMIOL_SUCCESS || file != NULL) {
+		fprintf(test_log, "Failed to close 'smiol_sync_file.nc'\n");
+		return -1;
+	}
+
+
+	/* Testing SMIOL_sync_file on a file opened with SMIOL_FILE_WRITE */
+	ierr = SMIOL_open_file(context, "smiol_sync_file.nc", SMIOL_FILE_WRITE, &file);
+	if (ierr != SMIOL_SUCCESS || file == NULL) {
+		fprintf(test_log, "Failed to open `smiol_sync_file.nc in write mode\n");
+		return -1;
+	}
+
+	/* Testing SMIOL_sync_file */
+	fprintf(test_log, "Everything OK (SMIOL_sync_file) with SMIOL_FILE_WRITE: ");
+	ierr = SMIOL_sync_file(file);
+	if (ierr == SMIOL_SUCCESS && file != NULL) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr != SMIOL_SUCCESS && file != NULL) {
+		fprintf(test_log, "FAIL - file was not NULL, but SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	} else if (ierr == SMIOL_SUCCESS && file == NULL) {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was returned, but file was NULL\n");
+		errcount++;
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned and file was NULL\n");
+		errcount++;
+	}
+
+	/* Close the file */
+	ierr = SMIOL_close_file(&file);
+	if (ierr != SMIOL_SUCCESS || file != NULL) {
+		fprintf(test_log, "Failed to close 'smiol_sync_file.nc'\n");
+		return -1;
+	}
+
+	/* Testing SMIOL_sync_file on a file opened with SMIOL_FILE_READ*/
+	ierr = SMIOL_open_file(context, "smiol_sync_file.nc", SMIOL_FILE_READ, &file);
+	if (ierr != SMIOL_SUCCESS || file == NULL) {
+		fprintf(test_log, "Failed to open `smiol_sync_file.nc with SMIOL_FILE_READ\n");
+		return -1;
+	}
+
+	/* Testing SMIOL_sync_file */
+	fprintf(test_log, "Everything OK (SMIOL_sync_file) with SMIOL_FILE_READ: ");
+	ierr = SMIOL_sync_file(file);
+	if (ierr == SMIOL_SUCCESS && file != NULL) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr != SMIOL_SUCCESS && file != NULL) {
+		fprintf(test_log, "FAIL - file was not NULL, but SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	} else if (ierr == SMIOL_SUCCESS && file == NULL) {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was returned, but file was NULL\n");
+		errcount++;
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned and file was NULL\n");
+		errcount++;
+	}
+
+	/* Close the file */
+	ierr = SMIOL_close_file(&file);
+	if (ierr != SMIOL_SUCCESS || file != NULL) {
+		fprintf(test_log, "Failed to close 'smiol_sync_file.nc'\n");
+		return -1;
+	}
+
+
+#ifdef SMIOL_PNETCDF
+	/* Testing a file that was never opened */
+	fprintf(test_log, "Try to sync a file that was never opened: ");
+	file = (struct SMIOL_file *)malloc(sizeof(struct SMIOL_file));
+	file->context = context;
+	file->state = -42;	// Erroneous, currently unused, state
+	ierr = SMIOL_sync_file(file);
+	if (ierr == SMIOL_LIBRARY_ERROR && file != NULL) {
+		fprintf(test_log, "PASS (%s)\n",
+			SMIOL_lib_error_string(context));
+	} else {
+		fprintf(test_log, "FAIL - expected error code of SMIOL_LIBRARY_ERROR not returned, or file was not NULL\n");
+		errcount++;
+	}
+	free(file);
+#endif
+
+	/* Testing SMIOL_sync_file with a NULL file pointer*/
+	file = NULL;
+	fprintf(test_log, "Testing SMIOL_sync_file with a NULL file pointer: ");
+	ierr = SMIOL_sync_file(file);
+	if (ierr == SMIOL_INVALID_ARGUMENT && file == NULL) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - Expected error code SMIOL_INVALID_ARGUMENT not returned or file was not NULL\n");
+		errcount++;
+	}
+
+	ierr = SMIOL_finalize(&context);
+	if (ierr != SMIOL_SUCCESS || context != NULL) {
+		fprintf(test_log, "Failed to free SMIOL context...\n");
+		return -1;
+	}
+
+	fflush(test_log);
+	ierr = MPI_Barrier(MPI_COMM_WORLD);
+
+	fprintf(test_log, "\n");
+
+	return errcount;
+
+}
+

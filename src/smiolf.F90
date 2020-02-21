@@ -28,7 +28,7 @@ module SMIOLf
               SMIOLf_get_var, &
               SMIOLf_define_att, &
               SMIOLf_inquire_att, &
-              SMIOLf_file_sync, &
+              SMIOLf_sync_file, &
               SMIOLf_error_string, &
               SMIOLf_lib_error_string, &
               SMIOLf_set_option, &
@@ -51,6 +51,7 @@ module SMIOLf
     type, bind(C) :: SMIOLf_file
         type (c_ptr) :: context      ! Pointer to (struct SMIOL_context); the context within which the file was opened
 #ifdef SMIOL_PNETCDF
+        integer(c_int) :: state      ! parallel-netCDF file state (i.e. Define or data mode)
         integer(c_int) :: ncidp      ! parallel-netCDF file handle
 #endif
     end type SMIOLf_file
@@ -571,20 +572,41 @@ contains
     !
 
     !-----------------------------------------------------------------------
-    !  routine SMIOLf_file_sync
+    !  routine SMIOLf_sync_file
     !
     !> \brief Forces all in-memory data to be flushed to disk
     !> \details
-    !>  Detailed description of what this routine does.
+    !> Upon success, all in-memory data for the file associatd with the file
+    !> handle will be flushed to the file system and SMIOL_SUCCESS will be
+    !> returned; otherwise, an error code is returned.
     !
     !-----------------------------------------------------------------------
-    integer function SMIOLf_file_sync() result(ierr)
+    integer function SMIOLf_sync_file(file) result(ierr)
+
+        use iso_c_binding, only : c_ptr, c_loc, c_null_ptr
 
         implicit none
 
-        ierr = 0
+        type (SMIOLf_file), pointer :: file
+        type (c_ptr) :: c_file
 
-    end function SMIOLf_file_sync
+        interface
+            function SMIOL_sync_file(file) result(ierr) bind(C, name='SMIOL_sync_file')
+                use iso_c_binding, only : c_ptr, c_int
+                type(c_ptr), value :: file
+                integer(kind=c_int) :: ierr
+            end function
+        end interface
+
+        c_file = c_null_ptr
+
+        if (associated(file)) then
+            c_file = c_loc(file)
+        end if
+
+        ierr = SMIOL_sync_file(c_file)
+
+    end function SMIOLf_sync_file
 
 
     !-----------------------------------------------------------------------

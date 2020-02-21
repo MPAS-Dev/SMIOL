@@ -25,6 +25,7 @@ struct SMIOL_context {
 struct SMIOL_file {
 	struct SMIOL_context *context; /* Context for this file */
 #ifdef SMIOL_PNETCDF
+	int state; /* parallel-netCDF file state (i.e. Define or data mode) */
 	int ncidp; /* parallel-netCDF file handle */
 #endif
 };
@@ -80,7 +81,7 @@ int SMIOL_inquire_att(void);
 /*
  * Control methods
  */
-int SMIOL_file_sync(void);
+int SMIOL_sync_file(struct SMIOL_file *file);
 const char *SMIOL_error_string(int errno);
 const char *SMIOL_lib_error_string(struct SMIOL_context *context);
 int SMIOL_set_option(void);
