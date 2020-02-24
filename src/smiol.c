@@ -358,6 +358,18 @@ int SMIOL_define_dim(struct SMIOL_file *file, const char *dimname, SMIOL_Offset 
 		len = (MPI_Offset)dimsize;
 	}
 
+	/*
+	 * If the file is in data mode, then switch it to define mode
+	 */
+	if (file->state == PNETCDF_DATA_MODE) {
+		if ((ierr = ncmpi_redef(file->ncidp)) != NC_NOERR) {
+			file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+			file->context->lib_ierr = ierr;
+			return SMIOL_LIBRARY_ERROR;
+		}
+		file->state = PNETCDF_DEFINE_MODE;
+	}
+
 	if ((ierr = ncmpi_def_dim(file->ncidp, dimname, len, &dimidp)) != NC_NOERR) {
 		file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
 		file->context->lib_ierr = ierr;

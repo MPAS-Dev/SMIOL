@@ -134,6 +134,10 @@ program smiol_runner
         stop 1
     endif
 
+    if (SMIOLf_sync_file(file) /= SMIOL_SUCCESS) then
+        write(test_log,'(a)') "ERROR: 'SMIOLf_sync_file' was not called successfully"
+        stop 1
+    endif
 
     if (SMIOLf_define_dim(file, 'nCells', 40962_SMIOL_offset_kind) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_define_dim' was not called successfully"
