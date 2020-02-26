@@ -21,6 +21,9 @@ program smiol_runner
     character(len=16) :: log_fname
     character(len=32), dimension(2) :: dimnames
     integer(kind=SMIOL_offset_kind) :: dimsize
+    character(len=32), dimension(:), pointer :: dimnames_out
+    integer, pointer :: vartype_out
+    integer, pointer :: ndims_out
 
     call MPI_Init(ierr)
     if (ierr /= MPI_SUCCESS) then
@@ -181,13 +184,16 @@ program smiol_runner
         stop 1
     endif
 
-    if (SMIOLf_close_file(file) /= SMIOL_SUCCESS) then
-        write(test_log,'(a)') "ERROR: 'SMIOLf_close_file' was not called successfully"
-        stop 1
+    nullify(vartype_out)
+    nullify(ndims_out)
+    nullify(dimnames_out)
+    if (SMIOLf_inquire_var(file, 'theta', vartype_out, ndims_out, dimnames_out) /= SMIOL_SUCCESS) then
+        write(test_log,'(a)') "ERROR: 'SMIOLf_inquire_var' was not called successfully"
+!        stop 1
     endif
 
-    if (SMIOLf_inquire_var() /= SMIOL_SUCCESS) then
-        write(test_log,'(a)') "ERROR: 'SMIOLf_inquire_var' was not called successfully"
+    if (SMIOLf_close_file(file) /= SMIOL_SUCCESS) then
+        write(test_log,'(a)') "ERROR: 'SMIOLf_close_file' was not called successfully"
         stop 1
     endif
 

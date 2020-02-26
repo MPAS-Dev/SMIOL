@@ -519,7 +519,7 @@ int SMIOL_define_var(struct SMIOL_file *file, const char *varname, int vartype, 
 	/*
 	 * Translate SMIOL variable type to parallel-netcdf type
 	 */
-	switch(vartype) {
+	switch (vartype) {
 		case SMIOL_REAL32:
 			xtype = NC_FLOAT;
 			break;
@@ -572,11 +572,141 @@ int SMIOL_define_var(struct SMIOL_file *file, const char *varname, int vartype, 
  *
  * Inquires about an existing variable in a file.
  *
- * Detailed description.
+ * Inquires about a variable in a file, and optionally returns the type
+ * of the variable, the dimensionality of the variable, and the names of
+ * the dimensions of the variable. Which properties of the variable to return
+ * (type, dimensionality, or dimension names) is indicated by the status of
+ * the pointers for the corresponding properties: if the pointer is a non-NULL
+ * pointer, the property will be set upon successful completion of this routine.
+ *
+ * If the names of a variable's dimensions are requested (by providing a non-NULL
+ * actual argument for dimnames), the size of the dimnames array must be at least
+ * the number of dimensions in the variable, and each character string pointed
+ * to by an element of dimnames must be large enough to accommodate the corresponding
+ * dimension name.
  *
  ********************************************************************************/
-int SMIOL_inquire_var(void)
+int SMIOL_inquire_var(struct SMIOL_file *file, const char *varname, int *vartype, int *ndims, char **dimnames)
 {
+#ifdef SMIOL_PNETCDF
+	int *dimids;
+	int varidp;
+	int ierr;
+	int i;
+	int xtypep;
+	int ndimsp;
+#endif
+
+	/*
+	 * Check that file handle is valid
+	 */
+	if (file == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	/*
+	 * Check that variable name is valid
+	 */
+	if (varname == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	/*
+	 * If all output arguments are NULL, we can return early
+	 */
+	if (vartype == NULL && ndims == NULL && dimnames == NULL) {
+		return SMIOL_SUCCESS;
+	}
+
+#ifdef SMIOL_PNETCDF
+	/*
+	 * Get variable ID
+	 */
+	if ((ierr = ncmpi_inq_varid(file->ncidp, varname, &varidp)) != NC_NOERR) {
+		file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+		file->context->lib_ierr = ierr;
+		return SMIOL_LIBRARY_ERROR;
+	}
+
+	/*
+	 * If requested, inquire about variable type
+	 */
+	if (vartype != NULL) {
+		if ((ierr = ncmpi_inq_vartype(file->ncidp, varidp, &xtypep)) != NC_NOERR) {
+			file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+			file->context->lib_ierr = ierr;
+			return SMIOL_LIBRARY_ERROR;
+		}
+
+		/* Convert parallel-netCDF variable type to SMIOL variable type */
+		switch (xtypep) {
+			case NC_FLOAT:
+				*vartype = SMIOL_REAL32;
+				break;
+			case NC_DOUBLE:
+				*vartype = SMIOL_REAL64;
+				break;
+			case NC_INT:
+				*vartype = SMIOL_INT32;
+				break;
+			case NC_CHAR:
+				*vartype = SMIOL_CHAR;
+				break;
+			default:
+				*vartype = SMIOL_UNKNOWN_VAR_TYPE;
+		}
+	}
+
+	/*
+	 * All remaining properties will require the number of dimensions
+	 */
+	if (ndims != NULL || dimnames != NULL) {
+		if ((ierr = ncmpi_inq_varndims(file->ncidp, varidp, &ndimsp)) != NC_NOERR) {
+			file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+			file->context->lib_ierr = ierr;
+			return SMIOL_LIBRARY_ERROR;
+		}
+	}
+
+	/*
+	 * If requested, inquire about dimensionality
+	 */
+	if (ndims != NULL) {
+		*ndims = ndimsp;
+	}
+
+	/*
+	 * If requested, inquire about dimension names
+	 */
+	if (dimnames != NULL) {
+		dimids = (int *)malloc(sizeof(int) * (size_t)ndimsp);
+		if (dimids == NULL) {
+			return SMIOL_MALLOC_FAILURE;
+		}
+
+		if ((ierr = ncmpi_inq_vardimid(file->ncidp, varidp, dimids)) != NC_NOERR) {
+			file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+			file->context->lib_ierr = ierr;
+			free(dimids);
+			return SMIOL_LIBRARY_ERROR;
+		}
+
+		for (i=0; i<ndimsp; i++) {
+			if (dimnames[i] == NULL) {
+				return SMIOL_INVALID_ARGUMENT;
+			}
+			if ((ierr = ncmpi_inq_dimname(file->ncidp, dimids[i], dimnames[i])) != NC_NOERR) {
+				file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+				file->context->lib_ierr = ierr;
+				free(dimids);
+				return SMIOL_LIBRARY_ERROR;
+			}
+		}
+
+		free(dimids);
+	}
+#endif
+
 	return SMIOL_SUCCESS;
 }
 
