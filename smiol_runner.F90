@@ -930,6 +930,9 @@ contains
         character(len=32), dimension(6) :: dimnames
 
         character(len=32), dimension(:), pointer :: dimnames_ptr
+        character(len=32), dimension(:), pointer :: dimnames_out
+        integer, pointer :: ndims_out
+        integer, pointer :: vartype_out
 
         write(test_log,'(a)') '********************************************************************************'
         write(test_log,'(a)') '************ SMIOL_define_var / SMIOL_inquire_var unit tests *******************'
@@ -1201,6 +1204,153 @@ contains
             return
         end if
 
+        ! Re-open the SMIOL file
+        nullify(file)
+        ierr = SMIOLf_open_file(context, 'test_vars_fortran.nc', SMIOL_FILE_READ, file)
+        if (ierr /= SMIOL_SUCCESS .or. .not. associated(file)) then
+            write(test_log,'(a)') 'Failed to re-open the file...'
+            ierrcount = -1
+            return
+        end if
+
+        nullify(dimnames_out)
+        nullify(ndims_out)
+        nullify(vartype_out)
+
+        ! Inquire about just the number of dimensions for a variable
+        write(test_log,'(a)',advance='no') 'Inquire about just the number of dimensions for a variable: '
+        allocate(ndims_out)
+        ndims_out = -1
+        ierr = SMIOLf_inquire_var(file, 'r0_t', vartype_out, ndims_out, dimnames_out)
+        if (ierr == SMIOL_SUCCESS .and. ndims_out == 1) then
+            write(test_log,'(a)') 'PASS'
+        else if (ierr == SMIOL_SUCCESS .and. ndims_out /= 1) then
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was returned, but the number of dimensions was wrong'
+            ierrcount = ierrcount + 1
+        else if (ierr == SMIOL_LIBRARY_ERROR) then
+            write(test_log,'(a)') 'FAIL ('//trim(SMIOLf_lib_error_string(context))//')'
+            ierrcount = ierrcount + 1
+        else
+            write(test_log,'(a)') 'FAIL - '//trim(SMIOLf_error_string(ierr))
+            ierrcount = ierrcount + 1
+        end if
+        deallocate(ndims_out)
+
+        ! Inquire about just the type of a variable
+        write(test_log,'(a)',advance='no') 'Inquire about just the type of a variable: '
+        allocate(vartype_out)
+        vartype_out = SMIOL_UNKNOWN_VAR_TYPE
+        ierr = SMIOLf_inquire_var(file, 'r5_t', vartype_out, ndims_out, dimnames_out)
+        if (ierr == SMIOL_SUCCESS .and. vartype_out == SMIOL_REAL32) then
+            write(test_log,'(a)') 'PASS'
+        else if (ierr == SMIOL_SUCCESS .and. vartype_out /= SMIOL_REAL32) then
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was returned, but the variable type was wrong'
+            ierrcount = ierrcount + 1
+        else if (ierr == SMIOL_LIBRARY_ERROR) then
+            write(test_log,'(a)') 'FAIL ('//trim(SMIOLf_lib_error_string(context))//')'
+            ierrcount = ierrcount + 1
+        else
+            write(test_log,'(a)') 'FAIL - '//trim(SMIOLf_error_string(ierr))
+            ierrcount = ierrcount + 1
+        end if
+        deallocate(vartype_out)
+
+        ! Inquire about just the dimension names for a variable
+        write(test_log,'(a)',advance='no') 'Inquire about just the dimension names for a variable: '
+        allocate(dimnames_out(2))
+        dimnames_out(1) = '---------'
+        dimnames_out(2) = '---------'
+        ierr = SMIOLf_inquire_var(file, 'r1_t', vartype_out, ndims_out, dimnames_out)
+        if (ierr == SMIOL_SUCCESS .and. &
+            trim(dimnames_out(1)) == 'Time' .and. &
+            trim(dimnames_out(2)) == 'nCells') then
+            write(test_log,'(a)') 'PASS'
+        else if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was returned, but the dimension names were wrong'
+            ierrcount = ierrcount + 1
+        else if (ierr == SMIOL_LIBRARY_ERROR) then
+            write(test_log,'(a)') 'FAIL ('//trim(SMIOLf_lib_error_string(context))//')'
+            ierrcount = ierrcount + 1
+        else
+            write(test_log,'(a)') 'FAIL - '//trim(SMIOLf_error_string(ierr))
+            ierrcount = ierrcount + 1
+        end if
+        deallocate(dimnames_out)
+
+        allocate(dimnames_out(6))
+        allocate(ndims_out)
+        allocate(vartype_out)
+
+        ! Inquire about all properties of a variable
+        write(test_log,'(a)',advance='no') 'Inquire about all properties of a variable: '
+        vartype_out = SMIOL_UNKNOWN_VAR_TYPE
+        ndims_out = -1
+        dimnames_out(1) = '---------'
+        dimnames_out(2) = '---------'
+        ierr = SMIOLf_inquire_var(file, 'c1_t', vartype_out, ndims_out, dimnames_out);
+        if (ierr == SMIOL_SUCCESS .and. &
+            ndims_out == 2 .and. &
+            vartype_out == SMIOL_CHAR .and. &
+            trim(dimnames_out(1)) == 'Time' .and. &
+            trim(dimnames_out(2)) == 'StrLen') then
+            write(test_log,'(a)') 'PASS'
+        else if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was returned, but one or more properties were wrong'
+            ierrcount = ierrcount + 1
+        else if (ierr == SMIOL_LIBRARY_ERROR) then
+            write(test_log,'(a)') 'FAIL ('//trim(SMIOLf_lib_error_string(context))//')'
+            ierrcount = ierrcount + 1
+        else
+            write(test_log,'(a)') 'FAIL - '//trim(SMIOLf_error_string(ierr))
+            ierrcount = ierrcount + 1
+        end if
+
+        deallocate(dimnames_out)
+        deallocate(ndims_out)
+        deallocate(vartype_out)
+
+        ! Inquire about none of the properties of a variable
+        write(test_log,'(a)',advance='no') 'Inquire about none of the properties of a variable: '
+        ierr = SMIOLf_inquire_var(file, 'i5_t', vartype_out, ndims_out, dimnames_out);
+        if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'PASS'
+        else if (ierr == SMIOL_LIBRARY_ERROR) then
+            write(test_log,'(a)') 'FAIL ('//trim(SMIOLf_lib_error_string(context))//')'
+            ierrcount = ierrcount + 1
+        else
+            write(test_log,'(a)') 'FAIL - '//trim(SMIOLf_error_string(ierr))
+            ierrcount = ierrcount + 1
+        end if
+
+        allocate(dimnames_out(6))
+        allocate(ndims_out)
+        allocate(vartype_out)
+
+        ! Try to inquire about an undefined variable
+        write(test_log,'(a)',advance='no') 'Try to inquire about an undefined variable: '
+        ierr = SMIOLf_inquire_var(file, 'fooblaz', vartype_out, ndims_out, dimnames_out)
+        if (ierr == SMIOL_LIBRARY_ERROR) then
+            write(test_log,'(a)') 'PASS ('//trim(SMIOLf_lib_error_string(context))//')'
+        else if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was erroneously returned'
+            ierrcount = ierrcount + 1
+        else
+            write(test_log,'(a)') 'FAIL - a return code of SMIOL_LIBRARY_ERROR was expected'
+            ierrcount = ierrcount + 1
+        end if
+
+        deallocate(dimnames_out)
+        deallocate(ndims_out)
+        deallocate(vartype_out)
+
+        ! Close the SMIOL file
+        ierr = SMIOLf_close_file(file)
+        if (ierr /= SMIOL_SUCCESS .or. associated(file)) then
+            write(test_log,'(a)') 'Failed to close the file...'
+            ierrcount = -1
+            return
+        end if
+
         ! Free the SMIOL context
         ierr = SMIOLf_finalize(context)
         if (ierr /= SMIOL_SUCCESS .or. associated(context)) then
@@ -1212,6 +1362,7 @@ contains
         write(test_log,'(a)') ''
 
     end function test_variables
+
 
     function test_file_sync(test_log) result(ierrcount)
 
