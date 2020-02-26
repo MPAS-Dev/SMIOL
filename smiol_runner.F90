@@ -189,7 +189,7 @@ program smiol_runner
     nullify(dimnames_out)
     if (SMIOLf_inquire_var(file, 'theta', vartype_out, ndims_out, dimnames_out) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_inquire_var' was not called successfully"
-!        stop 1
+        stop 1
     endif
 
     if (SMIOLf_close_file(file) /= SMIOL_SUCCESS) then
@@ -927,6 +927,9 @@ contains
         integer :: ierrcount
         type (SMIOLf_context), pointer :: context
         type (SMIOLf_file), pointer :: file
+        character(len=32), dimension(6) :: dimnames
+
+        character(len=32), dimension(:), pointer :: dimnames_ptr
 
         write(test_log,'(a)') '********************************************************************************'
         write(test_log,'(a)') '************ SMIOL_define_var / SMIOL_inquire_var unit tests *******************'
@@ -939,6 +942,7 @@ contains
         nullify(context)
         ierr = SMIOLf_init(MPI_COMM_WORLD, context)
         if (ierr /= SMIOL_SUCCESS .or. .not. associated(context)) then
+            write(test_log,'(a)') 'Failed to create a context...'
             ierrcount = -1
             return
         end if
@@ -947,13 +951,252 @@ contains
         nullify(file)
         ierr = SMIOLf_open_file(context, 'test_vars_fortran.nc', SMIOL_FILE_CREATE, file)
         if (ierr /= SMIOL_SUCCESS .or. .not. associated(file)) then
+            write(test_log,'(a)') 'Failed to create a file...'
             ierrcount = -1
             return
+        end if
+
+        ! Define several dimensions in the file to be used when defining variables
+        if (SMIOLf_define_dim(file, 'Time', -1_SMIOL_offset_kind) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to create dimension Time...'
+            ierrcount = -1
+            return
+        end if
+
+        if (SMIOLf_define_dim(file, 'nCells', 40962_SMIOL_offset_kind) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to create dimension nCells...'
+            ierrcount = -1
+            return
+        end if
+
+        if (SMIOLf_define_dim(file, 'nVertLevels', 55_SMIOL_offset_kind) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to create dimension nVertLevels...'
+            ierrcount = -1
+            return
+        end if
+
+        if (SMIOLf_define_dim(file, 'maxEdges', 6_SMIOL_offset_kind) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to create dimension maxEdges...'
+            ierrcount = -1
+            return
+        end if
+
+        if (SMIOLf_define_dim(file, 'TWO', 2_SMIOL_offset_kind) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to create dimension TWO...'
+            ierrcount = -1
+            return
+        end if
+
+        if (SMIOLf_define_dim(file, 'nMonths', 12_SMIOL_offset_kind) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to create dimension nMonths...'
+            ierrcount = -1
+            return
+        end if
+
+        if (SMIOLf_define_dim(file, 'StrLen', 512_SMIOL_offset_kind) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to create dimension StrLen...'
+            ierrcount = -1
+            return
+        end if
+
+        ! Define a 32-bit real variable with zero dimensions
+        write(test_log,'(a)',advance='no') 'Define a 32-bit real variable with zero dimensions: '
+        allocate(dimnames_ptr(0))
+        ierr = SMIOLf_define_var(file, 'r0', SMIOL_REAL32, 0, dimnames_ptr)
+        deallocate(dimnames_ptr)
+        if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'PASS'
+        else if (ierr == SMIOL_LIBRARY_ERROR) then
+            write(test_log,'(a)') 'FAIL - a library-specific error was returned ('//trim(SMIOLf_lib_error_string(context))//')'
+            ierrcount = ierrcount + 1
+        else
+            write(test_log,'(a)') 'FAIL - '//trim(SMIOLf_error_string(ierr))
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Define a 32-bit real variable with one dimension that is a record dimension
+        write(test_log,'(a)',advance='no') 'Define a 32-bit real variable with only a record dimension: '
+        dimnames(1) = 'Time'
+        ierr = SMIOLf_define_var(file, 'r0_t', SMIOL_REAL32, 1, dimnames)
+        if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'PASS'
+        else if (ierr == SMIOL_LIBRARY_ERROR) then
+            write(test_log,'(a)') 'FAIL - a library-specific error was returned ('//trim(SMIOLf_lib_error_string(context))//')'
+            ierrcount = ierrcount + 1
+        else
+            write(test_log,'(a)') 'FAIL - '//trim(SMIOLf_error_string(ierr))
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Define a 32-bit real variable with one dimension that is *not* a record dimension
+        write(test_log,'(a)',advance='no') 'Define a 32-bit real variable with one non-record dimension: '
+        dimnames(1) = 'nCells'
+        ierr = SMIOLf_define_var(file, 'r1', SMIOL_REAL32, 1, dimnames)
+        if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'PASS'
+        else if (ierr == SMIOL_LIBRARY_ERROR) then
+            write(test_log,'(a)') 'FAIL - a library-specific error was returned ('//trim(SMIOLf_lib_error_string(context))//')'
+            ierrcount = ierrcount + 1
+        else
+            write(test_log,'(a)') 'FAIL - '//trim(SMIOLf_error_string(ierr))
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Define a 32-bit real variable with one non-record dimension and a record dimension
+        write(test_log,'(a)',advance='no') 'Define a 32-bit real variable with one non-record dimension and a record dimension: '
+        dimnames(1) = 'Time'
+        dimnames(2) = 'nCells'
+        ierr = SMIOLf_define_var(file, 'r1_t', SMIOL_REAL32, 2, dimnames)
+        if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'PASS'
+        else if (ierr == SMIOL_LIBRARY_ERROR) then
+            write(test_log,'(a)') 'FAIL - a library-specific error was returned ('//trim(SMIOLf_lib_error_string(context))//')'
+            ierrcount = ierrcount + 1
+        else
+            write(test_log,'(a)') 'FAIL - '//trim(SMIOLf_error_string(ierr))
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Define a 32-bit real variable with five dimensions, none of which is a record dimension
+        write(test_log,'(a)',advance='no') 'Define a 32-bit real variable with five non-record dimension: '
+        dimnames(1) = 'nCells'
+        dimnames(2) = 'nVertLevels'
+        dimnames(3) = 'maxEdges'
+        dimnames(4) = 'TWO'
+        dimnames(5) = 'nMonths'
+        ierr = SMIOLf_define_var(file, 'r5', SMIOL_REAL32, 5, dimnames)
+        if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'PASS'
+        else if (ierr == SMIOL_LIBRARY_ERROR) then
+            write(test_log,'(a)') 'FAIL - a library-specific error was returned ('//trim(SMIOLf_lib_error_string(context))//')'
+            ierrcount = ierrcount + 1
+        else
+            write(test_log,'(a)') 'FAIL - '//trim(SMIOLf_error_string(ierr))
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Define a 32-bit real variable with five non-record dimensions and a record dimension
+        write(test_log,'(a)',advance='no') 'Define a 32-bit real variable with five non-record dimension and a record dimension: '
+        dimnames(1) = 'Time'
+        dimnames(2) = 'nCells'
+        dimnames(3) = 'nVertLevels'
+        dimnames(4) = 'maxEdges'
+        dimnames(5) = 'TWO'
+        dimnames(6) = 'nMonths'
+        ierr = SMIOLf_define_var(file, 'r5_t', SMIOL_REAL32, 6, dimnames)
+        if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'PASS'
+        else if (ierr == SMIOL_LIBRARY_ERROR) then
+            write(test_log,'(a)') 'FAIL - a library-specific error was returned ('//trim(SMIOLf_lib_error_string(context))//')'
+            ierrcount = ierrcount + 1
+        else
+            write(test_log,'(a)') 'FAIL - '//trim(SMIOLf_error_string(ierr))
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Define a 64-bit real variable with five non-record dimension and a record dimension
+        write(test_log,'(a)',advance='no') 'Define a 64-bit real variable with five non-record dimension and a record dimension: '
+        dimnames(1) = 'Time'
+        dimnames(2) = 'nCells'
+        dimnames(3) = 'nVertLevels'
+        dimnames(4) = 'maxEdges'
+        dimnames(5) = 'TWO'
+        dimnames(6) = 'nMonths'
+        ierr = SMIOLf_define_var(file, 'd5_t', SMIOL_REAL64, 6, dimnames)
+        if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'PASS'
+        else if (ierr == SMIOL_LIBRARY_ERROR) then
+            write(test_log,'(a)') 'FAIL - a library-specific error was returned ('//trim(SMIOLf_lib_error_string(context))//')'
+            ierrcount = ierrcount + 1
+        else
+            write(test_log,'(a)') 'FAIL - '//trim(SMIOLf_error_string(ierr))
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Define a 32-bit int variable with five non-record dimension and a record dimension
+        write(test_log,'(a)',advance='no') 'Define a 32-bit int variable with five non-record dimension and a record dimension: '
+        dimnames(1) = 'Time'
+        dimnames(2) = 'nCells'
+        dimnames(3) = 'nVertLevels'
+        dimnames(4) = 'maxEdges'
+        dimnames(5) = 'TWO'
+        dimnames(6) = 'nMonths'
+        ierr = SMIOLf_define_var(file, 'i5_t', SMIOL_INT32, 6, dimnames)
+        if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'PASS'
+        else if (ierr == SMIOL_LIBRARY_ERROR) then
+            write(test_log,'(a)') 'FAIL - a library-specific error was returned ('//trim(SMIOLf_lib_error_string(context))//')'
+            ierrcount = ierrcount + 1
+        else
+            write(test_log,'(a)') 'FAIL - '//trim(SMIOLf_error_string(ierr))
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Define a char variable with one non-record dimension and a record dimension
+        write(test_log,'(a)',advance='no') 'Define a character variable with one non-record dimension and a record dimension: '
+        dimnames(1) = 'Time'
+        dimnames(2) = 'StrLen'
+        ierr = SMIOLf_define_var(file, 'c1_t', SMIOL_CHAR, 2, dimnames)
+        if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'PASS'
+        else if (ierr == SMIOL_LIBRARY_ERROR) then
+            write(test_log,'(a)') 'FAIL - a library-specific error was returned ('//trim(SMIOLf_lib_error_string(context))//')'
+            ierrcount = ierrcount + 1
+        else
+            write(test_log,'(a)') 'FAIL - '//trim(SMIOLf_error_string(ierr))
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Try to re-define a variable that already exists
+        write(test_log,'(a)',advance='no') 'Try to re-define a variable that already exists: '
+        dimnames(1) = 'Time'
+        dimnames(2) = 'nCells'
+        ierr = SMIOLf_define_var(file, 'c1_t', SMIOL_CHAR, 2, dimnames)
+        if (ierr == SMIOL_LIBRARY_ERROR) then
+            write(test_log,'(a)') 'PASS ('//trim(SMIOLf_lib_error_string(context))//')'
+        else if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was erroneously returned'
+            ierrcount = ierrcount + 1
+        else
+            write(test_log,'(a)') 'FAIL - a return code of SMIOL_LIBRARY_ERROR was expected'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Try to define a variable with an undefined dimension
+        write(test_log,'(a)',advance='no') 'Try to define a variable with an undefined dimension: '
+        dimnames(1) = 'Time'
+        dimnames(2) = 'foobar'
+        dimnames(3) = 'nVertLevels'
+        ierr = SMIOLf_define_var(file, 'should_not_exist', SMIOL_INT32, 3, dimnames)
+        if (ierr == SMIOL_LIBRARY_ERROR) then
+            write(test_log,'(a)') 'PASS ('//trim(SMIOLf_lib_error_string(context))//')'
+        else if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was erroneously returned'
+            ierrcount = ierrcount + 1
+        else
+            write(test_log,'(a)') 'FAIL - a return code of SMIOL_LIBRARY_ERROR was expected'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Try to define a variable with an invalid type
+        write(test_log,'(a)',advance='no') 'Try to define a variable with an invalid type: '
+        dimnames(1) = 'Time'
+        dimnames(2) = 'nCells'
+        dimnames(3) = 'nVertLevels'
+        ierr = SMIOLf_define_var(file, 'should_not_exist', &
+                                 not(ior(SMIOL_REAL32, ior(SMIOL_REAL64, ior(SMIOL_INT32, SMIOL_CHAR)))), &
+                                 3, dimnames)
+        if (ierr == SMIOL_INVALID_ARGUMENT) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - a return code of SMIOL_INVALID_ARGUMENT was expected'
+            ierrcount = ierrcount + 1
         end if
 
         ! Close the SMIOL file
         ierr = SMIOLf_close_file(file)
         if (ierr /= SMIOL_SUCCESS .or. associated(file)) then
+            write(test_log,'(a)') 'Failed to close the file...'
             ierrcount = -1
             return
         end if
@@ -961,6 +1204,7 @@ contains
         ! Free the SMIOL context
         ierr = SMIOLf_finalize(context)
         if (ierr /= SMIOL_SUCCESS .or. associated(context)) then
+            write(test_log,'(a)') 'Failed to finalize the context...'
             ierrcount = -1
             return
         end if

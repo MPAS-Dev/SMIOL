@@ -691,7 +691,7 @@ int SMIOL_inquire_var(struct SMIOL_file *file, const char *varname, int *vartype
 			return SMIOL_LIBRARY_ERROR;
 		}
 
-		for (i=0; i<ndimsp; i++) {
+		for (i = 0; i < ndimsp; i++) {
 			if (dimnames[i] == NULL) {
 				return SMIOL_INVALID_ARGUMENT;
 			}
