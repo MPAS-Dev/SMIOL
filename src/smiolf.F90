@@ -771,9 +771,32 @@ contains
 
         ierr = SMIOL_SUCCESS
 
+        ! Check to see if compute_elements contains >= n_compute_elements
+        if (.not. size(compute_elements) >= n_compute_elements) then
+            nullify(decomp)
+            ierr = SMIOL_INVALID_ARGUMENT
+            return
+        endif
+
+        ! Check to see if io_elements contains >= n_io_elements
+        if (.not. size(io_elements) >= n_io_elements) then
+            nullify(decomp)
+            ierr = SMIOL_INVALID_ARGUMENT
+            return
+        endif
+
         ! Translate Fortran types into C interoperable types
-        c_compute_elements = c_loc(compute_elements)
-        c_io_elements = c_loc(io_elements)
+        if (size(compute_elements) > 0) then
+           c_compute_elements = c_loc(compute_elements)
+        else
+           c_compute_elements = c_null_ptr
+        endif
+
+        if (size(io_elements) > 0) then
+           c_io_elements = c_loc(io_elements)
+        else
+           c_io_elements = c_null_ptr
+        endif
 
         ! Create SMIOL_decomp type via c SMIOL_create_decomp
         c_decomp = SMIOL_create_decomp(n_compute_elements, n_io_elements, c_compute_elements, c_io_elements)
