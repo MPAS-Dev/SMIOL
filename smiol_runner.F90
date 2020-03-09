@@ -580,6 +580,23 @@ contains
             ierrcount = ierrcount + 1
         endif
 
+        ! Test with size(compute_elements) and size(io_elements) >= n_io_elements and n_compute_elements, respectively
+        write(test_log,'(a)',advance='no') 'Everything OK for SMIOLf_create_decomp  size(elements) >= n_elements: '
+        n_compute_elements = 21
+        n_io_elements = 21
+        allocate(compute_elements(42))
+        allocate(io_elements(42))
+        ierr = SMIOLf_create_decomp(n_compute_elements, n_io_elements, compute_elements, io_elements, decomp)
+        if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
+            write(test_log,'(a)') "PASS"
+        else if (ierr /= SMIOL_SUCCESS .and. .not. associated(decomp)) then
+            write(test_log,'(a)') "FAIL - SMIOLf_create_decomp returned an error and decomp was not associated"
+            ierrcount = ierrcount + 1
+        else if (ierr == SMIOL_SUCCESS .and. .not. associated(decomp)) then
+            write(test_log,'(a)') "FAIL - ierr returned success but decomp was NOT associated when it should have been"
+            ierrcount = ierrcount + 1
+        endif
+
         ! Large number of Compute and IO Elements
         write(test_log,'(a)',advance='no') 'Everything OK for SMIOLf_create_decomp large number of elements: '
         n_compute_elements = 10000000
