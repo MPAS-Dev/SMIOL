@@ -682,6 +682,16 @@ struct SMIOL_decomp *SMIOL_create_decomp(size_t n_compute_elements,
 	struct SMIOL_decomp *d;
 	size_t i;
 
+	if (compute_elements == NULL && n_compute_elements != 0) {
+		fprintf(stderr, "ERROR: n_compute_elements was not 0, but compute_elements was NULL\n");
+		return NULL;
+	}
+
+	if (io_elements == NULL && n_io_elements != 0) {
+		fprintf(stderr, "ERROR: n_io_elements was not 0, but io_elements was NULL\n");
+		return NULL;
+	}
+
 	d = malloc(sizeof(struct SMIOL_decomp));
 	d->n_compute_elements = n_compute_elements;
 	d->n_io_elements = n_io_elements;
