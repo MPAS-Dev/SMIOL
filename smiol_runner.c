@@ -573,6 +573,19 @@ int test_decomp(FILE *test_log)
 		fprintf(test_log, "FAIL - decomp was returned as NULL\n");
 	}
 
+	/* Test decomp with io_elements and compute_elements == NULL, but n_io_elements and n_compute_elements != 0 */
+	fprintf(test_log, "Everything OK (SMIOL_create_decomp) with NULL elements and non-zero n-elements: ");
+	n_compute_elements = 1;
+	n_io_elements = 1;
+	decomp = SMIOL_create_decomp(n_compute_elements, n_io_elements,
+					compute_elements, io_elements);
+	if (decomp == NULL) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - decomp was not returned as NULL\n");
+		errcount++;
+	}
+
 	fprintf(test_log, "Everything OK (SMIOL_free_decomp) with NULL elements: ");
 	ierr = SMIOL_free_decomp(&decomp);
 	if (ierr == SMIOL_SUCCESS && decomp == NULL) {
