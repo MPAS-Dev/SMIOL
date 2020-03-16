@@ -1219,6 +1219,7 @@ contains
         nullify(ndims_out)
         nullify(vartype_out)
 
+#ifdef SMIOL_PNETCDF
         ! Inquire about just the number of dimensions for a variable
         write(test_log,'(a)',advance='no') 'Inquire about just the number of dimensions for a variable: '
         allocate(ndims_out)
@@ -1310,6 +1311,7 @@ contains
         deallocate(dimnames_out)
         deallocate(ndims_out)
         deallocate(vartype_out)
+#endif
 
         ! Inquire about none of the properties of a variable
         write(test_log,'(a)',advance='no') 'Inquire about none of the properties of a variable: '
@@ -1324,6 +1326,7 @@ contains
             ierrcount = ierrcount + 1
         end if
 
+#ifdef SMIOL_PNETCDF
         allocate(dimnames_out(6))
         allocate(ndims_out)
         allocate(vartype_out)
@@ -1344,6 +1347,7 @@ contains
         deallocate(dimnames_out)
         deallocate(ndims_out)
         deallocate(vartype_out)
+#endif
 
         ! Close the SMIOL file
         ierr = SMIOLf_close_file(file)

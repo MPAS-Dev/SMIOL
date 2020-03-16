@@ -1372,6 +1372,7 @@ int test_variables(FILE *test_log)
 		return -1;
 	}
 
+#ifdef SMIOL_PNETCDF
 	/* Inquire about just the number of dimensions for a variable */
 	fprintf(test_log, "Inquire about just the number of dimensions for a variable: ");
 	ndims = -1;
@@ -1449,6 +1450,7 @@ int test_variables(FILE *test_log)
 		fprintf(test_log, "FAIL - %s\n", SMIOL_error_string(ierr));
 		errcount++;
 	}
+#endif
 
 	/* Inquire about none of the properties of a variable */
 	fprintf(test_log, "Inquire about none of the properties of a variable: ");
@@ -1463,6 +1465,7 @@ int test_variables(FILE *test_log)
 		errcount++;
 	}
 
+#ifdef SMIOL_PNETCDF
 	/* Try to inquire about an undefined variable */
 	fprintf(test_log, "Try to inquire about an undefined variable: ");
 	ierr = SMIOL_inquire_var(file, "fooblaz", &vartype, &ndims, dimnames);
@@ -1475,6 +1478,7 @@ int test_variables(FILE *test_log)
 		fprintf(test_log, "FAIL - a return code of SMIOL_LIBRARY_ERROR was expected\n");
 		errcount++;
 	}
+#endif
 
 	/* Try to inquire with NULL variable name argument */
 	fprintf(test_log, "Try to inquire with a NULL variable name argument: ");
