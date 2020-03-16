@@ -1150,6 +1150,7 @@ contains
             ierrcount = ierrcount + 1
         end if
 
+#ifdef SMIOL_PNETCDF
         ! Try to re-define a variable that already exists
         write(test_log,'(a)',advance='no') 'Try to re-define a variable that already exists: '
         dimnames(1) = 'Time'
@@ -1195,6 +1196,7 @@ contains
             write(test_log,'(a)') 'FAIL - a return code of SMIOL_INVALID_ARGUMENT was expected'
             ierrcount = ierrcount + 1
         end if
+#endif
 
         ! Close the SMIOL file
         ierr = SMIOLf_close_file(file)

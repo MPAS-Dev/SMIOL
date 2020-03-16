@@ -1275,6 +1275,7 @@ int test_variables(FILE *test_log)
 		errcount++;
 	}
 
+#ifdef SMIOL_PNETCDF
 	/* Try to re-define a variable that already exists */
 	fprintf(test_log, "Try to re-define a variable that already exists: ");
 	snprintf(dimnames[0], 32, "Time");
@@ -1305,6 +1306,7 @@ int test_variables(FILE *test_log)
 		fprintf(test_log, "FAIL - a return code of SMIOL_LIBRARY_ERROR was expected\n");
 		errcount++;
 	}
+#endif
 
 	/* Try to define a variable with a NULL variable name argument */
 	fprintf(test_log, "Try to define a variable with a NULL variable name argument: ");
@@ -1339,6 +1341,7 @@ int test_variables(FILE *test_log)
 		fprintf(test_log, "FAIL - a return code of SMIOL_INVALID_ARGUMENT was expected\n");
 	}
 
+#ifdef SMIOL_PNETCDF
 	/* Try to define a variable with an invalid type */
 	fprintf(test_log, "Try to define a variable with an invalid type: ");
 	snprintf(dimnames[0], 32, "Time");
@@ -1352,6 +1355,7 @@ int test_variables(FILE *test_log)
 	} else {
 		fprintf(test_log, "FAIL - a return code of SMIOL_INVALID_ARGUMENT was expected\n");
 	}
+#endif
 
 	/* Close the SMIOL file */
 	ierr = SMIOL_close_file(&file);
