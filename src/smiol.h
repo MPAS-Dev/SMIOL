@@ -31,10 +31,17 @@ struct SMIOL_file {
 };
 
 struct SMIOL_decomp {
-	size_t n_compute_elements;
-	size_t n_io_elements;
-	SMIOL_Offset *compute_elements;
-	SMIOL_Offset *io_elements;
+	/*
+	 * The lists below are structured as follows:
+	 *   list[0] - the number of neighbors for which a task sends/recvs
+	 *                                                                             |
+	 *   list[n] - neighbor task ID                                                | repeated for
+	 *   list[n+1] - number of elements, m, to send/recv to/from the neighbor      | each neighbor
+	 *   list[n+2 .. n+2+m] - local element IDs to send/recv to/from the neighbor  |
+	 *                                                                             |
+	 */
+	SMIOL_Offset *comp_list;   /* Elements to be sent/received from/on a compute task */
+	SMIOL_Offset *io_list;     /* Elements to be sent/received from/on an I/O task */
 };
 
 

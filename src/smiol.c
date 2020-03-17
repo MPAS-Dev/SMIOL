@@ -683,29 +683,27 @@ struct SMIOL_decomp *SMIOL_create_decomp(struct SMIOL_context *context,
 	size_t i;
 
 	d = malloc(sizeof(struct SMIOL_decomp));
-	d->n_compute_elements = n_compute_elements;
-	d->n_io_elements = n_io_elements;
 
-	d->compute_elements = malloc(sizeof(SMIOL_Offset) * d->n_compute_elements);
-	if (d->compute_elements == NULL) {
-		fprintf(stderr, "ERROR: Could not malloc space for d->compute_elements\n");
+	d->comp_list = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
+	if (d->comp_list == NULL) {
+		fprintf(stderr, "ERROR: Could not malloc space for d->comp_list\n");
 		return NULL;
 	}
 
-	d->io_elements = malloc(sizeof(SMIOL_Offset) * d->n_io_elements);
-	if (d->io_elements == NULL) {
-		fprintf(stderr, "ERROR: Could not malloc space for d->io_elements\n");
+	d->io_list = malloc(sizeof(SMIOL_Offset) * n_io_elements);
+	if (d->io_list == NULL) {
+		fprintf(stderr, "ERROR: Could not malloc space for d->io_list\n");
 		return NULL;
 	}
 
 	// Copy compute elements
-	for (i = 0; i < d->n_compute_elements; i++) {
-		d->compute_elements[i] = compute_elements[i];
+	for (i = 0; i < n_compute_elements; i++) {
+		d->comp_list[i] = compute_elements[i];
 	}
 
 	// Copy io elements
-	for (i = 0; i < d->n_io_elements; i++) {
-		d->io_elements[i] = io_elements[i];
+	for (i = 0; i < n_io_elements; i++) {
+		d->io_list[i] = io_elements[i];
 	}
 
 	return d;
@@ -729,8 +727,8 @@ int SMIOL_free_decomp(struct SMIOL_decomp **d)
 		return SMIOL_SUCCESS;
 	}
 
-	free((*d)->compute_elements);
-	free((*d)->io_elements);
+	free((*d)->comp_list);
+	free((*d)->io_list);
 	free((*d));
 	*d = NULL;
 

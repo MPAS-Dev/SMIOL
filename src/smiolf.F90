@@ -57,10 +57,17 @@ module SMIOLf
     end type SMIOLf_file
 
     type, bind(C) :: SMIOLf_decomp
-        integer(c_size_t) :: n_compute_elements
-        integer(c_size_t) :: n_io_elements
-        type(c_ptr) :: compute_elements
-        type(c_ptr) :: io_elements
+        !
+        ! The lists below are structured (in C) as follows:
+        !   list[0] - the number of neighbors for which a task sends/recvs
+        !                                                                             |
+        !   list[n] - neighbor task ID                                                | repeated for
+        !   list[n+1] - number of elements, m, to send/recv to/from the neighbor      | each neighbor
+        !   list[n+2 .. n+2+m] - local element IDs to send/recv to/from the neighbor  |
+        !                                                                             |
+        !
+        type(c_ptr) :: comp_list  ! Elements to be sent/received from/on a compute task
+        type(c_ptr) :: io_list    ! Elements to be send/received from/on an I/O task
     end type SMIOLf_decomp
 
 
