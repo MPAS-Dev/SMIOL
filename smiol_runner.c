@@ -19,8 +19,8 @@ int main(int argc, char **argv)
 	SMIOL_Offset dimsize;
 	size_t n_compute_elements = 1;
 	size_t n_io_elements = 1;
-	int64_t *compute_elements;
-	int64_t *io_elements;
+	SMIOL_Offset *compute_elements;
+	SMIOL_Offset *io_elements;
 	struct SMIOL_decomp *decomp = NULL;
 	struct SMIOL_context *context = NULL;
 	struct SMIOL_file *file = NULL;
@@ -117,11 +117,10 @@ int main(int argc, char **argv)
 	}
 
 	// Create elements
-	compute_elements = malloc(sizeof(int64_t) * n_compute_elements);
-	io_elements = malloc(sizeof(int64_t) * n_io_elements);
+	compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
+	io_elements = malloc(sizeof(SMIOL_Offset) * n_io_elements);
 
-	decomp = SMIOL_create_decomp(n_compute_elements, n_io_elements,
-				compute_elements, io_elements);
+	decomp = SMIOL_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements);
 	if (decomp == NULL) {
 		printf("ERROR: SMIOL_create_decomp - Decomp was not allocated\n");
 		return 1;
@@ -559,19 +558,26 @@ int test_decomp(FILE *test_log)
 	int ierr;
 	int errcount = 0;
 	size_t n_compute_elements, n_io_elements;
-	int64_t *compute_elements = NULL, *io_elements = NULL;
+	SMIOL_Offset *compute_elements = NULL, *io_elements = NULL;
+	struct SMIOL_context *context = NULL;
 	struct SMIOL_decomp *decomp = NULL;
 
 	fprintf(test_log, "********************************************************************************\n");
 	fprintf(test_log, "************ SMIOL_create_decomp / SMIOL_free_decomp unit tests ****************\n");
 	fprintf(test_log, "\n");
 
+	/* Create a SMIOL context for testing decomp routines */
+	ierr = SMIOL_init(MPI_COMM_WORLD, &context);
+	if (ierr != SMIOL_SUCCESS || context == NULL) {
+		fprintf(test_log, "Failed to create SMIOL context...\n");
+		return -1;
+	}
+
 	/* Create decomp with io_elements and compute_elements == NULL */
 	fprintf(test_log, "Everything OK (SMIOL_create_decomp) with NULL elements: ");
 	n_compute_elements = 0;
 	n_io_elements = 0;
-	decomp = SMIOL_create_decomp(n_compute_elements, n_io_elements,
-					compute_elements, io_elements);
+	decomp = SMIOL_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements);
 	if (decomp != NULL) {
 		fprintf(test_log, "PASS\n");
 	} else {
@@ -595,10 +601,9 @@ int test_decomp(FILE *test_log)
 	fprintf(test_log, "Everything OK (SMIOL_create_decomp) with 0 elements: ");
 	n_compute_elements = 0;
 	n_io_elements = 0;
-	compute_elements = malloc(sizeof(int64_t) * n_compute_elements);
-	io_elements = malloc(sizeof(int64_t) * n_io_elements);
-	decomp = SMIOL_create_decomp(n_compute_elements, n_io_elements,
-				compute_elements, io_elements);
+	compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
+	io_elements = malloc(sizeof(SMIOL_Offset) * n_io_elements);
+	decomp = SMIOL_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements);
 	if (decomp != NULL) {
 		fprintf(test_log, "PASS\n");
 	} else {
@@ -630,10 +635,9 @@ int test_decomp(FILE *test_log)
 	fprintf(test_log, "Everything OK (SMIOL_create_decomp) with 1 elements: ");
 	n_compute_elements = 1;
 	n_io_elements = 1;
-	compute_elements = malloc(sizeof(int64_t) * n_compute_elements);
-	io_elements = malloc(sizeof(int64_t) * n_io_elements);
-	decomp = SMIOL_create_decomp(n_compute_elements, n_io_elements,
-	                             compute_elements, io_elements);
+	compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
+	io_elements = malloc(sizeof(SMIOL_Offset) * n_io_elements);
+	decomp = SMIOL_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements);
 	if (decomp != NULL) {
 		fprintf(test_log, "PASS\n");
 	} else {
@@ -664,10 +668,9 @@ int test_decomp(FILE *test_log)
 	fprintf(test_log, "Everything OK (SMIOL_create_decomp) with large amount of elements: ");
 	n_compute_elements = 100000000;
 	n_io_elements = 100000000;
-	compute_elements = malloc(sizeof(int64_t) * n_compute_elements);
-	io_elements = malloc(sizeof(int64_t) * n_io_elements);
-	decomp = SMIOL_create_decomp(n_compute_elements, n_io_elements,
-	                             compute_elements, io_elements);
+	compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
+	io_elements = malloc(sizeof(SMIOL_Offset) * n_io_elements);
+	decomp = SMIOL_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements);
 	if (decomp != NULL) {
 		fprintf(test_log, "PASS\n");
 	} else {
@@ -705,6 +708,13 @@ int test_decomp(FILE *test_log)
 	} else if (ierr != SMIOL_SUCCESS && decomp == NULL) {
 		fprintf(test_log, "FAIL - decomp was NULL but did not returned SMIOL_SUCCESS\n");
 		errcount++;
+	}
+
+	/* Free the SMIOL context */
+	ierr = SMIOL_finalize(&context);
+	if (ierr != SMIOL_SUCCESS || context != NULL) {
+		fprintf(test_log, "Failed to free SMIOL context...\n");
+		return -1;
 	}
 
 	fflush(test_log);
