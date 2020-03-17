@@ -96,7 +96,8 @@ int SMIOL_set_option(void);
 /*
  * Decomposition methods
  */
-struct SMIOL_decomp *SMIOL_create_decomp(struct SMIOL_context *context,
-                                         size_t n_compute_elements, SMIOL_Offset *compute_elements,
-                                         size_t n_io_elements, SMIOL_Offset *io_elements);
+int SMIOL_create_decomp(struct SMIOL_context *context,
+                        size_t n_compute_elements, SMIOL_Offset *compute_elements,
+                        size_t n_io_elements, SMIOL_Offset *io_elements,
+                        struct SMIOL_decomp **decomp);
 int SMIOL_free_decomp(struct SMIOL_decomp **d);

@@ -675,38 +675,57 @@ int SMIOL_set_option(void)
  * success, return a valid SMIOL decomp; otherwise return NULL.
  *
  ********************************************************************************/
-struct SMIOL_decomp *SMIOL_create_decomp(struct SMIOL_context *context,
-                                         size_t n_compute_elements, SMIOL_Offset *compute_elements,
-                                         size_t n_io_elements, SMIOL_Offset *io_elements)
+int SMIOL_create_decomp(struct SMIOL_context *context,
+                        size_t n_compute_elements,
+                        SMIOL_Offset *compute_elements,
+                        size_t n_io_elements,
+                        SMIOL_Offset *io_elements,
+                        struct SMIOL_decomp **decomp)
 {
-	struct SMIOL_decomp *d;
 	size_t i;
 
-	d = malloc(sizeof(struct SMIOL_decomp));
-
-	d->comp_list = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
-	if (d->comp_list == NULL) {
-		fprintf(stderr, "ERROR: Could not malloc space for d->comp_list\n");
-		return NULL;
+	if (context == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
 	}
 
-	d->io_list = malloc(sizeof(SMIOL_Offset) * n_io_elements);
-	if (d->io_list == NULL) {
-		fprintf(stderr, "ERROR: Could not malloc space for d->io_list\n");
-		return NULL;
+	if (compute_elements == NULL && n_compute_elements != 0) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	if (io_elements == NULL && n_io_elements != 0) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	*decomp = malloc(sizeof(struct SMIOL_decomp));
+	if ((*decomp) == NULL) {
+		return SMIOL_MALLOC_FAILURE;
+	}
+
+	(*decomp)->comp_list = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
+	if ((*decomp)->comp_list == NULL) {
+		free(*decomp);
+		*decomp = NULL;
+		return SMIOL_MALLOC_FAILURE;
+	}
+
+	(*decomp)->io_list = malloc(sizeof(SMIOL_Offset) * n_io_elements);
+	if ((*decomp)->io_list == NULL) {
+		free(*decomp);
+		*decomp = NULL;
+		return SMIOL_MALLOC_FAILURE;
 	}
 
 	// Copy compute elements
 	for (i = 0; i < n_compute_elements; i++) {
-		d->comp_list[i] = compute_elements[i];
+		(*decomp)->comp_list[i] = compute_elements[i];
 	}
 
 	// Copy io elements
 	for (i = 0; i < n_io_elements; i++) {
-		d->io_list[i] = io_elements[i];
+		(*decomp)->io_list[i] = io_elements[i];
 	}
 
-	return d;
+	return SMIOL_SUCCESS;
 }
 
 

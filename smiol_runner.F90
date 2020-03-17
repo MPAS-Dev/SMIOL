@@ -538,11 +538,8 @@ contains
         ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements, decomp)
         if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
             write(test_log,'(a)') "PASS"
-        else if (ierr /= SMIOL_SUCCESS .and. .not. associated(decomp)) then
-            write(test_log,'(a)') "FAIL - SMIOLf_create_decomp returned an error and decomp was not associated"
-            ierrcount = ierrcount + 1
-        else if (ierr == SMIOL_SUCCESS .and. .not. associated(decomp)) then
-            write(test_log,'(a)') "FAIL - ierr returned success but decomp was NOT associated when it should have been"
+        else
+            write(test_log, '(a)') "FAIL - Either SMIOL_SUCCESS was not returned or decomp was not associated"
             ierrcount = ierrcount + 1
         endif
 
@@ -571,11 +568,8 @@ contains
         ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements, decomp)
         if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
             write(test_log,'(a)') "PASS"
-        else if (ierr /= SMIOL_SUCCESS .and. .not. associated(decomp)) then
-            write(test_log,'(a)') "FAIL - SMIOLf_create_decomp returned an error and decomp was not associated"
-            ierrcount = ierrcount + 1
-        else if (ierr == SMIOL_SUCCESS .and. .not. associated(decomp)) then
-            write(test_log,'(a)') "FAIL - ierr returned success but decomp was NOT associated when it should have been"
+        else
+            write(test_log, '(a)') "FAIL - Either SMIOL_SUCCESS was not returned or decomp was not associated"
             ierrcount = ierrcount + 1
         endif
 
@@ -604,11 +598,8 @@ contains
         ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements, decomp)
         if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
             write(test_log,'(a)') "PASS"
-        else if (ierr /= SMIOL_SUCCESS .and. .not. associated(decomp)) then
-            write(test_log,'(a)') "FAIL - SMIOLf_create_decomp returned an error and decomp was not associated"
-            ierrcount = ierrcount + 1
-        else if (ierr == SMIOL_SUCCESS .and. .not. associated(decomp)) then
-            write(test_log,'(a)') "FAIL - ierr returned success but decomp was NOT associated when it should have been"
+        else
+            write(test_log, '(a)') "FAIL - Either SMIOL_SUCCESS was not returned or decomp was not associated"
             ierrcount = ierrcount + 1
         endif
 
