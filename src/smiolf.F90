@@ -579,15 +579,12 @@ contains
     !> \details
     !>  Inquires about a variable in a file, and optionally returns the type
     !>  of the variable, the dimensionality of the variable, and the names of
-    !>  the dimensions of the variable. Which properties of the variable to return
-    !>  (type, dimensionality, or dimension names) is indicated by the status of
-    !>  the pointers for the corresponding properties: if the pointer is an associated
-    !>  pointer, the property will be set upon successful completion of this routine.
+    !>  the dimensions of the variable.
     !>
-    !>  If the names of a variable's dimensions are requested (by providing an associated
-    !>  actual argument for dimnames), the size of the dimnames array must be at least
-    !>  the number of dimensions in the variable, and each character string pointed
-    !>  to by an element of dimnames must be large enough to accommodate the corresponding
+    !>  If the names of a variable's dimensions are requested (by providing an
+    !>  actual argument for dimnames), the size of the dimnames array must be at
+    !>  least the number of dimensions in the variable, and each character string
+    !>  in the dimnames array must be large enough to accommodate the corresponding
     !>  dimension name.
     !
     !-----------------------------------------------------------------------
@@ -599,9 +596,9 @@ contains
 
         type (SMIOLf_file), target :: file
         character(len=*), intent(in) :: varname
-        integer, pointer :: vartype
-        integer, pointer :: ndims
-        character(len=*), dimension(:), pointer :: dimnames
+        integer, intent(out), optional :: vartype
+        integer, intent(out), optional :: ndims
+        character(len=*), dimension(:), intent(out), optional :: dimnames
 
         type (c_ptr) :: c_file
         character(kind=c_char), dimension(:), pointer :: c_varname
@@ -652,7 +649,7 @@ contains
         !
         ! Set C pointer for variable type
         !
-        if (associated(vartype)) then
+        if (present(vartype)) then
             c_vartype_ptr = c_loc(c_vartype)
         else
             c_vartype_ptr = c_null_ptr
@@ -661,7 +658,7 @@ contains
         !
         ! Set C pointer for number of dimensions
         !
-        if (associated(ndims)) then
+        if (present(ndims)) then
             c_ndims_ptr = c_loc(c_ndims)
         else
             c_ndims_ptr = c_null_ptr
@@ -670,7 +667,7 @@ contains
         !
         ! Set C pointers for dimension names
         !
-        if (associated(dimnames)) then
+        if (present(dimnames)) then
             allocate(c_dimnames(size(dimnames)))
             allocate(strings(size(dimnames)))
 
@@ -690,21 +687,21 @@ contains
         !
         ! Copy variable type to output argument
         !
-        if (associated(vartype)) then
+        if (present(vartype)) then
             vartype = c_vartype
         end if
 
         !
         ! Copy number of dimensions to output argument
         !
-        if (associated(ndims)) then
+        if (present(ndims)) then
             ndims = c_ndims
         end if
 
         !
         ! Copy dimension names to output argument
         !
-        if (associated(dimnames)) then
+        if (present(dimnames)) then
             do j=1,size(dimnames)
                 do i=1,len(dimnames(j))
                     if (strings(j) % str(i) == c_null_char) exit

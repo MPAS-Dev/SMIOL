@@ -21,9 +21,7 @@ program smiol_runner
     character(len=16) :: log_fname
     character(len=32), dimension(2) :: dimnames
     integer(kind=SMIOL_offset_kind) :: dimsize
-    character(len=32), dimension(:), pointer :: dimnames_out
-    integer, pointer :: vartype_out
-    integer, pointer :: ndims_out
+    integer :: ndims
 
     call MPI_Init(ierr)
     if (ierr /= MPI_SUCCESS) then
@@ -184,10 +182,7 @@ program smiol_runner
         stop 1
     endif
 
-    nullify(vartype_out)
-    nullify(ndims_out)
-    nullify(dimnames_out)
-    if (SMIOLf_inquire_var(file, 'theta', vartype_out, ndims_out, dimnames_out) /= SMIOL_SUCCESS) then
+    if (SMIOLf_inquire_var(file, 'theta', ndims=ndims) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_inquire_var' was not called successfully"
         stop 1
     endif
@@ -929,10 +924,11 @@ contains
         type (SMIOLf_file), pointer :: file
         character(len=32), dimension(6) :: dimnames
 
-        character(len=32), dimension(:), pointer :: dimnames_ptr
         character(len=32), dimension(:), pointer :: dimnames_out
-        integer, pointer :: ndims_out
-        integer, pointer :: vartype_out
+#ifdef SMIOL_PNETCDF
+        integer :: ndims_out
+        integer :: vartype_out
+#endif
 
         write(test_log,'(a)') '********************************************************************************'
         write(test_log,'(a)') '************ SMIOL_define_var / SMIOL_inquire_var unit tests *******************'
@@ -1004,9 +1000,9 @@ contains
 
         ! Define a 32-bit real variable with zero dimensions
         write(test_log,'(a)',advance='no') 'Define a 32-bit real variable with zero dimensions: '
-        allocate(dimnames_ptr(0))
-        ierr = SMIOLf_define_var(file, 'r0', SMIOL_REAL32, 0, dimnames_ptr)
-        deallocate(dimnames_ptr)
+        allocate(dimnames_out(0))
+        ierr = SMIOLf_define_var(file, 'r0', SMIOL_REAL32, 0, dimnames_out)
+        deallocate(dimnames_out)
         if (ierr == SMIOL_SUCCESS) then
             write(test_log,'(a)') 'PASS'
         else if (ierr == SMIOL_LIBRARY_ERROR) then
@@ -1216,15 +1212,12 @@ contains
         end if
 
         nullify(dimnames_out)
-        nullify(ndims_out)
-        nullify(vartype_out)
 
 #ifdef SMIOL_PNETCDF
         ! Inquire about just the number of dimensions for a variable
         write(test_log,'(a)',advance='no') 'Inquire about just the number of dimensions for a variable: '
-        allocate(ndims_out)
         ndims_out = -1
-        ierr = SMIOLf_inquire_var(file, 'r0_t', vartype_out, ndims_out, dimnames_out)
+        ierr = SMIOLf_inquire_var(file, 'r0_t', ndims=ndims_out)
         if (ierr == SMIOL_SUCCESS .and. ndims_out == 1) then
             write(test_log,'(a)') 'PASS'
         else if (ierr == SMIOL_SUCCESS .and. ndims_out /= 1) then
@@ -1237,13 +1230,11 @@ contains
             write(test_log,'(a)') 'FAIL - '//trim(SMIOLf_error_string(ierr))
             ierrcount = ierrcount + 1
         end if
-        deallocate(ndims_out)
 
         ! Inquire about just the type of a variable
         write(test_log,'(a)',advance='no') 'Inquire about just the type of a variable: '
-        allocate(vartype_out)
         vartype_out = SMIOL_UNKNOWN_VAR_TYPE
-        ierr = SMIOLf_inquire_var(file, 'r5_t', vartype_out, ndims_out, dimnames_out)
+        ierr = SMIOLf_inquire_var(file, 'r5_t', vartype=vartype_out)
         if (ierr == SMIOL_SUCCESS .and. vartype_out == SMIOL_REAL32) then
             write(test_log,'(a)') 'PASS'
         else if (ierr == SMIOL_SUCCESS .and. vartype_out /= SMIOL_REAL32) then
@@ -1256,14 +1247,13 @@ contains
             write(test_log,'(a)') 'FAIL - '//trim(SMIOLf_error_string(ierr))
             ierrcount = ierrcount + 1
         end if
-        deallocate(vartype_out)
 
         ! Inquire about just the dimension names for a variable
         write(test_log,'(a)',advance='no') 'Inquire about just the dimension names for a variable: '
         allocate(dimnames_out(2))
         dimnames_out(1) = '---------'
         dimnames_out(2) = '---------'
-        ierr = SMIOLf_inquire_var(file, 'r1_t', vartype_out, ndims_out, dimnames_out)
+        ierr = SMIOLf_inquire_var(file, 'r1_t', dimnames=dimnames_out)
         if (ierr == SMIOL_SUCCESS .and. &
             trim(dimnames_out(1)) == 'Time' .and. &
             trim(dimnames_out(2)) == 'nCells') then
@@ -1281,8 +1271,6 @@ contains
         deallocate(dimnames_out)
 
         allocate(dimnames_out(6))
-        allocate(ndims_out)
-        allocate(vartype_out)
 
         ! Inquire about all properties of a variable
         write(test_log,'(a)',advance='no') 'Inquire about all properties of a variable: '
@@ -1290,7 +1278,7 @@ contains
         ndims_out = -1
         dimnames_out(1) = '---------'
         dimnames_out(2) = '---------'
-        ierr = SMIOLf_inquire_var(file, 'c1_t', vartype_out, ndims_out, dimnames_out);
+        ierr = SMIOLf_inquire_var(file, 'c1_t', vartype=vartype_out, ndims=ndims_out, dimnames=dimnames_out)
         if (ierr == SMIOL_SUCCESS .and. &
             ndims_out == 2 .and. &
             vartype_out == SMIOL_CHAR .and. &
@@ -1309,13 +1297,11 @@ contains
         end if
 
         deallocate(dimnames_out)
-        deallocate(ndims_out)
-        deallocate(vartype_out)
 #endif
 
         ! Inquire about none of the properties of a variable
         write(test_log,'(a)',advance='no') 'Inquire about none of the properties of a variable: '
-        ierr = SMIOLf_inquire_var(file, 'i5_t', vartype_out, ndims_out, dimnames_out);
+        ierr = SMIOLf_inquire_var(file, 'i5_t')
         if (ierr == SMIOL_SUCCESS) then
             write(test_log,'(a)') 'PASS'
         else if (ierr == SMIOL_LIBRARY_ERROR) then
@@ -1328,12 +1314,10 @@ contains
 
 #ifdef SMIOL_PNETCDF
         allocate(dimnames_out(6))
-        allocate(ndims_out)
-        allocate(vartype_out)
 
         ! Try to inquire about an undefined variable
         write(test_log,'(a)',advance='no') 'Try to inquire about an undefined variable: '
-        ierr = SMIOLf_inquire_var(file, 'fooblaz', vartype_out, ndims_out, dimnames_out)
+        ierr = SMIOLf_inquire_var(file, 'fooblaz', vartype=vartype_out, ndims=ndims_out, dimnames=dimnames_out)
         if (ierr == SMIOL_LIBRARY_ERROR) then
             write(test_log,'(a)') 'PASS ('//trim(SMIOLf_lib_error_string(context))//')'
         else if (ierr == SMIOL_SUCCESS) then
@@ -1345,8 +1329,6 @@ contains
         end if
 
         deallocate(dimnames_out)
-        deallocate(ndims_out)
-        deallocate(vartype_out)
 #endif
 
         ! Close the SMIOL file
