@@ -657,8 +657,11 @@ contains
 
         !
         ! Set C pointer for number of dimensions
+        ! This is done even if dimnames is requested but ndims is not,
+        ! since c_ndims may be used later on when copying out strings
+        ! to dimnames.
         !
-        if (present(ndims)) then
+        if (present(ndims) .or. present(dimnames)) then
             c_ndims_ptr = c_loc(c_ndims)
         else
             c_ndims_ptr = c_null_ptr
@@ -683,6 +686,11 @@ contains
 
         ierr = SMIOL_inquire_var(c_file, c_varname, c_vartype_ptr, c_ndims_ptr, c_dimnames_ptr)
 
+        deallocate(c_varname)
+
+        if (ierr /= SMIOL_SUCCESS) then
+            return
+        end if
 
         !
         ! Copy variable type to output argument
@@ -702,7 +710,7 @@ contains
         ! Copy dimension names to output argument
         !
         if (present(dimnames)) then
-            do j=1,size(dimnames)
+            do j=1,c_ndims
                 do i=1,len(dimnames(j))
                     if (strings(j) % str(i) == c_null_char) exit
                 end do
@@ -719,8 +727,6 @@ contains
             deallocate(strings)
             deallocate(c_dimnames)
         end if
-
-        deallocate(c_varname)
 
     end function SMIOLf_inquire_var
 
