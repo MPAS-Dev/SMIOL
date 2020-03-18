@@ -740,16 +740,16 @@ int SMIOL_create_decomp(struct SMIOL_context *context,
  * is called, no other SMIOL routines should use the freed SMIOL_decomp.
  *
  ********************************************************************************/
-int SMIOL_free_decomp(struct SMIOL_decomp **d)
+int SMIOL_free_decomp(struct SMIOL_decomp **decomp)
 {
-	if ((*d) == NULL) {
+	if ((*decomp) == NULL) {
 		return SMIOL_SUCCESS;
 	}
 
-	free((*d)->comp_list);
-	free((*d)->io_list);
-	free((*d));
-	*d = NULL;
+	free((*decomp)->comp_list);
+	free((*decomp)->io_list);
+	free((*decomp));
+	*decomp = NULL;
 
 	return SMIOL_SUCCESS;
 }
