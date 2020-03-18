@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "smiol.h"
 
 /*******************************************************************************
@@ -9,6 +10,7 @@
 int test_init_finalize(FILE *test_log);
 int test_open_close(FILE *test_log);
 int test_dimensions(FILE *test_log);
+int test_variables(FILE *test_log);
 int test_decomp(FILE *test_log);
 int test_file_sync(FILE *test_log);
 
@@ -26,6 +28,7 @@ int main(int argc, char **argv)
 	struct SMIOL_file *file = NULL;
 	char log_fname[17];
 	FILE *test_log = NULL;
+	char **dimnames;
 
 	if (argc == 2) {
 		n_compute_elements = (size_t) atoi(argv[1]);
@@ -76,6 +79,18 @@ int main(int argc, char **argv)
 	 * Unit tests for dimensions
 	 */
 	ierr = test_dimensions(test_log);
+	if (ierr == 0) {
+		fprintf(test_log, "All tests PASSED!\n\n");
+	}
+	else {
+		fprintf(test_log, "%i tests FAILED!\n\n", ierr);
+	}
+
+
+	/*
+	 * Unit tests for variables
+	 */
+	ierr = test_variables(test_log);
 	if (ierr == 0) {
 		fprintf(test_log, "All tests PASSED!\n\n");
 	}
@@ -182,14 +197,21 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if ((ierr = SMIOL_close_file(&file)) != SMIOL_SUCCESS) {
-		fprintf(test_log, "ERROR: SMIOL_close_file: %s ", SMIOL_error_string(ierr));
+	dimnames = (char **)malloc((size_t)2 * sizeof(char *));
+	dimnames[0] = (char *)malloc((size_t)64 * sizeof(char));
+	dimnames[1] = (char *)malloc((size_t)64 * sizeof(char));
+	snprintf(dimnames[0], 64, "Time");
+	snprintf(dimnames[1], 64, "nCells");
+	if ((ierr = SMIOL_define_var(file, "theta", SMIOL_REAL32, 2, (const char**)dimnames)) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_define_var: %s ", SMIOL_error_string(ierr));
 		return 1;
 	}
+	free(dimnames[0]);
+	free(dimnames[1]);
+	free(dimnames);
 
-	if ((ierr = SMIOL_define_var()) != SMIOL_SUCCESS) {
-		fprintf(test_log, "ERROR: SMIOL_define_var: %s ",
-			SMIOL_error_string(ierr));
+	if ((ierr = SMIOL_close_file(&file)) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_close_file: %s ", SMIOL_error_string(ierr));
 		return 1;
 	}
 
@@ -1003,6 +1025,485 @@ int test_dimensions(FILE *test_log)
 		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned\n");
 		errcount++;
 	}
+
+	/* Close the SMIOL file */
+	ierr = SMIOL_close_file(&file);
+	if (ierr != SMIOL_SUCCESS || file != NULL) {
+		fprintf(test_log, "Failed to close SMIOL file...\n");
+		return -1;
+	}
+
+	/* Free the SMIOL context */
+	ierr = SMIOL_finalize(&context);
+	if (ierr != SMIOL_SUCCESS || context != NULL) {
+		fprintf(test_log, "Failed to free SMIOL context...\n");
+		return -1;
+	}
+
+	fflush(test_log);
+	ierr = MPI_Barrier(MPI_COMM_WORLD);
+
+	fprintf(test_log, "\n");
+
+	return errcount;
+}
+
+int test_variables(FILE *test_log)
+{
+	int errcount;
+	int ierr;
+	int i;
+	struct SMIOL_context *context;
+	struct SMIOL_file *file;
+	char **dimnames;
+	int ndims;
+	int vartype;
+
+	fprintf(test_log, "********************************************************************************\n");
+	fprintf(test_log, "************ SMIOL_define_var / SMIOL_inquire_var ******************************\n");
+	fprintf(test_log, "\n");
+
+	errcount = 0;
+
+	/* Create a SMIOL context for testing variable routines */
+	context = NULL;
+	ierr = SMIOL_init(MPI_COMM_WORLD, &context);
+	if (ierr != SMIOL_SUCCESS || context == NULL) {
+		fprintf(test_log, "Failed to create SMIOL context...\n");
+		return -1;
+	}
+
+	/* Create a SMIOL file for testing variable routines */
+	file = NULL;
+	ierr = SMIOL_open_file(context, "test_vars.nc", SMIOL_FILE_CREATE, &file);
+	if (ierr != SMIOL_SUCCESS || file == NULL) {
+		fprintf(test_log, "Failed to create SMIOL file...\n");
+		return -1;
+	}
+
+        /* Define several dimensions in the file to be used when defining variables */
+	ierr = SMIOL_define_dim(file, "Time", (SMIOL_Offset)-1);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create dimension Time...\n");
+		return -1;
+	}
+
+	ierr = SMIOL_define_dim(file, "nCells", (SMIOL_Offset)40962);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create dimension nCells...\n");
+		return -1;
+	}
+
+	ierr = SMIOL_define_dim(file, "nVertLevels", (SMIOL_Offset)55);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create dimension nVertLevels...\n");
+		return -1;
+	}
+
+	ierr = SMIOL_define_dim(file, "maxEdges", (SMIOL_Offset)6);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create dimension maxEdges...\n");
+		return -1;
+	}
+
+	ierr = SMIOL_define_dim(file, "TWO", (SMIOL_Offset)2);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create dimension TWO...\n");
+		return -1;
+	}
+
+	ierr = SMIOL_define_dim(file, "nMonths", (SMIOL_Offset)12);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create dimension nMonths...\n");
+		return -1;
+	}
+
+	ierr = SMIOL_define_dim(file, "StrLen", (SMIOL_Offset)512);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create dimension StrLen...\n");
+		return -1;
+	}
+
+	dimnames = (char **)malloc(sizeof(char *) * (size_t)6);
+	for (i = 0; i < 6; i++) {
+		dimnames[i] = (char *)malloc(sizeof(char) * (size_t)32);
+	}
+
+	/* Define a 32-bit real variable with zero dimensions */
+	fprintf(test_log, "Define a 32-bit real variable with zero dimensions: ");
+	ierr = SMIOL_define_var(file, "r0", SMIOL_REAL32, 0, NULL);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr == SMIOL_LIBRARY_ERROR) {
+		fprintf(test_log, "FAIL - a library-specific error was returned (%s)\n", SMIOL_lib_error_string(context));
+		errcount++;
+	} else {
+		fprintf(test_log, "FAIL - %s\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+
+	/* Define a 32-bit real variable with one dimension that is a record dimension */
+	fprintf(test_log, "Define a 32-bit real variable with only a record dimension: ");
+	snprintf(dimnames[0], 32, "Time");
+	ierr = SMIOL_define_var(file, "r0_t", SMIOL_REAL32, 1, (const char **)dimnames);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr == SMIOL_LIBRARY_ERROR) {
+		fprintf(test_log, "FAIL - a library-specific error was returned (%s)\n", SMIOL_lib_error_string(context));
+		errcount++;
+	} else {
+		fprintf(test_log, "FAIL - %s\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+
+	/* Define a 32-bit real variable with one dimension that is *not* a record dimension */
+	fprintf(test_log, "Define a 32-bit real variable with one non-record dimension: ");
+	snprintf(dimnames[0], 32, "nCells");
+	ierr = SMIOL_define_var(file, "r1", SMIOL_REAL32, 1, (const char **)dimnames);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr == SMIOL_LIBRARY_ERROR) {
+		fprintf(test_log, "FAIL - a library-specific error was returned (%s)\n", SMIOL_lib_error_string(context));
+		errcount++;
+	} else {
+		fprintf(test_log, "FAIL - %s\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+
+	/* Define a 32-bit real variable with one non-record dimension and a record dimension */
+	fprintf(test_log, "Define a 32-bit real variable with one non-record dimension and a record dimension: ");
+	snprintf(dimnames[0], 32, "Time");
+	snprintf(dimnames[1], 32, "nCells");
+	ierr = SMIOL_define_var(file, "r1_t", SMIOL_REAL32, 2, (const char **)dimnames);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr == SMIOL_LIBRARY_ERROR) {
+		fprintf(test_log, "FAIL - a library-specific error was returned (%s)\n", SMIOL_lib_error_string(context));
+		errcount++;
+	} else {
+		fprintf(test_log, "FAIL - %s\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+
+	/* Define a 32-bit real variable with five dimensions, none of which is a record dimension */
+	fprintf(test_log, "Define a 32-bit real variable with five non-record dimension: ");
+	snprintf(dimnames[0], 32, "nCells");
+	snprintf(dimnames[1], 32, "nVertLevels");
+	snprintf(dimnames[2], 32, "maxEdges");
+	snprintf(dimnames[3], 32, "TWO");
+	snprintf(dimnames[4], 32, "nMonths");
+	ierr = SMIOL_define_var(file, "r5", SMIOL_REAL32, 5, (const char **)dimnames);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr == SMIOL_LIBRARY_ERROR) {
+		fprintf(test_log, "FAIL - a library-specific error was returned (%s)\n", SMIOL_lib_error_string(context));
+		errcount++;
+	} else {
+		fprintf(test_log, "FAIL - %s\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+
+	/* Define a 32-bit real variable with five non-record dimensions and a record dimension */
+	fprintf(test_log, "Define a 32-bit real variable with five non-record dimension and a record dimension: ");
+	snprintf(dimnames[0], 32, "Time");
+	snprintf(dimnames[1], 32, "nCells");
+	snprintf(dimnames[2], 32, "nVertLevels");
+	snprintf(dimnames[3], 32, "maxEdges");
+	snprintf(dimnames[4], 32, "TWO");
+	snprintf(dimnames[5], 32, "nMonths");
+	ierr = SMIOL_define_var(file, "r5_t", SMIOL_REAL32, 6, (const char **)dimnames);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr == SMIOL_LIBRARY_ERROR) {
+		fprintf(test_log, "FAIL - a library-specific error was returned (%s)\n", SMIOL_lib_error_string(context));
+		errcount++;
+	} else {
+		fprintf(test_log, "FAIL - %s\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+
+	/* Define a 64-bit real variable with five non-record dimension and a record dimension */
+	fprintf(test_log, "Define a 64-bit real variable with five non-record dimension and a record dimension: ");
+	snprintf(dimnames[0], 32, "Time");
+	snprintf(dimnames[1], 32, "nCells");
+	snprintf(dimnames[2], 32, "nVertLevels");
+	snprintf(dimnames[3], 32, "maxEdges");
+	snprintf(dimnames[4], 32, "TWO");
+	snprintf(dimnames[5], 32, "nMonths");
+	ierr = SMIOL_define_var(file, "d5_t", SMIOL_REAL64, 6, (const char **)dimnames);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr == SMIOL_LIBRARY_ERROR) {
+		fprintf(test_log, "FAIL - a library-specific error was returned (%s)\n", SMIOL_lib_error_string(context));
+		errcount++;
+	} else {
+		fprintf(test_log, "FAIL - %s\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+
+	/* Define a 32-bit int variable with five non-record dimension and a record dimension */
+	fprintf(test_log, "Define a 32-bit int variable with five non-record dimension and a record dimension: ");
+	snprintf(dimnames[0], 32, "Time");
+	snprintf(dimnames[1], 32, "nCells");
+	snprintf(dimnames[2], 32, "nVertLevels");
+	snprintf(dimnames[3], 32, "maxEdges");
+	snprintf(dimnames[4], 32, "TWO");
+	snprintf(dimnames[5], 32, "nMonths");
+	ierr = SMIOL_define_var(file, "i5_t", SMIOL_INT32, 6, (const char **)dimnames);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr == SMIOL_LIBRARY_ERROR) {
+		fprintf(test_log, "FAIL - a library-specific error was returned (%s)\n", SMIOL_lib_error_string(context));
+		errcount++;
+	} else {
+		fprintf(test_log, "FAIL - %s\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+
+	/* Define a char variable with one non-record dimension and a record dimension */
+	fprintf(test_log, "Define a character variable with one non-record dimension and a record dimension: ");
+	snprintf(dimnames[0], 32, "Time");
+	snprintf(dimnames[1], 32, "StrLen");
+	ierr = SMIOL_define_var(file, "c1_t", SMIOL_CHAR, 2, (const char **)dimnames);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr == SMIOL_LIBRARY_ERROR) {
+		fprintf(test_log, "FAIL - a library-specific error was returned (%s)\n", SMIOL_lib_error_string(context));
+		errcount++;
+	} else {
+		fprintf(test_log, "FAIL - %s\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+
+#ifdef SMIOL_PNETCDF
+	/* Try to re-define a variable that already exists */
+	fprintf(test_log, "Try to re-define a variable that already exists: ");
+	snprintf(dimnames[0], 32, "Time");
+	snprintf(dimnames[1], 32, "nCells");
+	ierr = SMIOL_define_var(file, "c1_t", SMIOL_CHAR, 2, (const char **)dimnames);
+	if (ierr == SMIOL_LIBRARY_ERROR) {
+		fprintf(test_log, "PASS (%s)\n", SMIOL_lib_error_string(context));
+	} else if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was erroneously returned\n");
+		errcount++;
+	} else {
+		fprintf(test_log, "FAIL - a return code of SMIOL_LIBRARY_ERROR was expected\n");
+		errcount++;
+	}
+
+	/* Try to define a variable with undefined dimension */
+	fprintf(test_log, "Try to define a variable with an undefined dimension: ");
+	snprintf(dimnames[0], 32, "Time");
+	snprintf(dimnames[1], 32, "foobar");
+	snprintf(dimnames[2], 32, "nVertLevels");
+	ierr = SMIOL_define_var(file, "should_not_exist", SMIOL_INT32, 3, (const char **)dimnames);
+	if (ierr == SMIOL_LIBRARY_ERROR) {
+		fprintf(test_log, "PASS (%s)\n", SMIOL_lib_error_string(context));
+	} else if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was erroneously returned\n");
+		errcount++;
+	} else {
+		fprintf(test_log, "FAIL - a return code of SMIOL_LIBRARY_ERROR was expected\n");
+		errcount++;
+	}
+#endif
+
+	/* Try to define a variable with a NULL variable name argument */
+	fprintf(test_log, "Try to define a variable with a NULL variable name argument: ");
+	snprintf(dimnames[0], 32, "Time");
+	snprintf(dimnames[1], 32, "nCells");
+	snprintf(dimnames[2], 32, "nVertLevels");
+	ierr = SMIOL_define_var(file, NULL, SMIOL_INT32, 3, (const char **)dimnames);
+	if (ierr == SMIOL_INVALID_ARGUMENT) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - a return code of SMIOL_INVALID_ARGUMENT was expected\n");
+	}
+
+	/* Try to define a variable with a NULL file argument */
+	fprintf(test_log, "Try to define a variable with a NULL file argument: ");
+	snprintf(dimnames[0], 32, "Time");
+	snprintf(dimnames[1], 32, "nCells");
+	snprintf(dimnames[2], 32, "nVertLevels");
+	ierr = SMIOL_define_var(NULL, "should_not_exist", SMIOL_INT32, 3, (const char **)dimnames);
+	if (ierr == SMIOL_INVALID_ARGUMENT) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - a return code of SMIOL_INVALID_ARGUMENT was expected\n");
+	}
+
+	/* Try to define a variable with a NULL dimension list */
+	fprintf(test_log, "Try to define a variable with a NULL dimension list: ");
+	ierr = SMIOL_define_var(file, "should_not_exist", SMIOL_INT32, 3, NULL);
+	if (ierr == SMIOL_INVALID_ARGUMENT) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - a return code of SMIOL_INVALID_ARGUMENT was expected\n");
+	}
+
+#ifdef SMIOL_PNETCDF
+	/* Try to define a variable with an invalid type */
+	fprintf(test_log, "Try to define a variable with an invalid type: ");
+	snprintf(dimnames[0], 32, "Time");
+	snprintf(dimnames[1], 32, "nCells");
+	snprintf(dimnames[2], 32, "nVertLevels");
+	ierr = SMIOL_define_var(file, "should_not_exist",
+	                        ~(SMIOL_REAL32 | SMIOL_REAL64 | SMIOL_INT32 | SMIOL_CHAR),
+	                        3, (const char **)dimnames);
+	if (ierr == SMIOL_INVALID_ARGUMENT) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - a return code of SMIOL_INVALID_ARGUMENT was expected\n");
+	}
+#endif
+
+	/* Close the SMIOL file */
+	ierr = SMIOL_close_file(&file);
+	if (ierr != SMIOL_SUCCESS || file != NULL) {
+		fprintf(test_log, "Failed to close SMIOL file...\n");
+		return -1;
+	}
+
+	/* Re-open the SMIOL file */
+	file = NULL;
+	ierr = SMIOL_open_file(context, "test_vars.nc", SMIOL_FILE_READ, &file);
+	if (ierr != SMIOL_SUCCESS || file == NULL) {
+		fprintf(test_log, "Failed to re-open SMIOL file...\n");
+		return -1;
+	}
+
+#ifdef SMIOL_PNETCDF
+	/* Inquire about just the number of dimensions for a variable */
+	fprintf(test_log, "Inquire about just the number of dimensions for a variable: ");
+	ndims = -1;
+	ierr = SMIOL_inquire_var(file, "r0_t", NULL, &ndims, NULL);
+	if (ierr == SMIOL_SUCCESS && ndims == 1) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr == SMIOL_SUCCESS && ndims != 1) {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was returned, but the number of dimensions was wrong\n");
+		errcount++;
+	} else if (ierr == SMIOL_LIBRARY_ERROR) {
+		fprintf(test_log, "FAIL (%s)\n", SMIOL_lib_error_string(context));
+		errcount++;
+	} else {
+		fprintf(test_log, "FAIL - %s\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+
+	/* Inquire about just the type of a variable */
+	fprintf(test_log, "Inquire about just the type of a variable: ");
+	vartype = SMIOL_UNKNOWN_VAR_TYPE;
+	ierr = SMIOL_inquire_var(file, "r5_t", &vartype, NULL, NULL);
+	if (ierr == SMIOL_SUCCESS && vartype == SMIOL_REAL32) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr == SMIOL_SUCCESS && vartype != SMIOL_REAL32) {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was returned, but the variable type was wrong\n");
+		errcount++;
+	} else if (ierr == SMIOL_LIBRARY_ERROR) {
+		fprintf(test_log, "FAIL (%s)\n", SMIOL_lib_error_string(context));
+		errcount++;
+	} else {
+		fprintf(test_log, "FAIL - %s\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+
+	/* Inquire about just the dimension names for a variable */
+	fprintf(test_log, "Inquire about just the dimension names for a variable: ");
+	snprintf(dimnames[0], 32, "----------");
+	snprintf(dimnames[1], 32, "----------");
+	ierr = SMIOL_inquire_var(file, "r1_t", NULL, NULL, dimnames);
+	if (ierr == SMIOL_SUCCESS &&
+	    strncmp(dimnames[0], "Time", 32) == 0 &&
+	    strncmp(dimnames[1], "nCells", 32) == 0) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was returned, but the dimension names were wrong\n");
+		errcount++;
+	} else if (ierr == SMIOL_LIBRARY_ERROR) {
+		fprintf(test_log, "FAIL (%s)\n", SMIOL_lib_error_string(context));
+		errcount++;
+	} else {
+		fprintf(test_log, "FAIL - %s\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+
+	/* Inquire about all properties of a variable */
+	fprintf(test_log, "Inquire about all properties of a variable: ");
+	vartype = SMIOL_UNKNOWN_VAR_TYPE;
+	ndims = -1;
+	snprintf(dimnames[0], 32, "----------");
+	snprintf(dimnames[1], 32, "----------");
+	ierr = SMIOL_inquire_var(file, "c1_t", &vartype, &ndims, dimnames);
+	if (ierr == SMIOL_SUCCESS &&
+	    ndims == 2 &&
+	    vartype == SMIOL_CHAR &&
+	    strncmp(dimnames[0], "Time", 32) == 0 &&
+	    strncmp(dimnames[1], "StrLen", 32) == 0) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was returned, but one or more properties were wrong\n");
+		errcount++;
+	} else if (ierr == SMIOL_LIBRARY_ERROR) {
+		fprintf(test_log, "FAIL (%s)\n", SMIOL_lib_error_string(context));
+		errcount++;
+	} else {
+		fprintf(test_log, "FAIL - %s\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+#endif
+
+	/* Inquire about none of the properties of a variable */
+	fprintf(test_log, "Inquire about none of the properties of a variable: ");
+	ierr = SMIOL_inquire_var(file, "i5_t", NULL, NULL, NULL);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr == SMIOL_LIBRARY_ERROR) {
+		fprintf(test_log, "FAIL (%s)\n", SMIOL_lib_error_string(context));
+		errcount++;
+	} else {
+		fprintf(test_log, "FAIL - %s\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+
+#ifdef SMIOL_PNETCDF
+	/* Try to inquire about an undefined variable */
+	fprintf(test_log, "Try to inquire about an undefined variable: ");
+	ierr = SMIOL_inquire_var(file, "fooblaz", &vartype, &ndims, dimnames);
+	if (ierr == SMIOL_LIBRARY_ERROR) {
+		fprintf(test_log, "PASS (%s)\n", SMIOL_lib_error_string(context));
+	} else if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was erroneously returned\n");
+		errcount++;
+	} else {
+		fprintf(test_log, "FAIL - a return code of SMIOL_LIBRARY_ERROR was expected\n");
+		errcount++;
+	}
+#endif
+
+	/* Try to inquire with NULL variable name argument */
+	fprintf(test_log, "Try to inquire with a NULL variable name argument: ");
+	ierr = SMIOL_inquire_var(file, NULL, &vartype, &ndims, dimnames);
+	if (ierr == SMIOL_INVALID_ARGUMENT) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - a return code of SMIOL_INVALID_ARGUMENT was expected\n");
+		errcount++;
+	}
+
+	/* Try to inquire with NULL file argument */
+	fprintf(test_log, "Try to inquire with a NULL file argument: ");
+	ierr = SMIOL_inquire_var(NULL, "i5_t", &vartype, &ndims, dimnames);
+	if (ierr == SMIOL_INVALID_ARGUMENT) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - a return code of SMIOL_INVALID_ARGUMENT was expected\n");
+		errcount++;
+	}
+
+	for (i = 0; i < 6; i++) {
+		free(dimnames[i]);
+	}
+	free(dimnames);
 
 	/* Close the SMIOL file */
 	ierr = SMIOL_close_file(&file);

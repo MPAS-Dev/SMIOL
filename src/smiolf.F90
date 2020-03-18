@@ -466,14 +466,108 @@ contains
     !
     !> \brief Defines a new variable in a file
     !> \details
-    !>  Detailed description of what this routine does.
+    !>  Defines a variable with the specified name, type, and dimensions in an open
+    !>  file pointed to by the file argument. The varname and dimnames arguments
+    !>  are expected to be null-terminated strings, except if the variable has
+    !>  zero dimensions, in which case the dimnames argument is ignored.
+    !>
+    !>  Upon successful completion, SMIOL_SUCCESS is returned; otherwise, an error
+    !>  code is returned.
     !
     !-----------------------------------------------------------------------
-    integer function SMIOLf_define_var() result(ierr)
+    integer function SMIOLf_define_var(file, varname, vartype, ndims, dimnames) result(ierr)
+
+        use iso_c_binding, only : c_int, c_char, c_null_char, c_ptr, c_loc
 
         implicit none
 
-        ierr = 0
+        type (SMIOLf_file), target :: file
+        character(len=*), intent(in) :: varname
+        integer, intent(in) :: vartype
+        integer, intent(in) :: ndims
+        character(len=*), dimension(:), intent(in) :: dimnames
+
+        type (c_ptr) :: c_file
+        character(kind=c_char), dimension(:), pointer :: c_varname
+        integer(kind=c_int) :: c_vartype
+        integer(kind=c_int) :: c_ndims
+
+        type (c_ptr), dimension(:), allocatable, target :: c_dimnames
+
+        integer :: i, j
+
+        ! C interface definitions
+        interface
+            function SMIOL_define_var(file, varname, vartype, ndims, dimnames) result(ierr) bind(C, name='SMIOL_define_var')
+                use iso_c_binding, only : c_ptr, c_char, c_int
+                type (c_ptr), value :: file
+                character(kind=c_char), dimension(*) :: varname
+                integer(kind=c_int), value :: vartype
+                integer(kind=c_int), value :: ndims
+                type (c_ptr), value :: dimnames
+                integer(kind=c_int) :: ierr
+            end function
+        end interface
+
+        ! Used to store an array of pointers to character arrays
+        type string_ptr
+            character(kind=c_char), dimension(:), allocatable :: str
+        end type string_ptr
+
+        type (string_ptr), dimension(:), allocatable, target :: strings
+
+        !
+        ! Check that the 'dimnames' array has at least ndims elements
+        !
+        if (size(dimnames) < ndims) then
+            ierr = SMIOL_FORTRAN_ERROR
+            return
+        end if
+
+        ! Get C address of file; there is no need to worry about an unassociated file here,
+        ! since the file argument is not a pointer
+        c_file = c_loc(file)
+
+        !
+        ! Convert Fortran string to C character array
+        !
+        allocate(c_varname(len_trim(varname) + 1))
+        do i=1,len_trim(varname)
+            c_varname(i) = varname(i:i)
+        end do
+        c_varname(i) = c_null_char
+
+        !
+        ! Convert vartype and ndims
+        !
+        c_vartype = vartype
+        c_ndims = ndims
+
+        !
+        ! Convert dimnames
+        !
+        allocate(c_dimnames(ndims))
+        allocate(strings(ndims))
+
+        do j=1,ndims
+            allocate(strings(j) % str(len_trim(dimnames(j))+1))
+
+            do i=1,len_trim(dimnames(j))
+                strings(j) % str(i) = dimnames(j)(i:i)
+            end do
+            strings(j) % str(i) = c_null_char
+            c_dimnames(j) = c_loc(strings(j) % str)
+        end do
+
+        ierr = SMIOL_define_var(c_file, c_varname, c_vartype, c_ndims, c_loc(c_dimnames))
+
+        do j=1,ndims
+            deallocate(strings(j) % str)
+        end do
+
+        deallocate(c_varname)
+        deallocate(strings)
+        deallocate(c_dimnames)
 
     end function SMIOLf_define_var
 
@@ -483,14 +577,156 @@ contains
     !
     !> \brief Inquires about an existing variable in a file
     !> \details
-    !>  Detailed description of what this routine does.
+    !>  Inquires about a variable in a file, and optionally returns the type
+    !>  of the variable, the dimensionality of the variable, and the names of
+    !>  the dimensions of the variable.
+    !>
+    !>  If the names of a variable's dimensions are requested (by providing an
+    !>  actual argument for dimnames), the size of the dimnames array must be at
+    !>  least the number of dimensions in the variable, and each character string
+    !>  in the dimnames array must be large enough to accommodate the corresponding
+    !>  dimension name.
     !
     !-----------------------------------------------------------------------
-    integer function SMIOLf_inquire_var() result(ierr)
+    integer function SMIOLf_inquire_var(file, varname, vartype, ndims, dimnames) result(ierr)
+
+        use iso_c_binding, only : c_char, c_null_char, c_loc, c_ptr, c_null_ptr, c_int
 
         implicit none
 
-        ierr = 0
+        type (SMIOLf_file), target :: file
+        character(len=*), intent(in) :: varname
+        integer, intent(out), optional :: vartype
+        integer, intent(out), optional :: ndims
+        character(len=*), dimension(:), intent(out), optional :: dimnames
+
+        type (c_ptr) :: c_file
+        character(kind=c_char), dimension(:), pointer :: c_varname
+        integer(kind=c_int), target :: c_vartype
+        integer(kind=c_int), target :: c_ndims
+        type (c_ptr), dimension(:), allocatable, target :: c_dimnames
+
+        type (c_ptr) :: c_vartype_ptr
+        type (c_ptr) :: c_ndims_ptr
+        type (c_ptr) :: c_dimnames_ptr
+
+        integer :: i, j
+
+        ! C interface definitions
+        interface
+            function SMIOL_inquire_var(file, varname, vartype, ndims, dimnames) result(ierr) bind(C, name='SMIOL_inquire_var')
+                use iso_c_binding, only : c_ptr, c_char, c_int
+                type (c_ptr), value :: file
+                character(kind=c_char), dimension(*) :: varname
+                type (c_ptr), value :: vartype
+                type (c_ptr), value :: ndims
+                type (c_ptr), value :: dimnames
+                integer(kind=c_int) :: ierr
+            end function
+        end interface
+
+        ! Used to store an array of pointers to character arrays
+        type string_ptr
+            character(kind=c_char), dimension(:), allocatable :: str
+        end type string_ptr
+
+        type (string_ptr), dimension(:), allocatable, target :: strings
+
+
+        ! Get C address of file; there is no need to worry about an unassociated file here,
+        ! since the file argument is not a pointer
+        c_file = c_loc(file)
+
+        !
+        ! Convert variable name string
+        !
+        allocate(c_varname(len_trim(varname) + 1))
+        do i=1,len_trim(varname)
+            c_varname(i) = varname(i:i)
+        end do
+        c_varname(i) = c_null_char
+
+        !
+        ! Set C pointer for variable type
+        !
+        if (present(vartype)) then
+            c_vartype_ptr = c_loc(c_vartype)
+        else
+            c_vartype_ptr = c_null_ptr
+        end if
+
+        !
+        ! Set C pointer for number of dimensions
+        ! This is done even if dimnames is requested but ndims is not,
+        ! since c_ndims may be used later on when copying out strings
+        ! to dimnames.
+        !
+        if (present(ndims) .or. present(dimnames)) then
+            c_ndims_ptr = c_loc(c_ndims)
+        else
+            c_ndims_ptr = c_null_ptr
+        end if
+
+        !
+        ! Set C pointers for dimension names
+        !
+        if (present(dimnames)) then
+            allocate(c_dimnames(size(dimnames)))
+            allocate(strings(size(dimnames)))
+
+            do j=1,size(dimnames)
+                allocate(strings(j) % str(len(dimnames(j))+1))
+                c_dimnames(j) = c_loc(strings(j) % str)
+            end do
+            c_dimnames_ptr = c_loc(c_dimnames)
+        else
+            c_dimnames_ptr = c_null_ptr
+        end if
+
+
+        ierr = SMIOL_inquire_var(c_file, c_varname, c_vartype_ptr, c_ndims_ptr, c_dimnames_ptr)
+
+        deallocate(c_varname)
+
+        if (ierr /= SMIOL_SUCCESS) then
+            return
+        end if
+
+        !
+        ! Copy variable type to output argument
+        !
+        if (present(vartype)) then
+            vartype = c_vartype
+        end if
+
+        !
+        ! Copy number of dimensions to output argument
+        !
+        if (present(ndims)) then
+            ndims = c_ndims
+        end if
+
+        !
+        ! Copy dimension names to output argument
+        !
+        if (present(dimnames)) then
+            do j=1,c_ndims
+                do i=1,len(dimnames(j))
+                    if (strings(j) % str(i) == c_null_char) exit
+                end do
+
+                i = i - 1
+
+                dimnames(j)(1:i) = transfer(strings(j) % str(1:i), dimnames(j))
+                dimnames(j) = dimnames(j)(1:i)
+            end do
+
+            do j=1,size(dimnames)
+                deallocate(strings(j) % str)
+            end do
+            deallocate(strings)
+            deallocate(c_dimnames)
+        end if
 
     end function SMIOLf_inquire_var
 
