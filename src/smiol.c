@@ -904,18 +904,23 @@ int SMIOL_set_option(void)
  *
  * Creates a mapping between compute elements and I/O elements.
  *
- * Allocate a SMIOL_decomp and copy compute and I/O elements into it. Upon
- * success, return a valid SMIOL decomp; otherwise return NULL.
+ * Given arrays of global element IDs that each task computes and global element IDs
+ * that each task reads/writes, this routine works out a mapping of elements between
+ * compute and I/O tasks.
+ *
+ * If all input arguments are determined to be valid and if the routine is successful
+ * in working out a mapping, the decomp pointer is allocated and given valid contents,
+ * and SMIOL_SUCCESS is returned; otherwise a non-success error code is returned and
+ * the decomp pointer is NULL.
  *
  ********************************************************************************/
 int SMIOL_create_decomp(struct SMIOL_context *context,
-                        size_t n_compute_elements,
-                        SMIOL_Offset *compute_elements,
-                        size_t n_io_elements,
-                        SMIOL_Offset *io_elements,
+                        size_t n_compute_elements, SMIOL_Offset *compute_elements,
+                        size_t n_io_elements, SMIOL_Offset *io_elements,
                         struct SMIOL_decomp **decomp)
 {
-	size_t i;
+	int comm_size;
+	int i;
 
 	if (context == NULL) {
 		return SMIOL_INVALID_ARGUMENT;
@@ -929,34 +934,140 @@ int SMIOL_create_decomp(struct SMIOL_context *context,
 		return SMIOL_INVALID_ARGUMENT;
 	}
 
-	*decomp = malloc(sizeof(struct SMIOL_decomp));
-	if ((*decomp) == NULL) {
-		return SMIOL_MALLOC_FAILURE;
+	*decomp = (struct SMIOL_decomp *)malloc(sizeof(struct SMIOL_decomp));
+// TODO: Check on malloc result, return SMIOL_MALLOC_FAILURE if needed
+	(*decomp)->comp_list = NULL;
+	(*decomp)->io_list = NULL;
+
+	comm_size = context->comm_size;
+
+
+	/*
+	 * Allocate an array, compute_ids, with three entries for each compute element
+	 *    [0] - element global ID
+	 *    [1] - element local ID
+	 *    [2] - I/O task that reads/writes this element
+	 */
+
+	/*
+	 * Fill in compute_ids array with global and local IDs; rank of I/O task is not yet known
+	 */
+
+	/*
+	 * Sort the compute_ids array on global element ID (first entry for each element)
+	 */
+
+	/*
+	 * Allocate buffer with two entries for each I/O element
+	 *    [0] - I/O element global ID
+	 *    [1] - task that computes this element
+	 */
+
+	/*
+	 * Fill buffer with I/O element IDs; compute task is not yet known
+	 */
+
+	/*
+	 * Iterate through all ranks in the communicator, receiving from "left" neighbor
+	 * and sending to "right" neighbor in each iteration.
+	 * The objective is to identify, for each I/O element, which MPI rank computes
+	 * that element. At the end of iteration, each rank will have seen the I/O element
+	 * list from all other ranks.
+	 */
+	for (i = 0; i < comm_size; i++) {
+
+		/*
+		 * Initiate send of outgoing buffer size and receive of incoming buffer size
+		 */
+
+		/*
+		 * Wait until the incoming buffer size has been received
+		 */
+
+		/*
+		 * Allocate incoming buffer
+		 */
+
+		/*
+		 * Initiate receive of incoming buffer
+		 */
+
+		/*
+		 * Wait until the outgoing buffer size has been sent
+		 */
+
+		/*
+		 * Initiate send of outgoing buffer
+		 */
+
+		/*
+		 * Wait until the incoming buffer has been received
+		 */
+
+		/*
+		 * Loop through the incoming buffer, marking all elements that are computed on this task
+		 */
+
+		/*
+		 * Wait until we have sent the outgoing buffer
+		 */
+
+		/*
+		 * Free outgoing buffer and make the input buffer into the output buffer for next iteration
+		 */
 	}
 
-	(*decomp)->comp_list = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
-	if ((*decomp)->comp_list == NULL) {
-		free(*decomp);
-		*decomp = NULL;
-		return SMIOL_MALLOC_FAILURE;
-	}
+	/*
+	 * The output buffer is now the initial buffer with the compute tasks
+	 * for each I/O element identified
+	 */
 
-	(*decomp)->io_list = malloc(sizeof(SMIOL_Offset) * n_io_elements);
-	if ((*decomp)->io_list == NULL) {
-		free(*decomp);
-		*decomp = NULL;
-		return SMIOL_MALLOC_FAILURE;
-	}
+	/*
+	 * Allocate an array, io_ids, with three entries for each I/O element
+	 *    [0] - element global ID
+	 *    [1] - element local ID
+	 *    [2] - compute task that operates on this element
+	 */
 
-	// Copy compute elements
-	for (i = 0; i < n_compute_elements; i++) {
-		(*decomp)->comp_list[i] = compute_elements[i];
-	}
+	/*
+	 * Fill in io_ids array with global and local IDs, plus the rank of the task that computes each element
+	 */
 
-	// Copy io elements
-	for (i = 0; i < n_io_elements; i++) {
-		(*decomp)->io_list[i] = io_elements[i];
-	}
+	/*
+	 * Sort io_ids array on task ID (third entry for each element)
+	 */
+
+	/*
+	 * Scan through io_ids to determine number of unique neighbors that compute
+	 * elements read/written on this task, and also determine the total number of elements
+	 * computed on other tasks that are read/written on this task
+	 */
+
+	/*
+	 * Based on number of neighbors and total number of elements to transfer allocate the io_list
+	 */
+
+	/*
+	 * Scan through io_ids a second time, filling in the io_list in the process
+	 */
+
+	/*
+	 * Sort compute_ids array on task ID (third entry for each element)
+	 */
+
+	/*
+	 * Scan through compute_ids to determine number of unique neighbors that read/write
+	 * elements computed on this task, and also determine the total number of elements
+	 * read/written on other tasks that are computed on this task
+	 */
+
+	/*
+	 * Based on number of neighbors and total number of elements to transfer allocate the comp_list
+	 */
+
+	/*
+	 * Scan through compute_ids a second time, filling in the comp_list in the process
+	 */
 
 	return SMIOL_SUCCESS;
 }
