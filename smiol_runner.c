@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "smiol.h"
+#include "smiol_utils.h"
 
 /*******************************************************************************
  * SMIOL C Runner - Take SMIOL out for a run!
@@ -13,6 +14,7 @@ int test_dimensions(FILE *test_log);
 int test_variables(FILE *test_log);
 int test_decomp(FILE *test_log);
 int test_file_sync(FILE *test_log);
+int test_utils(FILE *test_log);
 
 int main(int argc, char **argv)
 {
@@ -114,6 +116,17 @@ int main(int argc, char **argv)
 	 * Unit tests for SMIOL_sync_file
 	 */
 	ierr = test_file_sync(test_log);
+	if (ierr == 0) {
+		fprintf(test_log, "All tests PASSED!\n\n");
+	}
+	else {
+		fprintf(test_log, "%i tests FAILED!\n\n", ierr);
+	}
+
+	/*
+	 * Unit tests for SMIOL utilities
+	 */
+	ierr = test_utils(test_log);
 	if (ierr == 0) {
 		fprintf(test_log, "All tests PASSED!\n\n");
 	}
@@ -1693,5 +1706,241 @@ int test_file_sync(FILE *test_log)
 
 	return errcount;
 
+}
+
+int test_utils(FILE *test_log)
+{
+	int errcount;
+	int entry;
+	size_t uentry;
+	size_t n_arr;
+	SMIOL_Offset *arr;
+	SMIOL_Offset key;
+	SMIOL_Offset smallest, largest;
+	SMIOL_Offset *res;
+	size_t i;
+	const SMIOL_Offset RANDMAX = (SMIOL_Offset)1000000000;
+
+
+	fprintf(test_log, "********************************************************************************\n");
+	fprintf(test_log, "************************ SMIOL utilities unit tests ****************************\n");
+	fprintf(test_log, "\n");
+
+	errcount = 0;
+
+	/*
+	 * Test sorting and searching on each of the entries in a triplet
+	 */
+	for (entry = 0; entry < 3; entry++) {
+
+		/*
+		 * Some compilers will complain about change of signedness when
+		 * using entry as an offset to a size_t, below, so uentry is
+		 * used when indexing arr[]
+		 */
+		uentry = (size_t)entry;
+
+		/* Testing sort of an empty list of triplets on entry N */
+		fprintf(test_log, "Testing sort of an empty list of triplets on entry %i: ", entry);
+		n_arr = (size_t)0;
+		arr = NULL;
+		sort_triplet_array(n_arr, arr, entry);
+		if (arr == NULL) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL\n");
+			errcount++;
+		}
+
+		/* Testing search of an empty list of triplets on entry N */
+		fprintf(test_log, "Testing search of an empty list of triplets on entry %i: ", entry);
+		n_arr = (size_t)0;
+		arr = NULL;
+		key = (SMIOL_Offset)42;
+		res = search_triplet_array(key, n_arr, arr, entry);
+		if (res == NULL) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL\n");
+			errcount++;
+		}
+
+		n_arr = (size_t)1;
+		arr = (SMIOL_Offset *)malloc(sizeof(SMIOL_Offset) * TRIPLET_SIZE);
+		arr[TRIPLET_SIZE*0 + 0] = 1;
+		arr[TRIPLET_SIZE*0 + 1] = 2;
+		arr[TRIPLET_SIZE*0 + 2] = 3;
+
+		smallest = arr[TRIPLET_SIZE*0 + uentry];
+
+		/* Testing sort of a list of a single triplet on entry N */
+		fprintf(test_log, "Testing sort of a list of a single triplet on entry %i: ", entry);
+		sort_triplet_array(n_arr, arr, entry);
+		if (arr[TRIPLET_SIZE*0 + uentry] == smallest) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL\n");
+			errcount++;
+		}
+
+		/* Testing successful search of a list of a single triplet on entry N */
+		fprintf(test_log, "Testing successful search of a list of a single triplet on entry %i: ", entry);
+		key = smallest;
+		res = search_triplet_array(key, n_arr, arr, entry);
+		if (res == &arr[TRIPLET_SIZE*0]) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL (returned address was wrong)\n");
+			errcount++;
+		}
+
+		/* Testing un-successful search of a list of a single triplet on entry N */
+		fprintf(test_log, "Testing un-successful search of a list of a single triplet on entry %i: ", entry);
+		key = 42;
+		res = search_triplet_array(key, n_arr, arr, entry);
+		if (res == NULL) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL (returned address not NULL)\n");
+			errcount++;
+		}
+
+		free(arr);
+
+		n_arr = (size_t)2;
+		arr = (SMIOL_Offset *)malloc(n_arr * sizeof(SMIOL_Offset) * TRIPLET_SIZE);
+		arr[TRIPLET_SIZE*0 + 0] = 7;
+		arr[TRIPLET_SIZE*0 + 1] = 8;
+		arr[TRIPLET_SIZE*0 + 2] = 9;
+		arr[TRIPLET_SIZE*1 + 0] = 1;
+		arr[TRIPLET_SIZE*1 + 1] = 2;
+		arr[TRIPLET_SIZE*1 + 2] = 3;
+
+		largest = arr[TRIPLET_SIZE*0 + uentry];
+		smallest = arr[TRIPLET_SIZE*1 + uentry];
+
+		/* Testing sort of a list of two triplets on entry N */
+		fprintf(test_log, "Testing sort of a list of two triplets on entry %i: ", entry);
+		sort_triplet_array(n_arr, arr, entry);
+		if (arr[TRIPLET_SIZE*0 + uentry] == smallest && arr[TRIPLET_SIZE*1 + uentry] == largest) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL\n");
+			errcount++;
+		}
+
+		/* Testing successful search of a list of two triplets on entry N */
+		fprintf(test_log, "Testing successful search of a list of two triplets on entry %i: ", entry);
+		key = largest;
+		res = search_triplet_array(key, n_arr, arr, entry);
+		if (res == &arr[TRIPLET_SIZE*1]) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL (returned address was wrong)\n");
+			errcount++;
+		}
+
+		/* Testing un-successful search of a list of two triplets on entry N */
+		fprintf(test_log, "Testing un-successful search of a list of two triplets on entry %i: ", entry);
+		key = 42;
+		res = search_triplet_array(key, n_arr, arr, entry);
+		if (res == NULL) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL (returned address not NULL)\n");
+			errcount++;
+		}
+
+		free(arr);
+
+		n_arr = (size_t)10000;
+		arr = (SMIOL_Offset *)malloc(n_arr * sizeof(SMIOL_Offset) * TRIPLET_SIZE);
+		srand(42);
+		for (i = 0; i < (TRIPLET_SIZE * n_arr); i++) {
+			arr[i] = rand() % RANDMAX;
+		}
+
+		/* Testing sort of a list of 10000 triplets on entry N */
+		fprintf(test_log, "Testing sort of a list of 10000 triplets on entry %i: ", entry);
+		sort_triplet_array(n_arr, arr, entry);
+		for (i = 1; i < n_arr; i++) {
+			if (arr[TRIPLET_SIZE * i + uentry] < arr[TRIPLET_SIZE * (i - 1) + uentry]) {
+				fprintf(test_log, "FAIL\n");
+				errcount++;
+				break;
+			}
+		}
+		if (i == n_arr) {
+			fprintf(test_log, "PASS\n");
+		}
+
+		/* Testing successful search of a list of 10000 triplets on entry N */
+		fprintf(test_log, "Testing successful search of a list of 10000 triplets on entry %i: ", entry);
+		key = arr[TRIPLET_SIZE * 4242 + uentry];
+		res = search_triplet_array(key, n_arr, arr, entry);
+		if (res == &arr[TRIPLET_SIZE * 4242]) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			/* NB: in principle, the search could have found another entry whose value is
+			 *     the same as the entry at 4242, since we don't guarantee that all random
+			 *     values are unique...
+			 */
+			fprintf(test_log, "FAIL (returned address was wrong)\n");
+			errcount++;
+		}
+
+		/* Testing successful search for smallest element in a list of 10000 triplets on entry N */
+		fprintf(test_log, "Testing successful search for smallest element in a list of 10000 triplets on entry %i: ", entry);
+		key = arr[TRIPLET_SIZE * 0 + uentry];
+		res = search_triplet_array(key, n_arr, arr, entry);
+		if (res == &arr[TRIPLET_SIZE * 0]) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			/* NB: in principle, the search could have found another entry whose value is
+			 *     the same as the entry at 0, since we don't guarantee that all random
+			 *     values are unique...
+			 */
+			fprintf(test_log, "FAIL (returned address was wrong)\n");
+			errcount++;
+		}
+
+		/* Testing successful search for largest element in a list of 10000 triplets on entry N */
+		fprintf(test_log, "Testing successful search for largest element in a list of 10000 triplets on entry %i: ", entry);
+		key = arr[TRIPLET_SIZE * (n_arr - 1) + uentry];
+		res = search_triplet_array(key, n_arr, arr, entry);
+		if (res == &arr[TRIPLET_SIZE * (n_arr - 1)]) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			/* NB: in principle, the search could have found another entry whose value is
+			 *     the same as the entry at (n_arr-1), since we don't guarantee that all random
+			 *     values are unique...
+			 */
+			fprintf(test_log, "FAIL (returned address was wrong)\n");
+			errcount++;
+		}
+
+		/* Testing un-successful search of a list of 10000 triplets on entry N */
+		fprintf(test_log, "Testing un-successful search of a list of 10000 triplets on entry %i: ", entry);
+		key = RANDMAX;   /* Array should contain only values 0 through RANDMAX-1 */
+		res = search_triplet_array(key, n_arr, arr, entry);
+		if (res == NULL) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL (returned address not NULL)\n");
+			errcount++;
+		}
+
+		free(arr);
+	}
+
+	fflush(test_log);
+	if (MPI_Barrier(MPI_COMM_WORLD) != MPI_SUCCESS) {
+		fprintf(stderr, "Error: MPI_Barrier failed.\n");
+		return -1;
+	}
+
+	fprintf(test_log, "\n");
+
+	return errcount;
 }
 
