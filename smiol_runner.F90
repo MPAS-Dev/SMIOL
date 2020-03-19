@@ -608,8 +608,8 @@ contains
 
         ! Large number of Compute and IO Elements
         write(test_log,'(a)',advance='no') 'Everything OK for SMIOLf_create_decomp large number of elements: '
-        n_compute_elements = 10000000
-        n_io_elements = 10000000
+        n_compute_elements = 1000000
+        n_io_elements = 1000000
         allocate(compute_elements(n_compute_elements))
         allocate(io_elements(n_io_elements))
         ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements, decomp)

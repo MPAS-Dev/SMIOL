@@ -703,8 +703,8 @@ int test_decomp(FILE *test_log)
 
 	/* Create and Free Decomp with large amount of elements */
 	fprintf(test_log, "Everything OK (SMIOL_create_decomp) with large amount of elements: ");
-	n_compute_elements = 100000000;
-	n_io_elements = 100000000;
+	n_compute_elements = 1000000;
+	n_io_elements = 1000000;
 	compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
 	io_elements = malloc(sizeof(SMIOL_Offset) * n_io_elements);
 	ierr = SMIOL_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements, &decomp);
