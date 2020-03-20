@@ -36,7 +36,7 @@ module SMIOLf
               SMIOLf_free_decomp
 
 
-    integer, parameter :: SMIOL_offset_kind = c_int64_t   ! Must match SMIOL_Offset in smiol.h
+    integer, parameter :: SMIOL_offset_kind = c_int64_t   ! Must match SMIOL_Offset in smiol_types.h
 
 
     type, bind(C) :: SMIOLf_context

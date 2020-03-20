@@ -1,10 +1,11 @@
 /*******************************************************************************
  * Utilities and helper functions for SMIOL
  *******************************************************************************/
+#ifndef SMIOL_UTILS_H
+#define SMIOL_UTILS_H
 
-#include <stdint.h>
+#include "smiol_types.h"
 
-#define TRIPLET_SIZE ((size_t)3)
 
 /*
  * Searching and sorting
@@ -17,3 +18,5 @@ int64_t *search_triplet_array(int64_t key, size_t n_arr, int64_t *arr,
  * Debugging
  */
 void print_lists(int comm_rank, int64_t *comp_list, int64_t *io_list);
+
+#endif
