@@ -720,8 +720,68 @@ int SMIOL_inquire_var(struct SMIOL_file *file, const char *varname, int *vartype
  * Detailed description.
  *
  ********************************************************************************/
-int SMIOL_put_var(void)
+int SMIOL_put_var(struct SMIOL_file *file, const char *varname, 
+                  const void *buf, SMIOL_Offset start, SMIOL_Offset count, 
+				  struct SMIOL_decomp *decomp)
 {
+#ifdef SMIOL_PNETCDF
+	int ierr;
+	int varidp;
+#endif
+
+	if (file == NULL){
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	if (decomp == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	if (buf == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	/*** Send and recive needed elements here ***/
+
+#ifdef SMIOL_PNETCDF
+	/*
+	 * Get variable ID
+	 */
+	if ((ierr = ncmpi_inq_varid(file->ncidp, varname, &varidp)) != NC_NOERR) {
+		file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+		file->context->lib_ierr = ierr;
+		return SMIOL_LIBRARY_ERROR;
+	}
+
+	/*
+	 * If the file is in define mode, then switch it to data mode
+	 */
+	if (file->state == PNETCDF_DEFINE_MODE) {
+		if ((ierr = ncmpi_enddef(file->ncidp)) != NC_NOERR) {
+			file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+			file->context->lib_ierr = ierr;
+			return SMIOL_LIBRARY_ERROR;
+		}
+		file->state = PNETCDF_DATA_MODE;
+	}
+
+	fprintf(stderr, "File->ncidp: %d\n", file->ncidp);
+	fprintf(stderr, "File->state: %d\n", file->state);
+	fprintf(stderr, "Varidp: %d\n", varidp);
+
+	/* Write the variable */
+	if ((ierr = ncmpi_put_vara_all(file->ncidp, varidp, (const MPI_Offset *) start, 
+	                              (const MPI_Offset *) count, buf, 
+	                              (MPI_Offset) NULL, MPI_DATATYPE_NULL) 
+	                              != NC_NOERR)){
+		file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+		file->context->lib_ierr = ierr;
+		fprintf(stderr, "Ierr: %d\n", ierr);
+		return SMIOL_LIBRARY_ERROR;
+	}
+#endif 
+
+
 	return SMIOL_SUCCESS;
 }
 

@@ -13,6 +13,7 @@ int test_dimensions(FILE *test_log);
 int test_variables(FILE *test_log);
 int test_decomp(FILE *test_log);
 int test_file_sync(FILE *test_log);
+int test_put_var(FILE *test_log);
 
 int main(int argc, char **argv)
 {
@@ -121,6 +122,14 @@ int main(int argc, char **argv)
 		fprintf(test_log, "%i tests FAILED!\n\n", ierr);
 	}
 
+	ierr = test_put_var(test_log);
+	if (ierr == 0) {
+		fprintf(test_log, "All tests PASSED!\n\n");
+	}
+	else {
+		fprintf(test_log, "%i tests FAILED!\n\n", ierr);
+	}
+
 	if ((ierr = SMIOL_init(MPI_COMM_WORLD, &context)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_init: %s ", SMIOL_error_string(ierr));
 		return 1;
@@ -215,11 +224,11 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if ((ierr = SMIOL_put_var()) != SMIOL_SUCCESS) {
-		fprintf(test_log, "ERROR: SMIOL_put_var: %s ",
-			SMIOL_error_string(ierr));
-		return 1;
-	}
+//	if ((ierr = SMIOL_put_var()) != SMIOL_SUCCESS) {
+//		fprintf(test_log, "ERROR: SMIOL_put_var: %s ",
+//			SMIOL_error_string(ierr));
+//		return 1;
+//	}
 
 	if ((ierr = SMIOL_get_var()) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_get_var: %s ",
@@ -558,7 +567,7 @@ int test_open_close(FILE *test_log)
 	}
 	else {
 		fprintf(test_log, "FAIL - context is not NULL or SMIOL_SUCCESS was not returned\n");
-		errcount++;
+		errcount++;;
 	}
 
 	/* Free the SMIOL context */
@@ -1683,3 +1692,121 @@ int test_file_sync(FILE *test_log)
 
 }
 
+int test_put_var(FILE *test_log)
+{
+	int errcount;
+	int ierr;
+	int i;
+	struct SMIOL_context *context;
+	struct SMIOL_file *file;
+	struct SMIOL_decomp *decomp = NULL;
+	char **dimnames;
+	int ndims;
+	int vartype;
+	int64_t *compute_elements = NULL, *io_elements = NULL;
+
+	int32_t *int_32_buf;
+	float *float_buf;
+	double *double_buf;
+
+	fprintf(test_log, "********************************************************************************\n");
+	fprintf(test_log, "**************************** SMIOL_put_var *************************************\n");
+	fprintf(test_log, "\n");
+
+	errcount = 0;
+
+	/* Create a SMIOL context for testing put var */
+	context = NULL;
+	ierr = SMIOL_init(MPI_COMM_WORLD, &context);
+	if (ierr != SMIOL_SUCCESS || context == NULL) {
+		fprintf(test_log, "Failed to create SMIOL context...\n");
+		return -1;
+	}
+
+	/* Create a SMIOL file for testing put var*/
+	file = NULL;
+	ierr = SMIOL_open_file(context, "test_put_var.nc", (SMIOL_FILE_WRITE | SMIOL_FILE_CREATE), &file);
+	if (ierr != SMIOL_SUCCESS || file == NULL) {
+		fprintf(test_log, "Failed to create SMIOL file...\n");
+		return -1;
+	}
+
+	/* Create a dummy decomposition */
+	compute_elements = malloc(sizeof(int64_t) * (size_t)1);
+	io_elements = malloc(sizeof(int64_t) * (size_t)1);
+	decomp = SMIOL_create_decomp((size_t)1, (size_t)1, compute_elements, io_elements);
+	if (decomp == NULL) {
+		fprintf(test_log, "FAIL - decomp was returned as NULL\n");
+	}
+
+	/* Define a single dimension to use for testing put_var */
+	ierr = SMIOL_define_dim(file, "nCells", (SMIOL_Offset)10);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create dimension nCells...\n");
+		return -1;
+	}
+
+	dimnames = (char **)malloc(sizeof(char *) * (size_t)6);
+	for (i = 0; i < 6; i++) {
+		dimnames[i] = (char *)malloc(sizeof(char) * (size_t)32);
+	}
+
+	/* Define variables to use for testing put_var */
+	snprintf(dimnames[0], 32, "nCells");
+	ierr = SMIOL_define_var(file, "var1", SMIOL_INT32, 1, (const char **)dimnames);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create variable 'test_var_int32'...\n");
+		return -1;
+	}
+
+	SMIOL_Offset start, count;
+	if (context->comm_rank == 0) {
+		start = 0;
+		count = 5;
+	} else {
+		start = 5;
+		count = 5;
+	}
+
+	/* Testing SMIOL_put_var with a single int32 value */
+	int_32_buf = malloc(sizeof(int32_t) * (size_t) 5);
+	for (i = 0; i < 5; i++){
+		int_32_buf[i] = context->comm_rank;
+	}
+
+	fprintf(test_log, "Everything OK - SMIOL_put_var with 1 int32: ");
+	ierr = SMIOL_put_var(file, "var1", int_32_buf, start, count,
+	                     decomp);
+	if (ierr == SMIOL_SUCCESS){
+		fprintf(test_log, "PASS\n");
+	} else if (ierr == SMIOL_LIBRARY_ERROR) {
+		fprintf(test_log, "FAIL - Library error: %s\n", SMIOL_lib_error_string(context));
+		errcount++;
+	} else {
+		fprintf(test_log, "FAIL- Error was %s\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+	free(int_32_buf);
+
+
+	/* Close the SMIOL file */
+	ierr = SMIOL_close_file(&file);
+	if (ierr != SMIOL_SUCCESS || file != NULL) {
+		fprintf(test_log, "Failed to close SMIOL file...\n");
+		return -1;
+	}
+
+	/* Free the SMIOL context */
+	ierr = SMIOL_finalize(&context);
+	if (ierr != SMIOL_SUCCESS || context != NULL) {
+		fprintf(test_log, "Failed to free SMIOL context...\n");
+		return -1;
+	}
+
+	fflush(test_log);
+	ierr = MPI_Barrier(MPI_COMM_WORLD);
+
+	fprintf(test_log, "\n");
+
+	return errcount;
+}
