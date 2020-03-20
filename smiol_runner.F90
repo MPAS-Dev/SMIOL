@@ -2,7 +2,7 @@
 
 program smiol_runner
 
-    use iso_c_binding, only : c_size_t, c_int64_t
+    use iso_c_binding, only : c_size_t
     use SMIOLf
     use mpi
 
@@ -11,10 +11,10 @@ program smiol_runner
     integer :: ierr
     integer :: my_proc_id
     integer :: test_log = 42
-    integer(c_size_t) :: n_compute_elements = 1
-    integer(c_size_t) :: n_io_elements = 1
-    integer(c_int64_t), dimension(:), pointer :: compute_elements
-    integer(c_int64_t), dimension(:), pointer :: io_elements
+    integer(kind=c_size_t) :: n_compute_elements = 1
+    integer(kind=c_size_t) :: n_io_elements = 1
+    integer(kind=SMIOL_offset_kind), dimension(:), pointer :: compute_elements
+    integer(kind=SMIOL_offset_kind), dimension(:), pointer :: io_elements
     type (SMIOLf_decomp), pointer :: decomp => null()
     type (SMIOLf_context), pointer :: context => null()
     type (SMIOLf_file), pointer :: file => null()
@@ -126,7 +126,8 @@ program smiol_runner
     allocate(compute_elements(n_compute_elements))
     allocate(io_elements(n_io_elements))
 
-    if (SMIOLf_create_decomp(n_compute_elements, n_io_elements, compute_elements, io_elements, decomp) /= SMIOL_SUCCESS) then
+    if (SMIOLf_create_decomp(context, n_compute_elements, compute_elements, &
+                             n_io_elements, io_elements, decomp) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "Error: SMIOLf_create_decomp was not called successfully"
         stop 1
     endif
@@ -518,16 +519,17 @@ contains
 
     function test_decomp(test_log) result(ierrcount)
 
-        use iso_c_binding, only : c_size_t, c_int64_t
+        use iso_c_binding, only : c_size_t
 
         implicit none
 
         integer, intent(in) :: test_log
         integer :: ierrcount
-        integer(c_size_t) :: n_compute_elements
-        integer(c_size_t) :: n_io_elements
-        integer(c_int64_t), dimension(:), pointer :: compute_elements
-        integer(c_int64_t), dimension(:), pointer :: io_elements
+        integer(kind=c_size_t) :: n_compute_elements
+        integer(kind=c_size_t) :: n_io_elements
+        integer(kind=SMIOL_offset_kind), dimension(:), pointer :: compute_elements
+        integer(kind=SMIOL_offset_kind), dimension(:), pointer :: io_elements
+        type (SMIOLf_context), pointer :: context
         type (SMIOLf_decomp), pointer :: decomp => null()
 
         write(test_log,'(a)') '********************************************************************************'
@@ -536,20 +538,25 @@ contains
 
         ierrcount = 0
 
+        ! Create a SMIOL context for testing decomp routines
+        nullify(context)
+        ierr = SMIOLf_init(MPI_COMM_WORLD, context)
+        if (ierr /= SMIOL_SUCCESS .or. .not. associated(context)) then
+            ierrcount = -1
+            return
+        end if
+
         ! Test with 0 elements
         write(test_log,'(a)',advance='no') 'Everything OK for SMIOLf_create_decomp with 0 elements: '
         n_compute_elements = 0
         n_io_elements = 0
         allocate(compute_elements(n_compute_elements))
         allocate(io_elements(n_io_elements))
-        ierr = SMIOLf_create_decomp(n_compute_elements, n_io_elements, compute_elements, io_elements, decomp)
+        ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements, decomp)
         if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
             write(test_log,'(a)') "PASS"
-        else if (ierr /= SMIOL_SUCCESS .and. .not. associated(decomp)) then
-            write(test_log,'(a)') "FAIL - SMIOLf_create_decomp returned an error and decomp was not associated"
-            ierrcount = ierrcount + 1
-        else if (ierr == SMIOL_SUCCESS .and. .not. associated(decomp)) then
-            write(test_log,'(a)') "FAIL - ierr returned success but decomp was NOT associated when it should have been"
+        else
+            write(test_log, '(a)') "FAIL - Either SMIOL_SUCCESS was not returned or decomp was not associated"
             ierrcount = ierrcount + 1
         endif
 
@@ -575,14 +582,11 @@ contains
         n_io_elements = 1
         allocate(compute_elements(n_compute_elements))
         allocate(io_elements(n_io_elements))
-        ierr = SMIOLf_create_decomp(n_compute_elements, n_io_elements, compute_elements, io_elements, decomp)
+        ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements, decomp)
         if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
             write(test_log,'(a)') "PASS"
-        else if (ierr /= SMIOL_SUCCESS .and. .not. associated(decomp)) then
-            write(test_log,'(a)') "FAIL - SMIOLf_create_decomp returned an error and decomp was not associated"
-            ierrcount = ierrcount + 1
-        else if (ierr == SMIOL_SUCCESS .and. .not. associated(decomp)) then
-            write(test_log,'(a)') "FAIL - ierr returned success but decomp was NOT associated when it should have been"
+        else
+            write(test_log, '(a)') "FAIL - Either SMIOL_SUCCESS was not returned or decomp was not associated"
             ierrcount = ierrcount + 1
         endif
 
@@ -608,14 +612,11 @@ contains
         n_io_elements = 10000000
         allocate(compute_elements(n_compute_elements))
         allocate(io_elements(n_io_elements))
-        ierr = SMIOLf_create_decomp(n_compute_elements, n_io_elements, compute_elements, io_elements, decomp)
+        ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements, decomp)
         if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
             write(test_log,'(a)') "PASS"
-        else if (ierr /= SMIOL_SUCCESS .and. .not. associated(decomp)) then
-            write(test_log,'(a)') "FAIL - SMIOLf_create_decomp returned an error and decomp was not associated"
-            ierrcount = ierrcount + 1
-        else if (ierr == SMIOL_SUCCESS .and. .not. associated(decomp)) then
-            write(test_log,'(a)') "FAIL - ierr returned success but decomp was NOT associated when it should have been"
+        else
+            write(test_log, '(a)') "FAIL - Either SMIOL_SUCCESS was not returned or decomp was not associated"
             ierrcount = ierrcount + 1
         endif
 
@@ -647,6 +648,13 @@ contains
             write(test_log,'(a)') "FAIL - ierr returned SMIOL_SUCCESS, but the decomp became associated..."
             ierrcount = ierrcount + 1
         endif
+
+        ! Free the SMIOL context
+        ierr = SMIOLf_finalize(context)
+        if (ierr /= SMIOL_SUCCESS .or. associated(context)) then
+            ierrcount = -1
+            return
+        end if
 
         write(test_log,'(a)') ''
 

@@ -57,10 +57,17 @@ module SMIOLf
     end type SMIOLf_file
 
     type, bind(C) :: SMIOLf_decomp
-        integer(c_size_t) :: n_compute_elements
-        integer(c_size_t) :: n_io_elements
-        type(c_ptr) :: compute_elements
-        type(c_ptr) :: io_elements
+        !
+        ! The lists below are structured (in C) as follows:
+        !   list[0] - the number of neighbors for which a task sends/recvs
+        !                                                                             |
+        !   list[n] - neighbor task ID                                                | repeated for
+        !   list[n+1] - number of elements, m, to send/recv to/from the neighbor      | each neighbor
+        !   list[n+2 .. n+2+m] - local element IDs to send/recv to/from the neighbor  |
+        !                                                                             |
+        !
+        type(c_ptr) :: comp_list  ! Elements to be sent/received from/on a compute task
+        type(c_ptr) :: io_list    ! Elements to be send/received from/on an I/O task
     end type SMIOLf_decomp
 
 
@@ -976,31 +983,36 @@ contains
     !>  error code will be returned.
     !
     !-----------------------------------------------------------------------
-    integer function SMIOLf_create_decomp(n_compute_elements, n_io_elements, compute_elements, io_elements, decomp) result(ierr)
+    integer function SMIOLf_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements, decomp) &
+                                          result(ierr)
 
-        use iso_c_binding, only : c_size_t, c_int64_t
+        use iso_c_binding, only : c_size_t
         use iso_c_binding, only : c_ptr, c_null_ptr, c_loc, c_f_pointer, c_associated
 
         implicit none
 
-        integer(c_size_t), intent(in) :: n_compute_elements
-        integer(c_size_t), intent(in) :: n_io_elements
-        integer(c_int64_t), dimension(n_compute_elements), target, intent(in) :: compute_elements
-        integer(c_int64_t), dimension(n_io_elements), target, intent(in) :: io_elements
-        type(SMIOLf_decomp), pointer, intent(inout) :: decomp
+        type (SMIOLf_context), pointer :: context
+        integer(kind=c_size_t), intent(in) :: n_compute_elements
+        integer(kind=SMIOL_offset_kind), dimension(n_compute_elements), target, intent(in) :: compute_elements
+        integer(kind=c_size_t), intent(in) :: n_io_elements
+        integer(kind=SMIOL_offset_kind), dimension(n_io_elements), target, intent(in) :: io_elements
+        type (SMIOLf_decomp), pointer, intent(inout) :: decomp
 
-        type(c_ptr) :: c_compute_elements = c_null_ptr
-        type(c_ptr) :: c_io_elements = c_null_ptr
-        type(c_ptr) :: c_decomp = c_null_ptr
+        type (c_ptr) :: c_context = c_null_ptr
+        type (c_ptr) :: c_decomp = c_null_ptr
+        type (c_ptr) :: c_compute_elements = c_null_ptr
+        type (c_ptr) :: c_io_elements = c_null_ptr
         
         interface
-            function SMIOL_create_decomp(n_compute_elements, n_io_elements, compute_elements, io_elements) & 
-                                            result(decomp) bind(C, name='SMIOL_create_decomp')
-                use iso_c_binding, only : c_size_t, c_ptr
+            function SMIOL_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements, decomp) &
+                                         result(ierr) bind(C, name='SMIOL_create_decomp')
+                use iso_c_binding, only : c_size_t, c_ptr, c_int
+                type (c_ptr), value :: context
                 integer(c_size_t), value :: n_compute_elements
-                integer(c_size_t), value :: n_io_elements
                 type(c_ptr), value :: compute_elements
+                integer(c_size_t), value :: n_io_elements
                 type(c_ptr), value :: io_elements
+                integer(kind=c_int) :: ierr
                 type(c_ptr) :: decomp
             end function
         end interface
@@ -1008,11 +1020,16 @@ contains
         ierr = SMIOL_SUCCESS
 
         ! Translate Fortran types into C interoperable types
+
+        if (associated(context)) then
+            c_context = c_loc(context)
+        end if
+
         c_compute_elements = c_loc(compute_elements)
         c_io_elements = c_loc(io_elements)
 
         ! Create SMIOL_decomp type via c SMIOL_create_decomp
-        c_decomp = SMIOL_create_decomp(n_compute_elements, n_io_elements, c_compute_elements, c_io_elements)
+        ierr = SMIOL_create_decomp(c_context, n_compute_elements, c_compute_elements, n_io_elements, c_io_elements, c_decomp)
 
         ! Error check and translate c_decomp ptr into Fortran SMIOLf_decomp 
         if (.not. c_associated(c_decomp)) then
