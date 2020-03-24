@@ -721,7 +721,7 @@ int SMIOL_inquire_var(struct SMIOL_file *file, const char *varname, int *vartype
  *
  ********************************************************************************/
 int SMIOL_put_var(struct SMIOL_file *file, const char *varname, 
-                  const void *buf, SMIOL_Offset start, SMIOL_Offset count, 
+                  const void *buf, SMIOL_Offset *start, SMIOL_Offset *count, 
 				  struct SMIOL_decomp *decomp)
 {
 #ifdef SMIOL_PNETCDF
@@ -765,18 +765,14 @@ int SMIOL_put_var(struct SMIOL_file *file, const char *varname,
 		file->state = PNETCDF_DATA_MODE;
 	}
 
-	fprintf(stderr, "File->ncidp: %d\n", file->ncidp);
-	fprintf(stderr, "File->state: %d\n", file->state);
-	fprintf(stderr, "Varidp: %d\n", varidp);
-
 	/* Write the variable */
-	if ((ierr = ncmpi_put_vara_all(file->ncidp, varidp, (const MPI_Offset *) start, 
-	                              (const MPI_Offset *) count, buf, 
+	if ((ierr = ncmpi_put_vara_all(file->ncidp, varidp, 
+	                              (const MPI_Offset *) start, 
+	                              (const MPI_Offset *) count, buf,
 	                              (MPI_Offset) NULL, MPI_DATATYPE_NULL) 
 	                              != NC_NOERR)){
 		file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
 		file->context->lib_ierr = ierr;
-		fprintf(stderr, "Ierr: %d\n", ierr);
 		return SMIOL_LIBRARY_ERROR;
 	}
 #endif 

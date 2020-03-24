@@ -1692,22 +1692,93 @@ int test_file_sync(FILE *test_log)
 
 }
 
+/* From an initiated SMIOL_context, and a desired size, evenly divide */
+void generate_fake_decomp_1d(struct SMIOL_context *context, SMIOL_Offset size,
+                          SMIOL_Offset **start,
+                          SMIOL_Offset **count)
+{
+	int i, r;
+
+	*start = malloc(sizeof(SMIOL_Offset) * (size_t) 1);
+	*count = malloc(sizeof(SMIOL_Offset) * (size_t) 1);
+
+	// Distribute counts evenly
+    **count = size / context->comm_size;
+    r = size % context->comm_size;
+
+    i = 0;
+    while ( i != r ) {
+        if (context->comm_rank == i) {
+            (**count)++;
+        }
+        i++;
+    }
+
+    if (context->comm_rank == 0) {
+        **start = 0;
+    } else if (context->comm_rank <= r - 1) {
+        **start = context->comm_rank * **count;
+    } else {
+        **start = context->comm_rank * **count + r;
+    }
+}
+
+void generate_fake_decomp_2d(struct SMIOL_context *context, SMIOL_Offset size,
+                             SMIOL_Offset size2,
+                             SMIOL_Offset **start,
+                             SMIOL_Offset **count)
+{
+	int i, r;
+
+	*start = malloc(sizeof(SMIOL_Offset) * 2);
+	*count = malloc(sizeof(SMIOL_Offset) * 2);
+
+	// Distribute counts evenly
+    (*count)[0] = size / context->comm_size;
+	(*count)[1] = size2;
+	(*start)[1] = 0;
+
+    r = size % context->comm_size;
+    i = 0;
+    while ( i != r ) {
+        if (context->comm_rank == i) {
+            (*count)[0]++;
+        }
+        i++;
+    }
+
+    if (context->comm_rank == 0) {
+        (*start)[0] = 0;
+    } else if (context->comm_rank <= r - 1) {
+        (*start)[0] = context->comm_rank * (*count)[0];
+    } else {
+        (*start)[0] = context->comm_rank * (*count)[0] + r;
+    }
+
+}
+
 int test_put_var(FILE *test_log)
 {
 	int errcount;
 	int ierr;
-	int i;
+	int i, j;
 	struct SMIOL_context *context;
 	struct SMIOL_file *file;
 	struct SMIOL_decomp *decomp = NULL;
 	char **dimnames;
-	int ndims;
-	int vartype;
+	SMIOL_Offset *start = NULL, *count = NULL;
 	int64_t *compute_elements = NULL, *io_elements = NULL;
 
+	int32_t *cellsOnEdge;
 	int32_t *int_32_buf;
 	float *float_buf;
 	double *double_buf;
+	char *char_buf;
+
+	SMIOL_Offset nCells = 10;
+	SMIOL_Offset nEdges = 20;
+	SMIOL_Offset nVertices = 1000000;
+	SMIOL_Offset StrLen = 64;
 
 	fprintf(test_log, "********************************************************************************\n");
 	fprintf(test_log, "**************************** SMIOL_put_var *************************************\n");
@@ -1740,11 +1811,45 @@ int test_put_var(FILE *test_log)
 	}
 
 	/* Define a single dimension to use for testing put_var */
-	ierr = SMIOL_define_dim(file, "nCells", (SMIOL_Offset)10);
+
+	/* Define a single dimension to use for testing put_var */
+	ierr = SMIOL_define_dim(file, "StrLen", (SMIOL_Offset) StrLen);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create dimension StrLen...\n");
+		return -1;
+	}
+
+	/* Define a single dimension to use for testing put_var */
+	ierr = SMIOL_define_dim(file, "Time", (SMIOL_Offset)-1);
 	if (ierr != SMIOL_SUCCESS) {
 		fprintf(test_log, "Failed to create dimension nCells...\n");
 		return -1;
 	}
+
+	ierr = SMIOL_define_dim(file, "nCells", (SMIOL_Offset) nCells);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create dimension nCells...\n");
+		return -1;
+	}
+
+	ierr = SMIOL_define_dim(file, "nEdges", (SMIOL_Offset) nEdges);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create dimension nCells...\n");
+		return -1;
+	}
+
+	ierr = SMIOL_define_dim(file, "nVertices", (SMIOL_Offset) nVertices);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create dimension nCells...\n");
+		return -1;
+	}
+
+	ierr = SMIOL_define_dim(file, "TWO", (SMIOL_Offset)2);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create dimension nCells...\n");
+		return -1;
+	}
+
 
 	dimnames = (char **)malloc(sizeof(char *) * (size_t)6);
 	for (i = 0; i < 6; i++) {
@@ -1753,40 +1858,181 @@ int test_put_var(FILE *test_log)
 
 	/* Define variables to use for testing put_var */
 	snprintf(dimnames[0], 32, "nCells");
-	ierr = SMIOL_define_var(file, "var1", SMIOL_INT32, 1, (const char **)dimnames);
+	ierr = SMIOL_define_var(file, "int32_var", SMIOL_INT32, 1, (const char **)dimnames);
 	if (ierr != SMIOL_SUCCESS) {
-		fprintf(test_log, "Failed to create variable 'test_var_int32'...\n");
+		fprintf(test_log, "Failed to create variable 'int32_var'...\n");
 		return -1;
 	}
 
-	SMIOL_Offset start, count;
-	if (context->comm_rank == 0) {
-		start = 0;
-		count = 5;
-	} else {
-		start = 5;
-		count = 5;
+	ierr = SMIOL_define_var(file, "real32_var", SMIOL_REAL32, 1, (const char **)dimnames);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create variable 'real32_var'...\n");
+		return -1;
 	}
 
+	ierr = SMIOL_define_var(file, "real64_var", SMIOL_REAL64, 1, (const char **)dimnames);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create variable 'real64_var'...\n");
+		return -1;
+	}
+
+	snprintf(dimnames[0], 32, "nVertices");
+	ierr = SMIOL_define_var(file, "large_real64", SMIOL_REAL64, 1, (const char **)dimnames);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create variable 'real64_var'...\n");
+		return -1;
+	}
+
+	snprintf(dimnames[0], 32, "Time");
+	snprintf(dimnames[1], 32, "StrLen");
+	ierr = SMIOL_define_var(file, "xTime", SMIOL_CHAR, 2, (const char **)dimnames);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create variable 'xTime'...%s\n", 
+		                   SMIOL_lib_error_string(file->context));
+		return -1;
+	}
+
+	snprintf(dimnames[0], 32, "nEdges");
+	snprintf(dimnames[1], 32, "TWO");
+	ierr = SMIOL_define_var(file, "cellsOnEdge", SMIOL_INT32, 2, (const char **)dimnames);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create variable 'real64_var'...\n");
+		return -1;
+	}
+
+	generate_fake_decomp_1d(context, nCells, &start, &count);
+
 	/* Testing SMIOL_put_var with a single int32 value */
-	int_32_buf = malloc(sizeof(int32_t) * (size_t) 5);
-	for (i = 0; i < 5; i++){
+	int_32_buf = malloc(sizeof(int32_t) * (size_t) *count);
+	for (i = 0; i < *count; i++){
 		int_32_buf[i] = context->comm_rank;
 	}
 
-	fprintf(test_log, "Everything OK - SMIOL_put_var with 1 int32: ");
-	ierr = SMIOL_put_var(file, "var1", int_32_buf, start, count,
-	                     decomp);
+	fprintf(test_log, "Everything OK - SMIOL_put_var with 10 int32: ");
+	ierr = SMIOL_put_var(file, "int32_var", int_32_buf, start, count, decomp);
 	if (ierr == SMIOL_SUCCESS){
 		fprintf(test_log, "PASS\n");
 	} else if (ierr == SMIOL_LIBRARY_ERROR) {
 		fprintf(test_log, "FAIL - Library error: %s\n", SMIOL_lib_error_string(context));
 		errcount++;
 	} else {
-		fprintf(test_log, "FAIL- Error was %s\n", SMIOL_error_string(ierr));
+		fprintf(test_log, "FAIL- %s\n", SMIOL_error_string(ierr));
 		errcount++;
 	}
 	free(int_32_buf);
+
+	fprintf(test_log, "Everything OK - SMIOL_put_var with 10 reals: ");
+	float_buf = malloc(sizeof(float) * (size_t) count);
+	for (i = 0; i < *count; i++){
+		float_buf[i] = 3.1415926535 * (float) context->comm_rank;
+	}
+	ierr = SMIOL_put_var(file, "real32_var", float_buf, start, count, decomp);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr == SMIOL_LIBRARY_ERROR) {
+		fprintf(test_log, "FAIL - Library Error: %s\n", SMIOL_lib_error_string(context));
+		errcount++;
+	} else {
+		fprintf(stderr, "FAIL - %s\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+	free(float_buf);
+
+	fprintf(test_log, "Everything OK - SMIOL_put_var with 10 doubles: ");
+	double_buf = malloc(sizeof(double) * (size_t) count);
+	for (i = 0; i < *count; i++){
+		double_buf[i] = 3.14159265358979328 * (float) context->comm_rank;
+	}
+	ierr = SMIOL_put_var(file, "real64_var", float_buf, start, count, decomp);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr == SMIOL_LIBRARY_ERROR) {
+		fprintf(test_log, "FAIL - Library Error: %s\n", SMIOL_lib_error_string(context));
+		errcount++;
+	} else {
+		fprintf(stderr, "FAIL - %s\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+	free(double_buf);
+
+	free(start);
+	free(count);
+
+	/* SMIOL Put Var - Character test */
+	fprintf(test_log, "Everything OK - SMIOL_put_var with 10 chars: ");
+	char_buf = malloc(sizeof(char *) * (size_t) StrLen);
+	sprintf(char_buf, "YYYY-MM-DD_hh:mm:ss");
+
+	start = malloc(sizeof(int) * 2);
+	count = malloc(sizeof(int) * 2);
+
+	start[0] = 0;
+	count[0] = 1;
+	start[1] = 0;
+	count[1] = strlen(char_buf) + 1;
+
+	ierr = SMIOL_put_var(file, "xTime", char_buf, start, count, decomp);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr == SMIOL_LIBRARY_ERROR) {
+		fprintf(test_log, "FAIL - Library Error: %s\n", SMIOL_lib_error_string(context));
+		errcount++;
+	} else {
+		fprintf(test_log, "FAIL - %s\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+	free(char_buf);
+	free(start);
+	free(count);
+
+	/* SMIOL Put Var with two dimensions */
+	fprintf(test_log, "Everything OK - SMIOL_put_var two dims: ");
+	generate_fake_decomp_2d(context, nEdges, 2, &start, &count);
+	cellsOnEdge = malloc(sizeof(int32_t) * (size_t) count[0] * 2);
+	for (i = 0; i < count[0]; i++){
+		for (j = 0; j < 2; j++){
+			cellsOnEdge[i * 2 + j] = context->comm_rank;
+		}
+	}
+
+	ierr = SMIOL_put_var(file, "cellsOnEdge", cellsOnEdge, start, count, 
+	                     decomp);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr == SMIOL_LIBRARY_ERROR) {
+		fprintf(test_log, "FAIL - Library Error: %s\n", SMIOL_lib_error_string(context));
+		errcount++;
+	} else {
+		fprintf(test_log, "FAIL - %s\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+	free(cellsOnEdge);
+	free(start);
+	free(count);
+
+	fprintf(test_log, "Everything OK - SMIOL_put_var large n: ");
+	generate_fake_decomp_1d(context, nVertices, &start, &count);
+	double_buf = malloc(sizeof(double) * *count);
+	for (i = 0; i < *count; i++){
+		double_buf[i] = (double) context->comm_rank;
+	}
+
+	ierr = SMIOL_put_var(file, "large_real64", double_buf, start, count, 
+	                     decomp);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr == SMIOL_LIBRARY_ERROR) {
+		fprintf(test_log, "FAIL - Library Error: %s\n", SMIOL_lib_error_string(context));
+		errcount++;
+	} else {
+		fprintf(test_log, "FAIL - %s\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+
+	free(double_buf);
+	free(start);
+	free(count);
+
 
 
 	/* Close the SMIOL file */

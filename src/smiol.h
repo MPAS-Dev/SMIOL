@@ -70,7 +70,7 @@ int SMIOL_inquire_dim(struct SMIOL_file *file, const char *dimname, SMIOL_Offset
 int SMIOL_define_var(struct SMIOL_file *file, const char *varname, int vartype, int ndims, const char **dimnames);
 int SMIOL_inquire_var(struct SMIOL_file *file, const char *varname, int *vartype, int *ndims, char **dimnames);
 int SMIOL_put_var(struct SMIOL_file *file, const char *varname, 
-                  const void *buf, SMIOL_Offset start, SMIOL_Offset count, 
+                  const void *buf, SMIOL_Offset *start, SMIOL_Offset *count, 
 				  struct SMIOL_decomp *decomp);
 int SMIOL_get_var(void);
 
