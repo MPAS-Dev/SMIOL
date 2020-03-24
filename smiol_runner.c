@@ -151,6 +151,9 @@ int main(int argc, char **argv)
 	compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
 	io_elements = malloc(sizeof(SMIOL_Offset) * n_io_elements);
 
+	memset((void *)compute_elements, 0, sizeof(SMIOL_Offset) * n_compute_elements);
+	memset((void *)io_elements, 0, sizeof(SMIOL_Offset) * n_io_elements);
+
 	ierr = SMIOL_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements, &decomp);
 	if (ierr != SMIOL_SUCCESS) {
 		printf("ERROR: SMIOL_create_decomp - SMIOL_SUCCESS was not returned\n");
@@ -692,6 +695,8 @@ int test_decomp(FILE *test_log)
 	n_io_elements = 1;
 	compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
 	io_elements = malloc(sizeof(SMIOL_Offset) * n_io_elements);
+	memset((void *)compute_elements, 0, sizeof(SMIOL_Offset) * n_compute_elements);
+	memset((void *)io_elements, 0, sizeof(SMIOL_Offset) * n_io_elements);
 	ierr = SMIOL_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements, &decomp);
 	if (ierr == SMIOL_SUCCESS && decomp != NULL) {
 		fprintf(test_log, "PASS\n");
@@ -725,6 +730,8 @@ int test_decomp(FILE *test_log)
 	n_io_elements = 1000000;
 	compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
 	io_elements = malloc(sizeof(SMIOL_Offset) * n_io_elements);
+	memset((void *)compute_elements, 0, sizeof(SMIOL_Offset) * n_compute_elements);
+	memset((void *)io_elements, 0, sizeof(SMIOL_Offset) * n_io_elements);
 	ierr = SMIOL_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements, &decomp);
 	if (ierr == SMIOL_SUCCESS && decomp != NULL) {
 		fprintf(test_log, "PASS\n");

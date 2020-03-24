@@ -126,6 +126,9 @@ program smiol_runner
     allocate(compute_elements(n_compute_elements))
     allocate(io_elements(n_io_elements))
 
+    compute_elements(:) = 0
+    io_elements(:) = 0
+
     if (SMIOLf_create_decomp(context, n_compute_elements, compute_elements, &
                              n_io_elements, io_elements, decomp) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "Error: SMIOLf_create_decomp was not called successfully"
@@ -600,6 +603,8 @@ contains
         n_io_elements = 1
         allocate(compute_elements(n_compute_elements))
         allocate(io_elements(n_io_elements))
+        compute_elements(:) = 0
+        io_elements(:) = 0
         ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements, decomp)
         if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
             write(test_log,'(a)') "PASS"
@@ -630,6 +635,8 @@ contains
         n_io_elements = 1000000
         allocate(compute_elements(n_compute_elements))
         allocate(io_elements(n_io_elements))
+        compute_elements(:) = 0
+        io_elements(:) = 0
         ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements, decomp)
         if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
             write(test_log,'(a)') "PASS"
