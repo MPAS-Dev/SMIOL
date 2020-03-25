@@ -68,6 +68,13 @@ module SMIOLf
         !
         type(c_ptr) :: comp_list  ! Elements to be sent/received from/on a compute task
         type(c_ptr) :: io_list    ! Elements to be send/received from/on an I/O task
+
+        ! Offset start location in global variables with this decomposition for
+        ! each dimension for this task
+        type(c_ptr) :: start
+        ! Offset length/count from start in global variables with this
+        ! decpomosition for each dimension for this task
+        type(c_ptr) :: count
     end type SMIOLf_decomp
 
 
