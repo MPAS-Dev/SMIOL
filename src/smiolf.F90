@@ -977,31 +977,36 @@ contains
     !
     !> \brief Creates a mapping between compute elements and I/O elements
     !> \details
-    !>  Allocate a SMIOLf_decomp and copy compute_elements and io_elements into 
-    !>  it. On success, SMIOL_SUCCESS is returned and decomp will point to a 
-    !>  valid SMIOL decomp. On error, decomp will be unassociated and a SMIOL 
-    !>  error code will be returned.
+    !>  Given arrays of global element IDs that each task computes and global
+    !>  element IDs that each task reads/writes, this routine works out a mapping
+    !>  of elements between compute and I/O tasks.
+    !>
+    !>  If all input arguments are determined to be valid and if the routine is
+    !>  successful in working out a mapping, the decomp pointer is allocated
+    !>  and given valid contents, and SMIOL_SUCCESS is returned; otherwise
+    !>  a non-success error code is returned and the decomp pointer is unassociated.
     !
     !-----------------------------------------------------------------------
     integer function SMIOLf_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements, decomp) &
                                           result(ierr)
 
-        use iso_c_binding, only : c_size_t
-        use iso_c_binding, only : c_ptr, c_null_ptr, c_loc, c_f_pointer, c_associated
+        use iso_c_binding, only : c_size_t, c_ptr, c_null_ptr, c_loc, c_f_pointer, c_associated
 
         implicit none
 
-        type (SMIOLf_context), pointer :: context
+        ! Arguments
+        type (SMIOLf_context), target, intent(in) :: context
         integer(kind=c_size_t), intent(in) :: n_compute_elements
         integer(kind=SMIOL_offset_kind), dimension(n_compute_elements), target, intent(in) :: compute_elements
         integer(kind=c_size_t), intent(in) :: n_io_elements
         integer(kind=SMIOL_offset_kind), dimension(n_io_elements), target, intent(in) :: io_elements
         type (SMIOLf_decomp), pointer, intent(inout) :: decomp
 
-        type (c_ptr) :: c_context = c_null_ptr
-        type (c_ptr) :: c_decomp = c_null_ptr
-        type (c_ptr) :: c_compute_elements = c_null_ptr
-        type (c_ptr) :: c_io_elements = c_null_ptr
+        ! Local variables
+        type (c_ptr) :: c_context
+        type (c_ptr) :: c_decomp
+        type (c_ptr) :: c_compute_elements
+        type (c_ptr) :: c_io_elements
         
         interface
             function SMIOL_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements, decomp) &
@@ -1009,35 +1014,40 @@ contains
                 use iso_c_binding, only : c_size_t, c_ptr, c_int
                 type (c_ptr), value :: context
                 integer(c_size_t), value :: n_compute_elements
-                type(c_ptr), value :: compute_elements
+                type (c_ptr), value :: compute_elements
                 integer(c_size_t), value :: n_io_elements
-                type(c_ptr), value :: io_elements
+                type (c_ptr), value :: io_elements
                 integer(kind=c_int) :: ierr
-                type(c_ptr) :: decomp
+                type (c_ptr) :: decomp
             end function
         end interface
 
-        ierr = SMIOL_SUCCESS
 
-        ! Translate Fortran types into C interoperable types
 
-        if (associated(context)) then
-            c_context = c_loc(context)
-        end if
-
+        ! Get C pointers to Fortran types
+        c_context = c_loc(context)
         c_compute_elements = c_loc(compute_elements)
         c_io_elements = c_loc(io_elements)
 
-        ! Create SMIOL_decomp type via c SMIOL_create_decomp
-        ierr = SMIOL_create_decomp(c_context, n_compute_elements, c_compute_elements, n_io_elements, c_io_elements, c_decomp)
+        c_decomp = c_null_ptr
 
-        ! Error check and translate c_decomp ptr into Fortran SMIOLf_decomp 
-        if (.not. c_associated(c_decomp)) then
-            nullify(decomp)
-            ierr = SMIOL_FORTRAN_ERROR
+        ierr = SMIOL_create_decomp(c_context, n_compute_elements, c_compute_elements, &
+                                   n_io_elements, c_io_elements, c_decomp)
+
+        ! Error check and translate c_decomp pointer into a Fortran SMIOLf_decomp pointer
+        if (ierr == SMIOL_SUCCESS) then
+            if (c_associated(c_decomp)) then
+                call c_f_pointer(c_decomp, decomp)
+            else
+                nullify(decomp)
+                ierr = SMIOL_FORTRAN_ERROR
+            end if
         else
-            call c_f_pointer(c_decomp, decomp)
-        endif
+            nullify(decomp)
+            if (c_associated(c_decomp)) then
+                ierr = SMIOL_FORTRAN_ERROR
+            endif
+        end if
 
     end function SMIOLf_create_decomp
 
