@@ -1191,6 +1191,9 @@ int SMIOL_create_decomp(struct SMIOL_context *context,
 		return SMIOL_MALLOC_FAILURE;
 	}
 
+	(*decomp)->context = context;
+
+
 	/*
 	 * Scan through io_ids to determine number of unique neighbors that
 	 * compute elements read/written on this task, and also determine
