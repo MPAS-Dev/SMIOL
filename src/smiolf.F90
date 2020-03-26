@@ -759,7 +759,9 @@ contains
     !>  Detailed description of what this routine does.
     !
     !-----------------------------------------------------------------------
-    integer function SMIOLf_put_var_char(file, decomp, varname, buf) result(ierr)
+    integer function SMIOLf_put_var_char(file, decomp, varname, buf, bufsize) result(ierr)
+
+        use iso_c_binding, only : c_char, c_loc, c_ptr, c_null_ptr, c_null_char
 
         implicit none
 
@@ -768,9 +770,50 @@ contains
         character(len=*), intent(in) :: varname
         ! NOTE: The definition of buf for SMIOLf_put_var_char may change in later
         ! commits
-        character(len=*), dimension(:), intent(in), target :: buf
+        integer, intent(in), value :: bufsize
+        character(len=*), dimension(bufsize), intent(in), target :: buf
 
-        ierr = 0
+        integer :: i
+        character(kind=c_char), dimension(:), pointer :: c_varname
+        type (c_ptr) :: c_file
+        type (c_ptr) :: c_decomp
+        type (c_ptr) :: c_buf
+
+        interface
+            function SMIOL_put_var(file, decomp, varname, buf) result(ierr) bind(C, name='SMIOL_put_var')
+                use iso_c_binding, only : c_ptr, c_char, c_int
+                type (c_ptr), value :: file
+                type (c_ptr), value :: decomp
+                character(kind=c_char), dimension(*) :: varname
+                type (c_ptr), value :: buf
+                integer(kind=c_int) :: ierr
+            end function
+        end interface
+
+        c_file = c_null_ptr
+        c_decomp = c_null_ptr
+        c_buf = c_null_ptr
+
+        !
+        ! file, decomp and buf are all targets, so no need to check if they are
+        ! associated or not
+        !
+        c_file = c_loc(file)
+        c_decomp = c_loc(decomp)
+        c_buf = c_loc(buf)
+
+        !
+        ! Convert variable name string
+        !
+        allocate(c_varname(len_trim(varname) + 1))
+        do i=1,len_trim(varname)
+            c_varname(i) = varname(i:i)
+        end do
+        c_varname(i) = c_null_char
+
+        ierr = SMIOL_put_var(c_file, c_decomp, c_varname, c_buf)
+
+        deallocate(c_varname)
 
     end function SMIOLf_put_var_char
 
@@ -782,18 +825,59 @@ contains
     !>  Detailed description of what this routine does.
     !
     !-----------------------------------------------------------------------
-    integer function SMIOLf_put_var_int(file, decomp, varname, buf) result(ierr)
+    integer function SMIOLf_put_var_int(file, decomp, varname, buf, bufsize) result(ierr)
 
-        use iso_c_binding, only : c_int
+        use iso_c_binding, only : c_char, c_int, c_loc, c_ptr, c_null_ptr, c_null_char
 
         implicit none
 
         type(SMIOLf_file), target :: file
         type(SMIOLf_decomp), target :: decomp
         character(len=*), intent(in) :: varname
-        integer(kind=c_int), dimension(:), intent(in), target :: buf
+        integer, intent(in) :: bufsize
+        integer(kind=c_int), dimension(bufsize), intent(in), target :: buf
 
-        ierr = 0
+        integer :: i
+        character(kind=c_char), dimension(:), pointer :: c_varname
+        type (c_ptr) :: c_file
+        type (c_ptr) :: c_decomp
+        type (c_ptr) :: c_buf
+
+        interface
+            function SMIOL_put_var(file, decomp, varname, buf) result(ierr) bind(C, name='SMIOL_put_var')
+                use iso_c_binding, only : c_ptr, c_char, c_int
+                type (c_ptr), value :: file
+                type (c_ptr), value :: decomp
+                character(kind=c_char), dimension(*) :: varname
+                type (c_ptr), value :: buf
+                integer(kind=c_int) :: ierr
+            end function
+        end interface
+
+        c_file = c_null_ptr
+        c_decomp = c_null_ptr
+        c_buf = c_null_ptr
+
+        !
+        ! file, decomp and buf are all targets, so no need to check if they are
+        ! associated or not
+        !
+        c_file = c_loc(file)
+        c_decomp = c_loc(decomp)
+        c_buf = c_loc(buf)
+
+        !
+        ! Convert variable name string
+        !
+        allocate(c_varname(len_trim(varname) + 1))
+        do i=1,len_trim(varname)
+            c_varname(i) = varname(i:i)
+        end do
+        c_varname(i) = c_null_char
+
+        ierr = SMIOL_put_var(c_file, c_decomp, c_varname, c_buf)
+
+        deallocate(c_varname)
 
     end function SMIOLf_put_var_int
 
@@ -805,18 +889,59 @@ contains
     !>  Detailed description of what this routine does.
     !
     !-----------------------------------------------------------------------
-    integer function SMIOLf_put_var_real32(file, decomp, varname, buf) result(ierr)
+    integer function SMIOLf_put_var_real32(file, decomp, varname, buf, bufsize) result(ierr)
 
-        use iso_c_binding, only : c_float
+        use iso_c_binding, only : c_char, c_float, c_loc, c_ptr, c_null_ptr, c_null_char
 
         implicit none
 
         type(SMIOLf_file), target :: file
         type(SMIOLf_decomp), target :: decomp
         character(len=*), intent(in) :: varname
-        real(kind=c_float), dimension(:), intent(in), target :: buf
+        integer, intent(in) :: bufsize
+        real(kind=c_float), dimension(bufsize), intent(in), target :: buf
 
-        ierr = 0
+        integer :: i
+        character(kind=c_char), dimension(:), pointer :: c_varname
+        type (c_ptr) :: c_file
+        type (c_ptr) :: c_decomp
+        type (c_ptr) :: c_buf
+
+        interface
+            function SMIOL_put_var(file, decomp, varname, buf) result(ierr) bind(C, name='SMIOL_put_var')
+                use iso_c_binding, only : c_ptr, c_char, c_int
+                type (c_ptr), value :: file
+                type (c_ptr), value :: decomp
+                character(kind=c_char), dimension(*) :: varname
+                type (c_ptr), value :: buf
+                integer(kind=c_int) :: ierr
+            end function
+        end interface
+
+        c_file = c_null_ptr
+        c_decomp = c_null_ptr
+        c_buf = c_null_ptr
+
+        !
+        ! file, decomp and buf are all targets, so no need to check if they are
+        ! associated or not
+        !
+        c_file = c_loc(file)
+        c_decomp = c_loc(decomp)
+        c_buf = c_loc(buf)
+
+        !
+        ! Convert variable name string
+        !
+        allocate(c_varname(len_trim(varname) + 1))
+        do i=1,len_trim(varname)
+            c_varname(i) = varname(i:i)
+        end do
+        c_varname(i) = c_null_char
+
+        ierr = SMIOL_put_var(c_file, c_decomp, c_varname, c_buf)
+
+        deallocate(c_varname)
 
     end function SMIOLf_put_var_real32
 
@@ -828,18 +953,59 @@ contains
     !>  Detailed description of what this routine does.
     !
     !-----------------------------------------------------------------------
-    integer function SMIOLf_put_var_real64(file, decomp, varname, buf) result(ierr)
+    integer function SMIOLf_put_var_real64(file, decomp, varname, buf, bufsize) result(ierr)
 
-        use iso_c_binding, only : c_double
+        use iso_c_binding, only : c_char, c_double, c_loc, c_ptr, c_null_ptr, c_null_char
 
         implicit none
 
         type(SMIOLf_file), target :: file
         type(SMIOLf_decomp), target :: decomp
         character(len=*), intent(in) :: varname
-        real(kind=c_double), dimension(:), intent(in), target :: buf
+        integer, intent(in) :: bufsize
+        real(kind=c_double), dimension(bufsize), intent(in), target :: buf
 
-        ierr = 0
+        integer :: i
+        character(kind=c_char), dimension(:), pointer :: c_varname
+        type (c_ptr) :: c_file
+        type (c_ptr) :: c_decomp
+        type (c_ptr) :: c_buf
+
+        interface
+            function SMIOL_put_var(file, decomp, varname, buf) result(ierr) bind(C, name='SMIOL_put_var')
+                use iso_c_binding, only : c_ptr, c_char, c_int
+                type (c_ptr), value :: file
+                type (c_ptr), value :: decomp
+                character(kind=c_char), dimension(*) :: varname
+                type (c_ptr), value :: buf
+                integer(kind=c_int) :: ierr
+            end function
+        end interface
+
+        c_file = c_null_ptr
+        c_decomp = c_null_ptr
+        c_buf = c_null_ptr
+
+        !
+        ! file, decomp and buf are all targets, so no need to check if they are
+        ! associated or not
+        !
+        c_file = c_loc(file)
+        c_decomp = c_loc(decomp)
+        c_buf = c_loc(buf)
+
+        !
+        ! Convert variable name string
+        !
+        allocate(c_varname(len_trim(varname) + 1))
+        do i=1,len_trim(varname)
+            c_varname(i) = varname(i:i)
+        end do
+        c_varname(i) = c_null_char
+
+        ierr = SMIOL_put_var(c_file, c_decomp, c_varname, c_buf)
+
+        deallocate(c_varname)
 
     end function SMIOLf_put_var_real64
 

@@ -11,6 +11,7 @@ program smiol_runner
     integer :: ierr
     integer :: my_proc_id
     integer :: test_log = 42
+    integer :: buf_size
     integer, dimension(:), pointer :: int_buf
     integer(kind=c_size_t) :: n_compute_elements = 1
     integer(kind=c_size_t) :: n_io_elements = 1
@@ -190,9 +191,10 @@ program smiol_runner
         stop 1
     endif
 
-    allocate(int_buf(1))
+    buf_size = 1
+    allocate(int_buf(buf_size))
     int_buf(1) = 1
-    if (SMIOLf_put_var(file, decomp, 'indexToCellID', int_buf) /= SMIOL_SUCCESS) then
+    if (SMIOLf_put_var(file, decomp, 'indexToCellID', int_buf, buf_size) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_put_var' was not called successfully"
         stop 1
     endif
