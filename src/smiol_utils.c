@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <stdio.h>
 #include "smiol_utils.h"
 
 /*
@@ -95,6 +96,89 @@ int64_t *search_triplet_array(int64_t key, size_t n_arr, int64_t *arr,
 	}
 
 	return res;
+}
+
+/*******************************************************************************
+ *
+ * print_lists
+ *
+ * Writes the contents of comp_list and io_list arrays to a text file
+ *
+ * Given pointers to the comp_list and io_list arrays from a SMIOL_decomp
+ * structure, writes the contents of these arrays to a text file in a human-
+ * readable format.
+ *
+ * Because the comp_list and io_list arrays are unique to each MPI task, this
+ * routine takes as an argument the MPI rank of the calling task. The output
+ * text file is named list.NNNN.txt, where NNNN is the rank of the task.
+ *
+ *******************************************************************************/
+void print_lists(int comm_rank, int64_t *comp_list, int64_t *io_list)
+{
+	char filename[14];
+	FILE *f;
+	int64_t n_neighbors;
+	int64_t n_elems, neighbor;
+	int i, j, k;
+
+	snprintf(filename, 14, "list.%4.4i.txt", comm_rank);
+
+	f = fopen(filename, "w");
+
+	/*
+	 * The lists below are structured as follows:
+	 *   list[0] - the number of neighbors for which a task sends/recvs
+	 *                                                                             |
+	 *   list[n] - neighbor task ID                                                | repeated for
+	 *   list[n+1] - number of elements, m, to send/recv to/from the neighbor      | each neighbor
+	 *   list[n+2 .. n+2+m] - local element IDs to send/recv to/from the neighbor  |
+	 *                                                                             |
+	 */
+
+	fprintf(f, "===== comp_list for MPI rank %i =====\n", comm_rank);
+	fprintf(f, "Our compute elements are read/written on %i tasks\n",
+	        (int)comp_list[0]);
+	j = 0;
+	n_neighbors = comp_list[j++];
+	for (i = 0; i < n_neighbors; i++) {
+		neighbor = comp_list[j++];
+		n_elems = comp_list[j++];
+		if (neighbor == comm_rank) {
+			fprintf(f, "----- copy %i elements -----\n",
+			        (int)n_elems);
+		} else {
+			fprintf(f, "----- send %i elements to %i -----\n",
+			        (int)n_elems, (int)neighbor);
+		}
+		for (k = 0; k < n_elems; k++) {
+			fprintf(f, "  %i\n", (int)comp_list[j+k]);
+		}
+		j += n_elems;
+	}
+
+	fprintf(f, "\n\n");
+	fprintf(f, "===== io_list for MPI rank %i =====\n", comm_rank);
+	fprintf(f, "Our I/O elements are computed on %i tasks\n",
+	        (int)io_list[0]);
+	j = 0;
+	n_neighbors = io_list[j++];
+	for (i = 0; i < n_neighbors; i++) {
+		neighbor = io_list[j++];
+		n_elems = io_list[j++];
+		if (neighbor == comm_rank) {
+			fprintf(f, "----- copy %i elements -----\n",
+			        (int)n_elems);
+		} else {
+			fprintf(f, "----- recv %i elements from %i -----\n",
+			        (int)n_elems, (int)neighbor);
+		}
+		for (k = 0; k < n_elems; k++) {
+			fprintf(f, "  %i\n", (int)io_list[j+k]);
+		}
+		j += n_elems;
+	}
+
+	fclose(f);
 }
 
 
