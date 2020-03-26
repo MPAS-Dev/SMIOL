@@ -18,6 +18,7 @@ int main(int argc, char **argv)
 {
 	int ierr;
 	int my_proc_id;
+	int *int_buf;
 	SMIOL_Offset dimsize;
 	size_t n_compute_elements = 1;
 	size_t n_io_elements = 1;
@@ -145,16 +146,6 @@ int main(int argc, char **argv)
 	free(compute_elements);
 	free(io_elements);
 
-	if ((ierr = SMIOL_free_decomp(&decomp)) != SMIOL_SUCCESS) {
-		fprintf(test_log, "ERROR: SMIOL_free_decomp: %s ",
-			SMIOL_error_string(ierr));
-		return 1;
-	}
-
-	if (decomp != NULL) {
-		fprintf(test_log, "ERROR: SMIOL_free_decomp - Decomp not 'NULL' after free\n");
-		return 1;
-	}
 
 	if ((ierr = SMIOL_inquire()) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_inquire: %s ",
@@ -205,20 +196,26 @@ int main(int argc, char **argv)
 		fprintf(test_log, "ERROR: SMIOL_define_var: %s ", SMIOL_error_string(ierr));
 		return 1;
 	}
+
+	/*
+	 * Define a new, single dimension integer var for SMIOL_put_var test.
+	 */
+	snprintf(dimnames[0], 64, "nCells");
+	if ((ierr = SMIOL_define_var(file, "indexToCellID", SMIOL_INT32, 1, (const char**)dimnames)) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_define_var: %s ", SMIOL_error_string(ierr));
+		return 1;
+	}
 	free(dimnames[0]);
 	free(dimnames[1]);
 	free(dimnames);
 
-	if ((ierr = SMIOL_close_file(&file)) != SMIOL_SUCCESS) {
-		fprintf(test_log, "ERROR: SMIOL_close_file: %s ", SMIOL_error_string(ierr));
-		return 1;
-	}
-
-	if ((ierr = SMIOL_put_var()) != SMIOL_SUCCESS) {
+	int_buf = malloc(sizeof(int) * 1);
+	if ((ierr = SMIOL_put_var(file, decomp, "indexToCellID", int_buf)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_put_var: %s ",
 			SMIOL_error_string(ierr));
 		return 1;
 	}
+	free(int_buf);
 
 	if ((ierr = SMIOL_get_var()) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_get_var: %s ",
@@ -241,6 +238,22 @@ int main(int argc, char **argv)
 	if ((ierr = SMIOL_set_option()) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_set_option: %s ",
 			SMIOL_error_string(ierr));
+		return 1;
+	}
+
+	if ((ierr = SMIOL_free_decomp(&decomp)) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_free_decomp: %s ",
+			SMIOL_error_string(ierr));
+		return 1;
+	}
+
+	if (decomp != NULL) {
+		fprintf(test_log, "ERROR: SMIOL_free_decomp - Decomp not 'NULL' after free\n");
+		return 1;
+	}
+
+	if ((ierr = SMIOL_close_file(&file)) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_close_file: %s ", SMIOL_error_string(ierr));
 		return 1;
 	}
 

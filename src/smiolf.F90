@@ -77,6 +77,12 @@ module SMIOLf
         type(c_ptr) :: count
     end type SMIOLf_decomp
 
+    interface SMIOLf_put_var
+        module procedure SMIOLf_put_var_char
+        module procedure SMIOLf_put_var_int
+        module procedure SMIOLf_put_var_real32
+        module procedure SMIOLf_put_var_real64
+    end interface
 
 contains
 
@@ -746,20 +752,96 @@ contains
 
 
     !-----------------------------------------------------------------------
-    !  routine SMIOLf_put_var
+    !  routine SMIOLf_put_var_char
     !
-    !> \brief Writes a variable to a file
+    !> \brief Writes a character variable to a file
     !> \details
     !>  Detailed description of what this routine does.
     !
     !-----------------------------------------------------------------------
-    integer function SMIOLf_put_var() result(ierr)
+    integer function SMIOLf_put_var_char(file, decomp, varname, buf) result(ierr)
 
         implicit none
 
+        type(SMIOLf_file), target :: file
+        type(SMIOLf_decomp), target :: decomp
+        character(len=*), intent(in) :: varname
+        ! NOTE: The definition of buf for SMIOLf_put_var_char may change in later
+        ! commits
+        character(len=*), dimension(:), intent(in), target :: buf
+
         ierr = 0
 
-    end function SMIOLf_put_var
+    end function SMIOLf_put_var_char
+
+    !-----------------------------------------------------------------------
+    !  routine SMIOLf_put_var_int
+    !
+    !> \brief Writes a integer variable to a file
+    !> \details
+    !>  Detailed description of what this routine does.
+    !
+    !-----------------------------------------------------------------------
+    integer function SMIOLf_put_var_int(file, decomp, varname, buf) result(ierr)
+
+        use iso_c_binding, only : c_int
+
+        implicit none
+
+        type(SMIOLf_file), target :: file
+        type(SMIOLf_decomp), target :: decomp
+        character(len=*), intent(in) :: varname
+        integer(kind=c_int), dimension(:), intent(in), target :: buf
+
+        ierr = 0
+
+    end function SMIOLf_put_var_int
+
+    !-----------------------------------------------------------------------
+    !  routine SMIOLf_put_var_real32
+    !
+    !> \brief Writes a real32 variable to a file
+    !> \details
+    !>  Detailed description of what this routine does.
+    !
+    !-----------------------------------------------------------------------
+    integer function SMIOLf_put_var_real32(file, decomp, varname, buf) result(ierr)
+
+        use iso_c_binding, only : c_float
+
+        implicit none
+
+        type(SMIOLf_file), target :: file
+        type(SMIOLf_decomp), target :: decomp
+        character(len=*), intent(in) :: varname
+        real(kind=c_float), dimension(:), intent(in), target :: buf
+
+        ierr = 0
+
+    end function SMIOLf_put_var_real32
+
+    !-----------------------------------------------------------------------
+    !  routine SMIOLf_put_var_real64
+    !
+    !> \brief Writes a character variable to a file
+    !> \details
+    !>  Detailed description of what this routine does.
+    !
+    !-----------------------------------------------------------------------
+    integer function SMIOLf_put_var_real64(file, decomp, varname, buf) result(ierr)
+
+        use iso_c_binding, only : c_double
+
+        implicit none
+
+        type(SMIOLf_file), target :: file
+        type(SMIOLf_decomp), target :: decomp
+        character(len=*), intent(in) :: varname
+        real(kind=c_double), dimension(:), intent(in), target :: buf
+
+        ierr = 0
+
+    end function SMIOLf_put_var_real64
 
 
     !-----------------------------------------------------------------------

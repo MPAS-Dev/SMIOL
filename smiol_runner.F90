@@ -11,6 +11,7 @@ program smiol_runner
     integer :: ierr
     integer :: my_proc_id
     integer :: test_log = 42
+    integer, dimension(:), pointer :: int_buf
     integer(kind=c_size_t) :: n_compute_elements = 1
     integer(kind=c_size_t) :: n_io_elements = 1
     integer(kind=SMIOL_offset_kind), dimension(:), pointer :: compute_elements
@@ -135,11 +136,6 @@ program smiol_runner
     deallocate(compute_elements)
     deallocate(io_elements)
 
-    if (SMIOLf_free_decomp(decomp) /= SMIOL_SUCCESS) then
-        write(test_log,'(a)') "Error: SMIOLf_free_decomp was not called successfully"
-        stop 1
-    endif
-
     if (SMIOLf_inquire() /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_inquire' was not called successfully"
         stop 1
@@ -183,20 +179,24 @@ program smiol_runner
         stop 1
     endif
 
+    dimnames(1) = 'nCells'
+    if (SMIOLf_define_var(file, 'indexToCellID', SMIOL_INT32, 1, dimnames) /= SMIOL_SUCCESS) then
+        write(test_log,'(a)') "ERROR: 'SMIOLf_define_var' was not called successfully"
+        stop 1
+    endif
+
     if (SMIOLf_inquire_var(file, 'theta', ndims=ndims) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_inquire_var' was not called successfully"
         stop 1
     endif
 
-    if (SMIOLf_close_file(file) /= SMIOL_SUCCESS) then
-        write(test_log,'(a)') "ERROR: 'SMIOLf_close_file' was not called successfully"
-        stop 1
-    endif
-
-    if (SMIOLf_put_var() /= SMIOL_SUCCESS) then
+    allocate(int_buf(1))
+    int_buf(1) = 1
+    if (SMIOLf_put_var(file, decomp, 'indexToCellID', int_buf) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_put_var' was not called successfully"
         stop 1
     endif
+    deallocate(int_buf)
 
     if (SMIOLf_get_var() /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_get_var' was not called successfully"
@@ -215,6 +215,16 @@ program smiol_runner
 
     if (SMIOLf_set_option() /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_set_option' was not called successfully"
+        stop 1
+    endif
+
+    if (SMIOLf_free_decomp(decomp) /= SMIOL_SUCCESS) then
+        write(test_log,'(a)') "Error: SMIOLf_free_decomp was not called successfully"
+        stop 1
+    endif
+
+    if (SMIOLf_close_file(file) /= SMIOL_SUCCESS) then
+        write(test_log,'(a)') "ERROR: 'SMIOLf_close_file' was not called successfully"
         stop 1
     endif
 

@@ -720,7 +720,8 @@ int SMIOL_inquire_var(struct SMIOL_file *file, const char *varname, int *vartype
  * Detailed description.
  *
  ********************************************************************************/
-int SMIOL_put_var(void)
+int SMIOL_put_var(struct SMIOL_file *file, struct SMIOL_decomp *decomp,
+                  const char *varname, const void *buf)
 {
 	return SMIOL_SUCCESS;
 }
