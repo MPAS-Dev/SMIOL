@@ -6,6 +6,9 @@
 
 #include "smiol_types.h"
 
+#define SMIOL_COMP_TO_IO 1
+#define SMIOL_IO_TO_COMP 2
+
 
 /*
  * Searching and sorting
@@ -14,6 +17,12 @@ void sort_triplet_array(size_t n_arr, SMIOL_Offset *arr, int sort_entry);
 SMIOL_Offset *search_triplet_array(SMIOL_Offset key,
                                    size_t n_arr, SMIOL_Offset *arr,
                                    int search_entry);
+
+/*
+ * Communication
+ */
+int transfer_field(const struct SMIOL_decomp *decomp, int dir,
+                   size_t element_size, const void *in_field, void *out_field);
 
 /*
  * Debugging
