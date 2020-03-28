@@ -13,11 +13,84 @@ int test_open_close(FILE *test_log);
 int test_dimensions(FILE *test_log);
 int test_variables(FILE *test_log);
 int test_decomp(FILE *test_log);
+int test_transfer(FILE *test_log);
 int test_file_sync(FILE *test_log);
 int test_utils(FILE *test_log);
 int compare_decomps(struct SMIOL_decomp *decomp,
                     size_t n_comp_list, SMIOL_Offset *comp_list_correct,
                     size_t n_io_list, SMIOL_Offset *io_list_correct);
+
+/*******************************************************************************
+ *
+ * transfer test macro function
+ *
+ * Tests the transfer_field utility for a given SMIOL_decomp
+ *
+ * Given a SMIOL_decomp and the number of compute and I/O elements assumed by
+ * the SMIOL_decomp, this function:
+ * 1) Allocates a compute field and fills it with a pattern of values
+ * 2) Transfers the field from compute to I/O tasks
+ * 3) Zeros-out the compute field
+ * 4) Adds 42 to the field on I/O tasks
+ * 5) Transfers the field from I/O tasks back to compute tasks
+ * 6) Checks the field on compute tasks.
+ *
+ * If the final values in the compute field are their original values plus 42,
+ * a value of 0 is returned. Otherwise, 1 is returned.
+ *
+ *******************************************************************************/
+#define transfer_type(NAME, TYPE) \
+static int NAME(size_t n_compute_elements, size_t n_io_elements, \
+                struct SMIOL_decomp *decomp) \
+{ \
+	size_t i; \
+	TYPE *comp_field, *io_field; \
+\
+	comp_field = malloc(sizeof(TYPE) * n_compute_elements); \
+	io_field = malloc(sizeof(TYPE) * n_io_elements); \
+\
+	/* Initialize compute field */ \
+	for (i = 0; i < n_compute_elements; i++) { \
+		comp_field[i] = (TYPE)i; \
+	} \
+\
+	/* Transfer field from compute to I/O tasks */ \
+	transfer_field(decomp, SMIOL_COMP_TO_IO, sizeof(TYPE), \
+	               (const void *)comp_field, (void *)io_field); \
+\
+	/* Zero-out the compute field */ \
+	for (i = 0; i < n_compute_elements; i++) { \
+		comp_field[i] = (TYPE)0; \
+	} \
+\
+	/* Add 42 to all elements of the I/O field */ \
+	for (i = 0; i < n_io_elements; i++) { \
+		io_field[i] = io_field[i] + (TYPE)42; \
+	} \
+\
+	/* Transfer the modified field from I/O tasks to compute tasks */ \
+	transfer_field(decomp, SMIOL_IO_TO_COMP, sizeof(TYPE), \
+	               (const void *)io_field, (void *)comp_field); \
+\
+	free(io_field); \
+\
+	/* Verify values in the compute field */ \
+	for (i = 0; i < n_compute_elements; i++) { \
+		if (comp_field[i] != (TYPE)i + (TYPE)42) { \
+			free(comp_field); \
+			return 1; \
+		} \
+	} \
+\
+	free(comp_field); \
+\
+	return 0; \
+}
+
+transfer_type(transfer_float, float)
+transfer_type(transfer_int, int)
+transfer_type(transfer_double, double)
+transfer_type(transfer_char, char)
 
 int main(int argc, char **argv)
 {
@@ -108,6 +181,18 @@ int main(int argc, char **argv)
 	 * Unit tests for SMIOL_create_decomp and SMIOL_free_decomp
 	 */
 	ierr = test_decomp(test_log);
+	if (ierr == 0) {
+		fprintf(test_log, "All tests PASSED!\n\n");
+	}
+	else {
+		fprintf(test_log, "%i tests FAILED!\n\n", ierr);
+	}
+
+
+	/*
+	 * Unit tests transfer_field
+	 */
+	ierr = test_transfer(test_log);
 	if (ierr == 0) {
 		fprintf(test_log, "All tests PASSED!\n\n");
 	}
@@ -962,6 +1047,253 @@ int test_decomp(FILE *test_log)
 
 	} else {
 		fprintf(test_log, "<<< Tests that require exactly 2 MPI tasks will not be run >>>\n");
+	}
+
+	/* Free the SMIOL context */
+	ierr = SMIOL_finalize(&context);
+	if (ierr != SMIOL_SUCCESS || context != NULL) {
+		fprintf(test_log, "Failed to free SMIOL context...\n");
+		return -1;
+	}
+
+	fflush(test_log);
+	ierr = MPI_Barrier(MPI_COMM_WORLD);
+
+	fprintf(test_log, "\n");
+
+	return errcount;
+}
+
+int test_transfer(FILE *test_log)
+{
+	int ierr;
+	int errcount = 0;
+	int comm_rank;
+	int comm_size;
+	int j;
+	size_t i;
+	size_t n_compute_elements, n_io_elements;
+	SMIOL_Offset *compute_elements = NULL, *io_elements = NULL;
+	struct SMIOL_context *context = NULL;
+	struct SMIOL_decomp *decomp = NULL;
+
+	/* Pointers to transfer tests for various element types */
+	int (*testfun[4])(size_t,size_t,struct SMIOL_decomp *) = {
+	    transfer_char,
+	    transfer_int,
+	    transfer_float,
+	    transfer_double };
+
+	/* Names of the element types tested by transfer test function */
+	const char *testname[4] = {
+	    "char",
+	    "int",
+	    "float",
+	    "double" };
+
+	fprintf(test_log, "********************************************************************************\n");
+	fprintf(test_log, "************************* transfer_field unit tests ****************************\n");
+	fprintf(test_log, "\n");
+
+	ierr = MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+	if (ierr != MPI_SUCCESS) {
+		fprintf(test_log, "Failed to get MPI rank...\n");
+		return -1;
+	}
+
+	ierr = MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+	if (ierr != MPI_SUCCESS) {
+		fprintf(test_log, "Failed to get MPI size...\n");
+		return -1;
+	}
+
+	/* Create a SMIOL context for testing decomp routines */
+	ierr = SMIOL_init(MPI_COMM_WORLD, &context);
+	if (ierr != SMIOL_SUCCESS || context == NULL) {
+		fprintf(test_log, "Failed to create SMIOL context...\n");
+		return -1;
+	}
+
+	/*
+	 * The following tests will only be run if there are exactly two MPI
+	 * tasks. In principle, as long as there are at least two MPI ranks in
+	 * MPI_COMM_WORLD, an intracommunicator with exactly two ranks could be
+	 * created for these tests.
+	 */
+	if (comm_size != 2) {
+		fprintf(test_log, "<<< Tests that require exactly 2 MPI tasks will not be run >>>\n");
+
+		/* Free the SMIOL context */
+		ierr = SMIOL_finalize(&context);
+		if (ierr != SMIOL_SUCCESS || context != NULL) {
+			fprintf(test_log, "Failed to free SMIOL context...\n");
+			return -1;
+		}
+
+		return 0;
+	}
+
+	/* Iterate over different test element types and associated functions */
+	for (j = 0; j < 4; j++) {
+
+		/* Even/odd compute, half/half I/O */
+		fprintf(test_log, "Even/odd compute, half/half I/O (%s): ", testname[j]);
+		n_compute_elements = 4;
+		n_io_elements = 4;
+		compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
+		io_elements = malloc(sizeof(SMIOL_Offset) * n_io_elements);
+
+		if (comm_rank == 0) {
+			/* Odd elements */
+			for (i = 0; i < n_compute_elements; i++) {
+				compute_elements[i] = (SMIOL_Offset)(2 * i + 1);
+			}
+
+			/* First half of elements */
+			for (i = 0; i < n_io_elements; i++) {
+				io_elements[i] = (SMIOL_Offset)i;
+			}
+		} else {
+			/* Even elements */
+			for (i = 0; i < n_compute_elements; i++) {
+				compute_elements[i] = (SMIOL_Offset)(2 * i);
+			}
+
+			/* Second half of elements */
+			for (i = 0; i < n_io_elements; i++) {
+				io_elements[i] = (SMIOL_Offset)(4 + i);
+			}
+		}
+		ierr = SMIOL_create_decomp(context,
+		                           n_compute_elements, compute_elements,
+		                           n_io_elements, io_elements, &decomp);
+		if (ierr != SMIOL_SUCCESS || decomp == NULL) {
+			fprintf(test_log, "Failed to create a decomp to test transfer_field...\n");
+			return -1;
+		}
+
+		free(compute_elements);
+		free(io_elements);
+
+		if (testfun[j](n_compute_elements, n_io_elements, decomp) == 0) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL\n");
+			errcount++;
+		}
+
+		ierr = SMIOL_free_decomp(&decomp);
+		if (ierr != SMIOL_SUCCESS || decomp != NULL) {
+			fprintf(test_log, "After previous unit test, SMIOL_free_decomp was unsuccessful...\n");
+			return -1;
+		}
+
+
+		/* Even/odd compute, nothing/all I/O */
+		fprintf(test_log, "Even/odd compute, nothing/all I/O (%s): ", testname[j]);
+		n_compute_elements = 4;
+		if (comm_rank == 0) {
+			n_io_elements = 0;
+		} else {
+			n_io_elements = 8;
+		}
+		compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
+		io_elements = malloc(sizeof(SMIOL_Offset) * n_io_elements);
+
+		if (comm_rank == 0) {
+			/* Odd elements */
+			for (i = 0; i < n_compute_elements; i++) {
+				compute_elements[i] = (SMIOL_Offset)(2 * i + 1);
+			}
+
+			/* No I/O elements */
+		} else {
+			/* Even elements */
+			for (i = 0; i < n_compute_elements; i++) {
+				compute_elements[i] = (SMIOL_Offset)(2 * i);
+			}
+
+			/* All I/O elements */
+			for (i = 0; i < n_io_elements; i++) {
+				io_elements[i] = (SMIOL_Offset)i;
+			}
+		}
+		ierr = SMIOL_create_decomp(context,
+		                           n_compute_elements, compute_elements,
+		                           n_io_elements, io_elements, &decomp);
+		if (ierr != SMIOL_SUCCESS || decomp == NULL) {
+			fprintf(test_log, "Failed to create a decomp to test transfer_field...\n");
+			return -1;
+		}
+
+		free(compute_elements);
+		free(io_elements);
+
+		if (testfun[j](n_compute_elements, n_io_elements, decomp) == 0) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL\n");
+			errcount++;
+		}
+
+		ierr = SMIOL_free_decomp(&decomp);
+		if (ierr != SMIOL_SUCCESS || decomp != NULL) {
+			fprintf(test_log, "After previous unit test, SMIOL_free_decomp was unsuccessful: FAIL\n");
+			errcount++;
+		}
+
+
+		/* All/nothing compute, nothing/all I/O */
+		fprintf(test_log, "All/nothing compute, nothing/all I/O (%s): ", testname[j]);
+		if (comm_rank == 0) {
+			n_compute_elements = 8;
+			n_io_elements = 0;
+		} else {
+			n_compute_elements = 0;
+			n_io_elements = 8;
+		}
+		compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
+		io_elements = malloc(sizeof(SMIOL_Offset) * n_io_elements);
+
+		if (comm_rank == 0) {
+			/* All compute elements */
+			for (i = 0; i < n_compute_elements; i++) {
+				compute_elements[i] = (SMIOL_Offset)(n_compute_elements - 1 - i);
+			}
+
+			/* No I/O elements */
+		} else {
+			/* No compute elements */
+
+			/* All I/O elements */
+			for (i = 0; i < n_io_elements; i++) {
+				io_elements[i] = (SMIOL_Offset)i;
+			}
+		}
+		ierr = SMIOL_create_decomp(context,
+		                           n_compute_elements, compute_elements,
+		                           n_io_elements, io_elements, &decomp);
+		if (ierr != SMIOL_SUCCESS || decomp == NULL) {
+			fprintf(test_log, "Failed to create a decomp to test transfer_field...\n");
+			return -1;
+		}
+
+		free(compute_elements);
+		free(io_elements);
+
+		if (testfun[j](n_compute_elements, n_io_elements, decomp) == 0) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL\n");
+			errcount++;
+		}
+
+		ierr = SMIOL_free_decomp(&decomp);
+		if (ierr != SMIOL_SUCCESS || decomp != NULL) {
+			fprintf(test_log, "After previous unit test, SMIOL_free_decomp was unsuccessful: FAIL\n");
+			errcount++;
+		}
+
 	}
 
 	/* Free the SMIOL context */
