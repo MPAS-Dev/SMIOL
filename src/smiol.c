@@ -1027,6 +1027,7 @@ int SMIOL_create_decomp(struct SMIOL_context *context,
 	buf_out = (SMIOL_Offset *)malloc(sizeof(SMIOL_Offset) * (size_t)2
 	                                 * (size_t)nbuf_out);
 	if (buf_out == NULL) {
+		free(compute_ids);
 		return SMIOL_MALLOC_FAILURE;
 	}
 
@@ -1166,6 +1167,8 @@ int SMIOL_create_decomp(struct SMIOL_context *context,
 	io_ids = (SMIOL_Offset *)malloc(sizeof(SMIOL_Offset) * TRIPLET_SIZE
 	                                * n_io_elements);
 	if (io_ids == NULL) {
+		free(compute_ids);
+		free(buf_out);
 		return SMIOL_MALLOC_FAILURE;
 	}
 
@@ -1188,6 +1191,8 @@ int SMIOL_create_decomp(struct SMIOL_context *context,
 
 	*decomp = (struct SMIOL_decomp *)malloc(sizeof(struct SMIOL_decomp));
 	if ((*decomp) == NULL) {
+		free(compute_ids);
+		free(io_ids);
 		return SMIOL_MALLOC_FAILURE;
 	}
 
@@ -1234,6 +1239,10 @@ int SMIOL_create_decomp(struct SMIOL_context *context,
 	                                 + n_xfer_total);
 	(*decomp)->io_list = (SMIOL_Offset *)malloc(n_list);
 	if ((*decomp)->io_list == NULL) {
+		free(compute_ids);
+		free(io_ids);
+		free(*decomp);
+		*decomp = NULL;
 		return SMIOL_MALLOC_FAILURE;
 	}
 	io_list = (*decomp)->io_list;
@@ -1320,6 +1329,10 @@ int SMIOL_create_decomp(struct SMIOL_context *context,
 	                                 + n_xfer_total);
 	(*decomp)->comp_list = (SMIOL_Offset *)malloc(n_list);
 	if ((*decomp)->comp_list == NULL) {
+		free(compute_ids);
+		free((*decomp)->io_list);
+		free(*decomp);
+		*decomp = NULL;
 		return SMIOL_MALLOC_FAILURE;
 	}
 	comp_list = (*decomp)->comp_list;
