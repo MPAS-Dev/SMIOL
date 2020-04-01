@@ -126,6 +126,9 @@ program smiol_runner
     allocate(compute_elements(n_compute_elements))
     allocate(io_elements(n_io_elements))
 
+    compute_elements(:) = 0
+    io_elements(:) = 0
+
     if (SMIOLf_create_decomp(context, n_compute_elements, compute_elements, &
                              n_io_elements, io_elements, decomp) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "Error: SMIOLf_create_decomp was not called successfully"
@@ -525,18 +528,36 @@ contains
 
         integer, intent(in) :: test_log
         integer :: ierrcount
+        integer :: comm_size
+        integer :: comm_rank
         integer(kind=c_size_t) :: n_compute_elements
         integer(kind=c_size_t) :: n_io_elements
+        integer(kind=c_size_t) :: i
         integer(kind=SMIOL_offset_kind), dimension(:), pointer :: compute_elements
         integer(kind=SMIOL_offset_kind), dimension(:), pointer :: io_elements
         type (SMIOLf_context), pointer :: context
         type (SMIOLf_decomp), pointer :: decomp => null()
+        logical :: matched
 
         write(test_log,'(a)') '********************************************************************************'
         write(test_log,'(a)') '************ SMIOLf_create_decomp / SMIOLf_free_decomp tests *******************'
         write(test_log,'(a)') ''
 
         ierrcount = 0
+
+        call MPI_Comm_rank(MPI_COMM_WORLD, comm_rank, ierr)
+        if (ierr /= MPI_SUCCESS) then
+            write(test_log, '(a)') 'Failed to get MPI rank...'
+            ierrcount = -1
+            return
+        end if
+
+        call MPI_Comm_size(MPI_COMM_WORLD, comm_size, ierr)
+        if (ierr /= MPI_SUCCESS) then
+            write(test_log, '(a)') 'Failed to get MPI size...'
+            ierrcount = -1
+            return
+        end if
 
         ! Create a SMIOL context for testing decomp routines
         nullify(context)
@@ -582,6 +603,8 @@ contains
         n_io_elements = 1
         allocate(compute_elements(n_compute_elements))
         allocate(io_elements(n_io_elements))
+        compute_elements(:) = 0
+        io_elements(:) = 0
         ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements, decomp)
         if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
             write(test_log,'(a)') "PASS"
@@ -608,10 +631,12 @@ contains
 
         ! Large number of Compute and IO Elements
         write(test_log,'(a)',advance='no') 'Everything OK for SMIOLf_create_decomp large number of elements: '
-        n_compute_elements = 10000000
-        n_io_elements = 10000000
+        n_compute_elements = 1000000
+        n_io_elements = 1000000
         allocate(compute_elements(n_compute_elements))
         allocate(io_elements(n_io_elements))
+        compute_elements(:) = 0
+        io_elements(:) = 0
         ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements, decomp)
         if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
             write(test_log,'(a)') "PASS"
@@ -648,6 +673,195 @@ contains
             write(test_log,'(a)') "FAIL - ierr returned SMIOL_SUCCESS, but the decomp became associated..."
             ierrcount = ierrcount + 1
         endif
+
+        !
+        ! The following tests will only be run if there are exactly two MPI tasks.
+        ! In principle, as long as there are at least two MPI ranks in MPI_COMM_WORLD,
+        ! an intracommunicator with exactly two ranks could be created for these tests.
+        !
+        if (comm_size == 2) then
+
+            ! Even/odd compute, half/half I/O
+            write(test_log,'(a)',advance='no') 'Even/odd compute, half/half I/O: '
+            n_compute_elements = 4
+            n_io_elements = 4
+            allocate(compute_elements(n_compute_elements))
+            allocate(io_elements(n_io_elements))
+
+            if (comm_rank == 0) then
+                do i = 1, n_compute_elements
+                    compute_elements(i) = 2 * (i-1) + 1      ! Odd elements
+                end do
+                do i = 1, n_io_elements
+                    io_elements(i) = (i-1)                   ! First half of elements
+                end do
+            else
+                do i = 1, n_compute_elements
+                    compute_elements(i) = 2 * (i-1)          ! Even elements
+                end do
+                do i = 1, n_io_elements
+                    io_elements(i) = 4 + (i-1)               ! Second half of elements
+                end do
+            end if
+
+            ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements, decomp)
+            if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
+
+                ! The correct comp_list and io_list arrays, below, were verified manually
+                if (comm_rank == 0) then
+                    matched = compare_decomps(decomp, &
+                                              [ integer(kind=SMIOL_offset_kind) :: 2, 0, 2, 0, 1, 1, 2, 2, 3 ], &
+                                              [ integer(kind=SMIOL_offset_kind) :: 2, 0, 2, 1, 3, 1, 2, 0, 2 ])
+                else
+                    matched = compare_decomps(decomp, &
+                                              [ integer(kind=SMIOL_offset_kind) :: 2, 0, 2, 0, 1, 1, 2, 2, 3 ], &
+                                              [ integer(kind=SMIOL_offset_kind) :: 2, 0, 2, 1, 3, 1, 2, 0, 2 ])
+                end if
+
+                if (matched) then
+                    write(test_log,'(a)') 'PASS'
+                else
+                    write(test_log,'(a)') 'FAIL - the decomp did not contain the expected values'
+                    ierrcount = ierrcount + 1
+                end if
+            else
+                write(test_log, '(a)') 'FAIL - Either SMIOL_SUCCESS was not returned or decomp was not associated'
+                ierrcount = ierrcount + 1
+            end if
+
+            deallocate(compute_elements)
+            deallocate(io_elements)
+
+            ierr = SMIOLf_free_decomp(decomp)
+            if (ierr /= SMIOL_SUCCESS .or. associated(decomp)) then
+                write(test_log,'(a)') 'After previous unit test, SMIOL_free_decomp was unsuccessful: FAIL'
+                ierrcount = ierrcount + 1
+            end if
+
+
+            ! Even/odd compute, nothing/all I/O
+            write(test_log,'(a)',advance='no') 'Even/odd compute, nothing/all I/O: '
+            n_compute_elements = 4
+            if (comm_rank == 0) then
+                n_io_elements = 0
+            else
+                n_io_elements = 8
+            end if
+            allocate(compute_elements(n_compute_elements))
+            allocate(io_elements(n_io_elements))
+
+            if (comm_rank == 0) then
+                do i = 1, n_compute_elements
+                    compute_elements(i) = 2 * (i-1) + 1      ! Odd elements
+                end do
+
+                ! No I/O elements
+            else
+                do i = 1, n_compute_elements
+                    compute_elements(i) = 2 * (i-1)          ! Even elements
+                end do
+                do i = 1, n_io_elements
+                    io_elements(i) = (i-1)                   ! All I/O elements
+                end do
+            end if
+
+            ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements, decomp)
+            if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
+
+                ! The correct comp_list and io_list arrays, below, were verified manually
+                if (comm_rank == 0) then
+                    matched = compare_decomps(decomp, &
+                                              [ integer(kind=SMIOL_offset_kind) :: 1, 1, 4, 0, 1, 2, 3 ], &
+                                              [ integer(kind=SMIOL_offset_kind) :: 0 ])
+                else
+                    matched = compare_decomps(decomp, &
+                                              [ integer(kind=SMIOL_offset_kind) :: 1, 1, 4, 0, 1, 2, 3 ], &
+                                              [ integer(kind=SMIOL_offset_kind) :: 2, 0, 4, 1, 3, 5, 7, 1, 4, 0, 2, 4, 6 ])
+                end if
+
+                if (matched) then
+                    write(test_log,'(a)') 'PASS'
+                else
+                    write(test_log,'(a)') 'FAIL - the decomp did not contain the expected values'
+                    ierrcount = ierrcount + 1
+                end if
+            else
+                write(test_log, '(a)') 'FAIL - Either SMIOL_SUCCESS was not returned or decomp was not associated'
+                ierrcount = ierrcount + 1
+            end if
+
+            deallocate(compute_elements)
+            deallocate(io_elements)
+
+            ierr = SMIOLf_free_decomp(decomp)
+            if (ierr /= SMIOL_SUCCESS .or. associated(decomp)) then
+                write(test_log,'(a)') 'After previous unit test, SMIOL_free_decomp was unsuccessful: FAIL'
+                ierrcount = ierrcount + 1
+            end if
+
+
+            ! All/nothing compute, nothing/all I/O
+            write(test_log,'(a)',advance='no') 'All/nothing compute, nothing/all I/O: '
+            if (comm_rank == 0) then
+                n_compute_elements = 8
+                n_io_elements = 0
+            else
+                n_compute_elements = 0
+                n_io_elements = 8
+            end if
+            allocate(compute_elements(n_compute_elements))
+            allocate(io_elements(n_io_elements))
+
+            if (comm_rank == 0) then
+                do i = 1, n_compute_elements
+                    compute_elements(i) = (n_compute_elements - i)      ! All compute elements
+                end do
+
+                ! No I/O elements
+            else
+                ! No compute elements
+
+                do i = 1, n_io_elements
+                    io_elements(i) = (i-1)                   ! All I/O elements
+                end do
+            end if
+
+            ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements, decomp)
+            if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
+
+                ! The correct comp_list and io_list arrays, below, were verified manually
+                if (comm_rank == 0) then
+                    matched = compare_decomps(decomp, &
+                                              [ integer(kind=SMIOL_offset_kind) :: 1, 1, 8, 7, 6, 5, 4, 3, 2, 1, 0 ], &
+                                              [ integer(kind=SMIOL_offset_kind) :: 0 ])
+                else
+                    matched = compare_decomps(decomp, &
+                                              [ integer(kind=SMIOL_offset_kind) :: 0], &
+                                              [ integer(kind=SMIOL_offset_kind) :: 1, 0, 8, 0, 1, 2, 3, 4, 5, 6, 7 ])
+                end if
+
+                if (matched) then
+                    write(test_log,'(a)') 'PASS'
+                else
+                    write(test_log,'(a)') 'FAIL - the decomp did not contain the expected values'
+                    ierrcount = ierrcount + 1
+                end if
+            else
+                write(test_log, '(a)') 'FAIL - Either SMIOL_SUCCESS was not returned or decomp was not associated'
+                ierrcount = ierrcount + 1
+            end if
+
+            deallocate(compute_elements)
+            deallocate(io_elements)
+
+            ierr = SMIOLf_free_decomp(decomp)
+            if (ierr /= SMIOL_SUCCESS .or. associated(decomp)) then
+                write(test_log,'(a)') 'After previous unit test, SMIOL_free_decomp was unsuccessful: FAIL'
+                ierrcount = ierrcount + 1
+            end if
+        else
+            write(test_log, '(a)') '<<< Tests that require exactly 2 MPI tasks will not be run >>>'
+        end if
 
         ! Free the SMIOL context
         ierr = SMIOLf_finalize(context)
@@ -1521,5 +1735,69 @@ contains
         write(test_log,'(a)') ''
 
     end function test_file_sync
+
+
+    !-----------------------------------------------------------------------
+    !  routine compare_decomps
+    !
+    !> \brief Compare a SMIOLf_decomp against known-correct comp_list and io_list
+    !> \details
+    !>  Compares the comp_list and io_list members of a SMIOLf_decomp against
+    !>  comp_list and io_list arrays that contain the correct (reference) values.
+    !>
+    !>  If all values in the comp_list_correct and decomp % comp_list match and
+    !>  if all values in the io_list_correct and decomp % io_list match, a value
+    !>  of .true. is returned; otherwise, .false. is returned.
+    !>
+    !>  Note: If the decomp % comp_list is not at least the size of comp_list_correct,
+    !>        or the decomp % io_list is not at least the size of io_list_correct,
+    !>        this routine may fail unpredictably (perhaps with a segfault), since
+    !>        accessing the lists in the SMIOLf_decomp type requires the use of
+    !>        c_f_pointer with an assumed size for these arrays.
+    !
+    !-----------------------------------------------------------------------
+    function compare_decomps(decomp, comp_list_correct, io_list_correct) result(matched)
+
+        use iso_c_binding, only : c_f_pointer
+
+        implicit none
+
+        ! Arguments
+        type (SMIOLf_decomp), intent(in) :: decomp
+        integer(kind=SMIOL_offset_kind), dimension(:), intent(in) :: comp_list_correct
+        integer(kind=SMIOL_offset_kind), dimension(:), intent(in) :: io_list_correct
+
+        ! Return value
+        logical :: matched
+
+        ! Local variables
+        integer :: i
+        integer(kind=SMIOL_offset_kind), dimension(:), pointer :: comp_list
+        integer(kind=SMIOL_offset_kind), dimension(:), pointer :: io_list
+
+
+        matched = .true.
+
+        ! Get Fortran pointers to the comp_list and io_list members of decomp
+        call c_f_pointer(decomp % comp_list, comp_list, shape=[size(comp_list_correct)])
+        call c_f_pointer(decomp % io_list, io_list, shape=[size(io_list_correct)])
+
+        ! Check comp_list
+        do i = 1, size(comp_list_correct)
+            if (comp_list(i) /= comp_list_correct(i)) then
+                matched = .false.
+                return
+            end if
+        end do
+
+        ! Check io_list
+        do i = 1, size(io_list_correct)
+            if (io_list(i) /= io_list_correct(i)) then
+                matched = .false.
+                return
+            end if
+        end do
+
+    end function compare_decomps
 
 end program smiol_runner
