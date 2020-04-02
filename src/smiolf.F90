@@ -75,6 +75,10 @@ module SMIOLf
         type (c_ptr) :: context   ! Pointer to (struct SMIOL_context); the context for this decomp
     end type SMIOLf_decomp
 
+    interface SMIOLf_put_var
+#include "smiolf_put_var_interface_headers.inc"
+    end interface SMIOLf_put_var
+
 
 contains
 
@@ -742,22 +746,10 @@ contains
 
     end function SMIOLf_inquire_var
 
-
-    !-----------------------------------------------------------------------
-    !  routine SMIOLf_put_var
     !
-    !> \brief Writes a variable to a file
-    !> \details
-    !>  Detailed description of what this routine does.
+    ! SMIOLf_put_var interfaces include
     !
-    !-----------------------------------------------------------------------
-    integer function SMIOLf_put_var() result(ierr)
-
-        implicit none
-
-        ierr = 0
-
-    end function SMIOLf_put_var
+#include "smiolf_put_var_interfaces.inc"
 
 
     !-----------------------------------------------------------------------

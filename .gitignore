@@ -6,6 +6,10 @@ smiol_runner_f
 smiol.????.test
 smiolf.????.test
 
+#SMIOLf_put_var interfaces
+smiolf_put_var_interface_headers.inc
+smiolf_put_var_interfaces.inc
+
 # All object and library files
 *.o
 *.a
