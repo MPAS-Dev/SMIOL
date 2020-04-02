@@ -69,6 +69,9 @@ module SMIOLf
         type(c_ptr) :: comp_list  ! Elements to be sent/received from/on a compute task
         type(c_ptr) :: io_list    ! Elements to be send/received from/on an I/O task
 
+        type(c_ptr) :: start
+        type(c_ptr) :: count
+
         type (c_ptr) :: context   ! Pointer to (struct SMIOL_context); the context for this decomp
     end type SMIOLf_decomp
 

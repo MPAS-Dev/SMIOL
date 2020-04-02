@@ -48,6 +48,9 @@ struct SMIOL_decomp {
 	SMIOL_Offset *comp_list;   /* Elements to be sent/received from/on a compute task */
 	SMIOL_Offset *io_list;     /* Elements to be sent/received from/on an I/O task */
 
+	SMIOL_Offset *start;
+	SMIOL_Offset *count;
+
 	struct SMIOL_context *context; /* Context for this decomp */
 };
 
