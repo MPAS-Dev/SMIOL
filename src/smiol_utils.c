@@ -99,6 +99,275 @@ SMIOL_Offset *search_triplet_array(SMIOL_Offset key,
 	return res;
 }
 
+
+/*******************************************************************************
+ *
+ * transfer_field
+ *
+ * Transfers a field between compute and I/O tasks
+ *
+ * Given a SMIOL_decomp and a direction, which determines whether the input
+ * field is transferred from compute tasks to I/O tasks or from I/O tasks to
+ * compute tasks, this function transfers the input field to the output field.
+ *
+ * The size in bytes of the elements in the field to be transferred is given by
+ * element_size; for example, a single-precision field would set element_size
+ * to sizeof(float).
+ *
+ * The caller must have already allocated the out_field argument with sufficient
+ * space to contain the field.
+ *
+ * If no errors are detected in the input arguments or in the transfer of
+ * the input field to the output field, SMIOL_SUCCESS is returned.
+ *
+ *******************************************************************************/
+int transfer_field(const struct SMIOL_decomp *decomp, int dir,
+                   size_t element_size, const void *in_field, void *out_field)
+{
+	MPI_Comm comm;
+	int comm_rank;
+
+	SMIOL_Offset *sendlist = NULL;
+	SMIOL_Offset *recvlist = NULL;
+
+	MPI_Request *send_reqs = NULL;
+	MPI_Request *recv_reqs = NULL;
+
+	uint8_t **send_bufs = NULL;
+	uint8_t **recv_bufs = NULL;
+	uint8_t *in_bytes = NULL;
+	uint8_t *out_bytes = NULL;
+
+	size_t ii, kk;
+	size_t n_neighbors_send;
+	size_t n_neighbors_recv;
+	int64_t pos;
+	int64_t pos_src = -1;
+	int64_t pos_dst = -1;
+
+	/*
+	 * The following are ints because they correspond to MPI arguments
+	 * that are ints, or they iterate over an int bound
+	 */
+	int taskid;
+	int n_send, n_recv;
+	int j;
+
+
+	if (decomp == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	comm = MPI_Comm_f2c(decomp->context->fcomm);
+	comm_rank = decomp->context->comm_rank;
+
+	/*
+	 * Throughout this function, operate on the fields as arrays of bytes
+	 */
+	in_bytes = (uint8_t *)in_field;
+	out_bytes = (uint8_t *)out_field;
+
+	/*
+	 * Set send and recv lists based on exchange direction
+	 */
+	if (dir == SMIOL_COMP_TO_IO) {
+		sendlist = decomp->comp_list;
+		recvlist = decomp->io_list;
+	} else if (dir == SMIOL_IO_TO_COMP) {
+		sendlist = decomp->io_list;
+		recvlist = decomp->comp_list;
+	} else {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	/*
+	 * Determine how many other MPI tasks to communicate with, and allocate
+	 * request lists and buffer pointers
+	 */
+	n_neighbors_send = (size_t)(sendlist[0]);
+	n_neighbors_recv = (size_t)(recvlist[0]);
+
+	/*
+	 * Check that we have non-NULL in_field and out_field arguments
+	 * in agreement with the number of neighbors to send/recv to/from
+	 */
+	if ((in_field == NULL && n_neighbors_send != 0)
+	    || (out_field == NULL && n_neighbors_recv != 0)) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	send_reqs = (MPI_Request *)malloc(sizeof(MPI_Request)
+	                                  * n_neighbors_send);
+	recv_reqs = (MPI_Request *)malloc(sizeof(MPI_Request)
+	                                  * n_neighbors_recv);
+
+	send_bufs = (uint8_t **)malloc(sizeof(uint8_t *) * n_neighbors_send);
+	recv_bufs = (uint8_t **)malloc(sizeof(uint8_t *) * n_neighbors_recv);
+
+	/*
+	 * Post receives
+	 */
+	pos = 1;
+	for (ii = 0; ii < n_neighbors_recv; ii++) {
+		taskid = (int)recvlist[pos++];
+		n_recv = (int)recvlist[pos++];
+		if (taskid != comm_rank) {
+			recv_bufs[ii] = (uint8_t *)malloc(sizeof(uint8_t)
+			                                  * element_size
+			                                  * (size_t)n_recv);
+
+			MPI_Irecv((void *)recv_bufs[ii],
+			          n_recv * (int)element_size,
+			          MPI_BYTE, taskid, comm_rank, comm,
+			          &recv_reqs[ii]);
+		}
+		else {
+			/*
+			 * This is a receive from ourself - save position in
+			 * recvlist for local copy, below
+			 */
+			pos_dst = pos - 1; /* Offset of n_recv */
+			recv_bufs[ii] = NULL;
+		}
+		pos += n_recv;
+	}
+
+	/*
+	 * Post sends
+	 */
+	pos = 1;
+	for (ii = 0; ii < n_neighbors_send; ii++) {
+		taskid = (int)sendlist[pos++];
+		n_send = (int)sendlist[pos++];
+		if (taskid != comm_rank) {
+			send_bufs[ii] = (uint8_t *)malloc(sizeof(uint8_t)
+			                                  * element_size
+			                                  * (size_t)n_send);
+
+			/* Pack send buffer */
+			for (j = 0; j < n_send; j++) {
+				size_t out_idx = (size_t)j
+				                 * element_size;
+				size_t in_idx = (size_t)sendlist[pos]
+				                * element_size;
+
+				for (kk = 0; kk < element_size; kk++) {
+					send_bufs[ii][out_idx + kk] = in_bytes[in_idx + kk];
+				}
+				pos++;
+			}
+
+			MPI_Isend((void *)send_bufs[ii],
+			          n_send * (int)element_size,
+			          MPI_BYTE, taskid, taskid, comm,
+			          &send_reqs[ii]);
+		}
+		else {
+			/*
+			 * This is a send to ourself - save position in
+			 * sendlist for local copy, below
+			 */
+			pos_src = pos - 1; /* Offset of n_send */
+			send_bufs[ii] = NULL;
+			pos += n_send;
+		}
+	}
+
+	/*
+	 * Handle local copies
+	 */
+	if (pos_src >= 0 && pos_dst >= 0) {
+
+		/* n_send and n_recv should actually be identical */
+		n_send = (int)sendlist[pos_src++];
+		n_recv = (int)recvlist[pos_dst++];
+
+		for (j = 0; j < n_send; j++) {
+			size_t out_idx = (size_t)recvlist[pos_dst]
+			                 * element_size;
+			size_t in_idx = (size_t)sendlist[pos_src]
+			                * element_size;
+
+			for (kk = 0; kk < element_size; kk++) {
+				out_bytes[out_idx + kk] = in_bytes[in_idx + kk];
+			}
+			pos_dst++;
+			pos_src++;
+		}
+	}
+
+	/*
+	 * Wait on receives
+	 */
+	pos = 1;
+	for (ii = 0; ii < n_neighbors_recv; ii++) {
+		taskid = (int)recvlist[pos++];
+		n_recv = (int)recvlist[pos++];
+		if (taskid != comm_rank) {
+			MPI_Wait(&recv_reqs[ii], MPI_STATUS_IGNORE);
+
+			/* Unpack receive buffer */
+			for (j = 0; j < n_recv; j++) {
+				size_t out_idx = (size_t)recvlist[pos]
+				                 * element_size;
+				size_t in_idx = (size_t)j
+				                * element_size;
+
+				for (kk = 0; kk < element_size; kk++) {
+					out_bytes[out_idx + kk] = recv_bufs[ii][in_idx + kk];
+				}
+				pos++;
+			}
+		}
+		else {
+			/*
+			 * A receive from ourself - just skip to next neighbor
+			 * in the recvlist
+			 */
+			pos += n_recv;
+		}
+
+		/*
+		 * The receive buffer for the current neighbor can now be freed
+		 */
+		if (recv_bufs[ii] != NULL) {
+			free(recv_bufs[ii]);
+		}
+	}
+
+	/*
+	 * Wait on sends
+	 */
+	pos = 1;
+	for (ii = 0; ii < n_neighbors_send; ii++) {
+		taskid = (int)sendlist[pos++];
+		n_send = (int)sendlist[pos++];
+		if (taskid != comm_rank) {
+			MPI_Wait(&send_reqs[ii], MPI_STATUS_IGNORE);
+		}
+
+		/*
+		 * The send buffer for the current neighbor can now be freed
+		 */
+		if (send_bufs[ii] != NULL) {
+			free(send_bufs[ii]);
+		}
+
+		pos += n_send;
+	}
+
+	/*
+	 * Free request lists and buffer pointers
+	 */
+	free(send_reqs);
+	free(recv_reqs);
+	free(send_bufs);
+	free(recv_bufs);
+
+	return SMIOL_SUCCESS;
+}
+
+
 /*******************************************************************************
  *
  * print_lists
