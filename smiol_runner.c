@@ -112,6 +112,7 @@ int main(int argc, char **argv)
 	char log_fname[17];
 	FILE *test_log = NULL;
 	char **dimnames;
+	char *char_buf;
 
 	if (MPI_Init(&argc, &argv) != MPI_SUCCESS) {
 		fprintf(stderr, "Error: MPI_Init failed.\n");
@@ -286,17 +287,6 @@ int main(int argc, char **argv)
 	/* Free local copy */
 	free(compute_elements);
 
-	if ((ierr = SMIOL_free_decomp(&decomp)) != SMIOL_SUCCESS) {
-		fprintf(test_log, "ERROR: SMIOL_free_decomp: %s ",
-			SMIOL_error_string(ierr));
-		return 1;
-	}
-
-	if (decomp != NULL) {
-		fprintf(test_log, "ERROR: SMIOL_free_decomp - Decomp not 'NULL' after free\n");
-		return 1;
-	}
-
 	if ((ierr = SMIOL_inquire()) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_inquire: %s ",
 			SMIOL_error_string(ierr));
@@ -310,6 +300,11 @@ int main(int argc, char **argv)
 	}
 
 	if ((ierr = SMIOL_define_dim(file, "Time", -1)) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_define_dim: %s ", SMIOL_error_string(ierr));
+		return 1;
+	}
+
+	if ((ierr = SMIOL_define_dim(file, "StrLen", 64)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_define_dim: %s ", SMIOL_error_string(ierr));
 		return 1;
 	}
@@ -346,18 +341,29 @@ int main(int argc, char **argv)
 		fprintf(test_log, "ERROR: SMIOL_define_var: %s ", SMIOL_error_string(ierr));
 		return 1;
 	}
+
+	snprintf(dimnames[0], 64, "Time");
+	snprintf(dimnames[1], 64, "StrLen");
+	if ((ierr = SMIOL_define_var(file, "xtime", SMIOL_CHAR, 2, (const char**)dimnames)) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_define_var: %s ", SMIOL_error_string(ierr));
+		return 1;
+	}
 	free(dimnames[0]);
 	free(dimnames[1]);
 	free(dimnames);
 
-	if ((ierr = SMIOL_close_file(&file)) != SMIOL_SUCCESS) {
-		fprintf(test_log, "ERROR: SMIOL_close_file: %s ", SMIOL_error_string(ierr));
+	char_buf = malloc(sizeof(char) * 64);
+	memset(char_buf, '\0', 64);
+	sprintf(char_buf, "YYYY-MM-DD_hh:mm:ss");
+	/* Put var and get var */
+	if ((ierr = SMIOL_put_var(file, NULL, "xtime", char_buf)) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_put_var %s ", SMIOL_error_string(ierr));
 		return 1;
 	}
+	free(char_buf);
 
-	if ((ierr = SMIOL_put_var()) != SMIOL_SUCCESS) {
-		fprintf(test_log, "ERROR: SMIOL_put_var: %s ",
-			SMIOL_error_string(ierr));
+	if ((ierr = SMIOL_get_var()) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_put_var %s ", SMIOL_error_string(ierr));
 		return 1;
 	}
 
@@ -366,7 +372,23 @@ int main(int argc, char **argv)
 			SMIOL_error_string(ierr));
 		return 1;
 	}
+
+	if ((ierr = SMIOL_close_file(&file)) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_close_file: %s ", SMIOL_error_string(ierr));
+		return 1;
+	}
+
+	if ((ierr = SMIOL_free_decomp(&decomp)) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_free_decomp: %s ",
+			SMIOL_error_string(ierr));
+		return 1;
+	}
 		
+	if (decomp != NULL) {
+		fprintf(test_log, "ERROR: SMIOL_free_decomp - Decomp not 'NULL' after free\n");
+		return 1;
+	}
+
 	if ((ierr = SMIOL_define_att()) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_define_att: %s ",
 			SMIOL_error_string(ierr));
