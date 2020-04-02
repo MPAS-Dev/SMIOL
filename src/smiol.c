@@ -721,8 +721,25 @@ int SMIOL_inquire_var(struct SMIOL_file *file, const char *varname, int *vartype
  * Detailed description.
  *
  ********************************************************************************/
-int SMIOL_put_var(void)
+int SMIOL_put_var(struct SMIOL_file *file, struct SMIOL_decomp *decomp,
+                  const char *varname, const void *buf)
 {
+	if (file == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	if (decomp == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	if (varname == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	if (buf == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
 	return SMIOL_SUCCESS;
 }
 
