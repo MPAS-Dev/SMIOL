@@ -758,12 +758,39 @@ int SMIOL_inquire_var(struct SMIOL_file *file, const char *varname, int *vartype
  *
  * Writes a variable to a file.
  *
- * Detailed description.
+ * Write values into a variable for an open SMIOL file. If varname is
+ * dimensioned by a decomposed dimension, then a SMIOL_decomp struct should
+ * be present that was created for that dimension with SMIOL_create_decomp.
+ * 
+ * If a variable is dimensioned by a decomposed dimension, then decomp should
+ * be NULL. In such case, all values of buf should be the same across tasks, as
+ * this routine does not guaranteed any task will write out its values over
+ * another.
+ *
+ * Currently, this function cannot write out fields that are greater than 2GB
+ * in size.
+ *
+ * This routine will need to be called by all tasks of an MPI communicator.
  *
  ********************************************************************************/
 int SMIOL_put_var(struct SMIOL_file *file, struct SMIOL_decomp *decomp,
                   const char *varname, const void *buf)
 {
+#ifdef SMIOL_PNETCDF
+	int i;
+	int ierr;
+	int varidp;
+	int vartype;
+	int ndims;
+	int innerdim_size;
+	int is_unlimited = 0;
+	char **dimnames;
+	size_t *start;
+	size_t *count;
+	size_t dsize;
+	SMIOL_Offset dimsize;
+	void *io_buf;
+#endif
 	if (file == NULL) {
 		return SMIOL_INVALID_ARGUMENT;
 	}
@@ -775,6 +802,144 @@ int SMIOL_put_var(struct SMIOL_file *file, struct SMIOL_decomp *decomp,
 	if (buf == NULL) {
 		return SMIOL_INVALID_ARGUMENT;
 	}
+#ifdef SMIOL_PNETCDF
+	/*
+	 * Retrieve vartype and number of dims for this var
+	 */
+	ierr = SMIOL_inquire_var(file, varname, &vartype, &ndims, NULL);
+	if (ierr != SMIOL_SUCCESS) {
+		return ierr;
+	}
+
+	dimnames = (char **) malloc(sizeof(char *) * (size_t) ndims);
+	for (i = 0; i < ndims; i++) {
+		dimnames[i] = (char *)malloc(sizeof(char) * (size_t) 64);
+	}
+	
+	ierr = SMIOL_inquire_var(file, varname, NULL, NULL, dimnames);
+	if (ierr != SMIOL_SUCCESS) {
+		return ierr;
+	}
+
+	start = malloc(sizeof(size_t) * (size_t) ndims);
+	count = malloc(sizeof(size_t) * (size_t) ndims);
+
+	innerdim_size = 1;
+	for (i = 0; i < ndims; i++) {
+		if (i == 0 && decomp != NULL) {
+			start[i] = decomp->io_start;
+			count[i] = decomp->io_count;
+			continue;
+		} else {
+			ierr = SMIOL_inquire_dim(file, dimnames[i], &dimsize,
+			                         &is_unlimited);
+			if (ierr != SMIOL_SUCCESS) {
+				return ierr;
+			}
+
+			/*
+			 * If this var is dimensioned by a unlimited dimension,
+			 * then write on the last set frame.
+			 */
+			if (is_unlimited) {
+				start[i] = file->frame;
+				count[i] = 1;
+			} else {
+				start[i] = 0;
+				count[i] = dimsize;
+			}
+			innerdim_size *= dimsize;
+		}
+	}
+
+	for (i = 0; i < ndims; i++) {
+		free(dimnames[i]);
+	}
+	free(dimnames);
+
+	switch (vartype) {
+		case SMIOL_REAL32:
+			dsize = sizeof(float);
+			break;
+		case SMIOL_REAL64:
+			dsize = sizeof(double);
+			break;
+		case SMIOL_INT32:
+			dsize = sizeof(int);
+			break;
+		case SMIOL_CHAR:
+			dsize = sizeof(char);
+			break;
+	}
+
+	/*
+	 * Transfer fields
+	 */
+	if (decomp != NULL) {
+		io_buf = malloc(dsize * count[0] * innerdim_size);
+		ierr = transfer_field(decomp, SMIOL_COMP_TO_IO,
+		                      dsize * innerdim_size,
+				      buf,
+				      io_buf);
+		if (ierr != SMIOL_SUCCESS) {
+			return ierr;
+		}
+	}
+
+	/*
+	 * Get variable ID
+	 */
+	ierr = ncmpi_inq_varid(file->ncidp, varname, &varidp);
+	if (ierr != NC_NOERR) {
+		file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+		file->context->lib_ierr = ierr;
+		return SMIOL_LIBRARY_ERROR;
+	}
+
+	/*
+	 * If the file is in define mode, then switch it to data mode
+	 */
+	if (file->state == PNETCDF_DEFINE_MODE) {
+		if ((ierr = ncmpi_enddef(file->ncidp)) != NC_NOERR) {
+			file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+			file->context->lib_ierr = ierr;
+			return SMIOL_LIBRARY_ERROR;
+		}
+		file->state = PNETCDF_DATA_MODE;
+	}
+
+	/*
+	 * Write the variable
+	 */
+	if (decomp) {
+		/* If this is a decomposed variable, then use the result from
+		 * transfer_field, io_buf.
+		 */
+		ierr = ncmpi_put_vara_all(file->ncidp, varidp,
+					 (MPI_Offset *) start,
+					 (MPI_Offset *) count,
+					 io_buf,
+					 (MPI_Offset) NULL, MPI_DATATYPE_NULL);
+		free(io_buf);
+	} else {
+		/* If this is not a decomposed variable, then use buf to write
+		 * out the this variable
+		 */
+		ierr = ncmpi_put_vara_all(file->ncidp, varidp,
+					 (MPI_Offset *) start,
+					 (MPI_Offset *) count,
+					 buf,
+					 (MPI_Offset) NULL, MPI_DATATYPE_NULL);
+	}
+	if (ierr != NC_NOERR) {
+		file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+		file->context->lib_ierr = ierr;
+		return SMIOL_LIBRARY_ERROR;
+	}
+
+	free(start);
+	free(count);
+#endif
 
 	return SMIOL_SUCCESS;
 }
