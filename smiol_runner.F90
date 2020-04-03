@@ -11,8 +11,8 @@ program smiol_runner
     integer :: ierr
     integer :: my_proc_id
     integer :: test_log = 42
-    !integer :: buf_size
-    !integer, dimension(:), pointer :: int_buf
+    integer :: buf_size
+    integer, dimension(:), pointer :: int_buf
     integer(kind=c_size_t) :: n_compute_elements = 1
     integer(kind=c_size_t) :: n_io_elements = 1
     integer(kind=SMIOL_offset_kind), dimension(:), pointer :: compute_elements
@@ -203,10 +203,14 @@ program smiol_runner
   !      stop 1
   !  endif
 
-    if (SMIOLf_get_var() /= SMIOL_SUCCESS) then
+    buf_size = 1
+    allocate(int_buf(buf_size))
+    int_buf(1) = 1
+    if (SMIOLf_get_var(file, decomp, 'indexToCellID', int_buf, buf_size) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_get_var' was not called successfully"
         stop 1
     endif
+    deallocate(int_buf)
 
     if (SMIOLf_free_decomp(decomp) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "Error: SMIOLf_free_decomp was not called successfully"

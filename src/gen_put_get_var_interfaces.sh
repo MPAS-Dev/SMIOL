@@ -6,7 +6,7 @@
 
 ############################################################
 #
-# generate_interface
+# generate_put_get_var_interface
 # 
 # Generate the function interfaces for SMIOLf_put_var
 #
@@ -18,18 +18,21 @@
 #
 # $4 - The iso_c_binding C variable needed to include and use for this variable
 #
+# $5 - The direction either 'put' or 'get'
+#
 ############################################################
-generate_interface()
+generate_put_get_var_interface()
 {
     funcVarName=$1
     varType=$2 
     nRanks=$3
     rankName=$3"d"
     cType=$4
+    direction=$5
 
     # Creating the function declaration and adding size(x) arguments, if any..
     printf "\n"
-    printf "    integer function SMIOLf_put_var_%s_%s(file, decomp, varname, buf" $rankName $funcVarName
+    printf "    integer function SMIOLf_%s_var_%s_%s(file, decomp, varname, buf" $direction $rankName $funcVarName
     
     i=1
     if [ $nRanks -ne 0 ]
@@ -132,7 +135,7 @@ generate_interface()
 
     printf "\n"
     printf "        interface\n"
-    printf "           function SMIOL_put_var(file, decomp, varname, buf) result(ierr) bind(C, name='SMIOL_put_var')\n"
+    printf "           function SMIOL_%s_var(file, decomp, varname, buf) result(ierr) bind(C, name='SMIOL_%s_var')\n" $direction $direction
     printf "                use iso_c_binding, only : c_ptr, c_char, c_int\n"
     printf "                type (c_ptr), value :: file\n"
     printf "                type (c_ptr), value :: decomp\n"
@@ -180,7 +183,7 @@ generate_interface()
     if [ $varType = "character" ]
     then
         printf "       ! \n"
-        printf "       ! Convert character variable string that is to be put\n"
+        printf "       ! Convert character variable string that is to be %s\n" $direction
         printf "       ! \n"
         printf "       allocate(string(1))\n"
         printf "       allocate(string(1) %% str(len_trim(buf) + 1))\n"
@@ -200,13 +203,13 @@ generate_interface()
     fi
 
     printf "\n"
-    printf "       ierr = SMIOL_put_var(c_file, c_decomp, c_varname, c_buf)\n"
+    printf "       ierr = SMIOL_%s_var(c_file, c_decomp, c_varname, c_buf)\n" $direction
 
     printf "\n"
     printf "       deallocate(c_varname)\n"
 
     printf "\n"
-    printf "    end function SMIOLf_put_var_%s_%s\n" $rankName $funcVarName
+    printf "    end function SMIOLf_%s_var_%s_%s\n" $direction $rankName $funcVarName
     printf "\n"
 }
 
@@ -217,54 +220,75 @@ generate_interface()
 # Generate the interface block entry for a SMIOLf_put_var function.
 # i.e.:
 #
-#     `module procedure SMIOLf_put_var_RANK_TYPE`
+#     `module procedure SMIOLf_DIRECTION_var_RANK_TYPE`
 #
-# $1 - Type name used in for the function name (int, real32, char etc.)
+# $1 - Direction, either 'put' or 'get'
 #
-# $2 - Integer rank value for this function (0, 1, 2, etc.)
+# $2 - Type name used in for the function name (int, real32, char etc.)
+#
+# $3 - Integer rank value for this function (0, 1, 2, etc.)
 #
 ############################################################
 generate_interface_block_entry()
 {
-    typeName=$1
-    rank=$2
+    direction=$1
+    typeName=$2
+    rank=$3
     # Interfaces are:
-    printf "         module procedure SMIOLf_put_var_%sd_%s\n" $rank $typeName
+    printf "         module procedure SMIOLf_%s_var_%sd_%s\n" $direction $rank $typeName
 }
 
 
 
-interfaceHeaderFile="smiolf_put_var_interface_headers.inc"
-interfaceBodyFile="smiolf_put_var_interfaces.inc"
+put_var_interfaceHeaderFile="smiolf_put_var_interface_headers.inc"
+put_var_interfaceBodyFile="smiolf_put_var_interfaces.inc"
+
+get_var_interfaceHeaderFile="smiolf_get_var_interface_headers.inc"
+get_var_interfaceBodyFile="smiolf_get_var_interfaces.inc"
 
 # Empty the files above if they exist
-printf "" > $interfaceHeaderFile
-printf "" > $interfaceBodyFile
+printf "" > $put_var_interfaceHeaderFile
+printf "" > $put_var_interfaceBodyFile
+
+printf "" > $get_var_interfaceHeaderFile
+printf "" > $get_var_interfaceBodyFile
 
 # Character - 0D
 for d in 0
 do
-    generate_interface "char" "character" $d "c_char" >> $interfaceBodyFile
-    generate_interface_block_entry "char" $d >> $interfaceHeaderFile
+    generate_put_get_var_interface "char" "character" $d "c_char" "put" >> $put_var_interfaceBodyFile
+    generate_interface_block_entry "put" "char" $d >> $put_var_interfaceHeaderFile
+
+    generate_put_get_var_interface "char" "character" $d "c_char" "get" >> $get_var_interfaceBodyFile
+    generate_interface_block_entry "get" "char" $d >> $get_var_interfaceHeaderFile
 done
 
 # Integer - 0D - 1D - 2D - 3D
 for d in 0 1 2 3
 do
-    generate_interface "int" "integer" $d "c_int" >> $interfaceBodyFile
-    generate_interface_block_entry "int" $d >> $interfaceHeaderFile
+    generate_put_get_var_interface "int" "integer" $d "c_int" "put" >> $put_var_interfaceBodyFile
+    generate_interface_block_entry "put" "int" $d >> $put_var_interfaceHeaderFile
+
+    generate_put_get_var_interface "int" "integer" $d "c_int" "get" >> $get_var_interfaceBodyFile
+    generate_interface_block_entry "get" "int" $d >> $get_var_interfaceHeaderFile
 done
 
 # Real - 0D - 1D - 2D - 3D - 4D - 5D - 6D
 for d in 0 1 2 3 5 6
 do
-    generate_interface "real32" "real" $d "c_float" >> $interfaceBodyFile
-    generate_interface_block_entry "real32" $d >> $interfaceHeaderFile
+    generate_put_get_var_interface "real32" "real" $d "c_float" "put" >> $put_var_interfaceBodyFile
+    generate_interface_block_entry "put" "real32" $d >> $put_var_interfaceHeaderFile
+
+    generate_put_get_var_interface "real32" "real" $d "c_float" "get" >> $get_var_interfaceBodyFile
+    generate_interface_block_entry "get" "real32" $d >> $get_var_interfaceHeaderFile
 done
 
 # Double - 0D - 1D - 2D - 3D - 4D - 5D - 6D
 for d in 0 1 2 3 5 6
 do
-    generate_interface "real64" "real" $d "c_double" >> $interfaceBodyFile
-    generate_interface_block_entry "real64" $d >> $interfaceHeaderFile
+    generate_put_get_var_interface "real64" "real" $d "c_double" "put" >> $put_var_interfaceBodyFile
+    generate_interface_block_entry "put" "real64" $d >> $put_var_interfaceHeaderFile
+
+    generate_put_get_var_interface "real64" "real" $d "c_double" "get" >> $get_var_interfaceBodyFile
+    generate_interface_block_entry "get" "real64" $d >> $get_var_interfaceHeaderFile
 done
