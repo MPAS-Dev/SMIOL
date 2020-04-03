@@ -301,7 +301,7 @@ int main(int argc, char **argv)
 	}
 
 	snprintf(dimnames[0], 64, "nCells");
-	if ((ierr = SMIOL_define_var(file, "indexToCellID", SMIOL_REAL32, 1, (const char**)dimnames)) != SMIOL_SUCCESS) {
+	if ((ierr = SMIOL_define_var(file, "indexToCellID", SMIOL_INT32, 1, (const char**)dimnames)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_define_var: %s ", SMIOL_error_string(ierr));
 		return 1;
 	}
@@ -311,8 +311,13 @@ int main(int argc, char **argv)
 
 	decomp->start = malloc(sizeof(SMIOL_Offset) * 1);
 	decomp->count = malloc(sizeof(SMIOL_Offset) * 1);
-	int_buf = malloc(sizeof(int) * 1);
-	int_buf[0] = 42;
+	decomp->start[0] = (SMIOL_Offset) 0;
+	decomp->count[0] = (SMIOL_Offset) 40962;
+	int_buf = malloc(sizeof(int) * 40962);
+	int i;
+	for (i = 0; i < 40962; i++){
+		int_buf[i] = 42;
+	}
 	if ((ierr = SMIOL_put_var(file, decomp, "indexToCellID", int_buf)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_put_var: %s ",
 			SMIOL_error_string(ierr));
