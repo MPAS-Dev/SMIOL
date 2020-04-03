@@ -34,7 +34,8 @@ int SMIOL_define_var(struct SMIOL_file *file, const char *varname, int vartype, 
 int SMIOL_inquire_var(struct SMIOL_file *file, const char *varname, int *vartype, int *ndims, char **dimnames);
 int SMIOL_put_var(struct SMIOL_file *file, struct SMIOL_decomp *decomp,
                   const char *varname, const void *buf);
-int SMIOL_get_var(void);
+int SMIOL_get_var(struct SMIOL_file *file, struct SMIOL_decomp *decomp,
+                  const char *varname, const void *buf);
 
 /*
  * Attribute methods

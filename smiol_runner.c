@@ -314,22 +314,22 @@ int main(int argc, char **argv)
 	decomp->start[0] = (SMIOL_Offset) 0;
 	decomp->count[0] = (SMIOL_Offset) 40962;
 	int_buf = malloc(sizeof(int) * 40962);
-	int i;
-	for (i = 0; i < 40962; i++){
-		int_buf[i] = 42;
-	}
+	memset(int_buf, (int) 42, (size_t) 40962);
 	if ((ierr = SMIOL_put_var(file, decomp, "indexToCellID", int_buf)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_put_var: %s ",
 			SMIOL_error_string(ierr));
 		return 1;
 	}
-	free(int_buf);
 
-	if ((ierr = SMIOL_get_var()) != SMIOL_SUCCESS) {
+	memset(int_buf, (int) 0, (size_t) 40962);
+	if ((ierr = SMIOL_get_var(file, decomp, "indexToCellID", int_buf)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_get_var: %s ",
 			SMIOL_error_string(ierr));
 		return 1;
 	}
+	free(decomp->start);
+	free(decomp->count);
+	free(int_buf);
 
 	if ((ierr = SMIOL_close_file(&file)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_close_file: %s ", SMIOL_error_string(ierr));
