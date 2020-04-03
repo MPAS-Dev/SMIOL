@@ -954,7 +954,8 @@ int SMIOL_put_var(struct SMIOL_file *file, struct SMIOL_decomp *decomp,
  * Detailed description.
  *
  ********************************************************************************/
-int SMIOL_get_var(void)
+int SMIOL_get_var(struct SMIOL_file *file, struct SMIOL_decomp *decomp,
+                  const char *varname, const void *buf)
 {
 	return SMIOL_SUCCESS;
 }

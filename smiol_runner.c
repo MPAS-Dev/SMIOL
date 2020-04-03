@@ -367,11 +367,13 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if ((ierr = SMIOL_get_var()) != SMIOL_SUCCESS) {
+	memset(int_buf, (int) 0, (size_t) 40962);
+	if ((ierr = SMIOL_get_var(file, decomp, "indexToCellID", int_buf)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_get_var: %s ",
 			SMIOL_error_string(ierr));
 		return 1;
 	}
+	free(int_buf);
 
 	if ((ierr = SMIOL_close_file(&file)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_close_file: %s ", SMIOL_error_string(ierr));
