@@ -324,7 +324,7 @@ int main(int argc, char **argv)
 	memset(int_buf, (int) 0, (size_t) 40962);
 	if ((ierr = SMIOL_get_var(file, decomp, "indexToCellID", int_buf)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_get_var: %s ",
-			SMIOL_error_string(ierr));
+			SMIOL_lib_error_string(file->context));
 		return 1;
 	}
 	free(decomp->start);
