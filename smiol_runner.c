@@ -16,9 +16,13 @@ int test_decomp(FILE *test_log);
 int test_transfer(FILE *test_log);
 int test_file_sync(FILE *test_log);
 int test_utils(FILE *test_log);
+int test_io_decomp(FILE *test_log);
 int compare_decomps(struct SMIOL_decomp *decomp,
                     size_t n_comp_list, SMIOL_Offset *comp_list_correct,
                     size_t n_io_list, SMIOL_Offset *io_list_correct);
+size_t elements_covered(int comm_size, size_t *io_start, size_t *io_count);
+int range_intersection(size_t start1, size_t count1, size_t start2, size_t count2);
+
 
 /*******************************************************************************
  *
@@ -215,6 +219,17 @@ int main(int argc, char **argv)
 	 * Unit tests for SMIOL utilities
 	 */
 	ierr = test_utils(test_log);
+	if (ierr == 0) {
+		fprintf(test_log, "All tests PASSED!\n\n");
+	}
+	else {
+		fprintf(test_log, "%i tests FAILED!\n\n", ierr);
+	}
+
+	/*
+	 * Unit tests for decomposition of I/O elements
+	 */
+	ierr = test_io_decomp(test_log);
 	if (ierr == 0) {
 		fprintf(test_log, "All tests PASSED!\n\n");
 	}
@@ -1655,7 +1670,7 @@ int test_variables(FILE *test_log)
 		return -1;
 	}
 
-        /* Define several dimensions in the file to be used when defining variables */
+	/* Define several dimensions in the file to be used when defining variables */
 	ierr = SMIOL_define_dim(file, "Time", (SMIOL_Offset)-1);
 	if (ierr != SMIOL_SUCCESS) {
 		fprintf(test_log, "Failed to create dimension Time...\n");
@@ -2493,6 +2508,297 @@ int test_utils(FILE *test_log)
 	return errcount;
 }
 
+int test_io_decomp(FILE *test_log)
+{
+	int errcount;
+	int ierr;
+	int comm_rank, comm_size;
+	size_t n_io_elements;
+	size_t io_start[16], io_count[16];
+
+	fprintf(test_log, "********************************************************************************\n");
+	fprintf(test_log, "******************** SMIOL I/O decomposition unit tests ************************\n");
+	fprintf(test_log, "\n");
+
+	errcount = 0;
+
+	/*
+	 * Perform a few quick tests on the range_intersection function (unit tests within unit tests...)
+	 */
+
+	/* No overlap, second range after the first */
+	if (range_intersection((size_t)0, (size_t)50, (size_t)50, (size_t)50)) {
+		fprintf(test_log, "Function range_intersection broken (test 1)...\n");
+		return -1;
+	}
+
+	/* No overlap, second range before the first */
+	if (range_intersection((size_t)50, (size_t)50, (size_t)0, (size_t)50)) {
+		fprintf(test_log, "Function range_intersection broken (test 2)...\n");
+		return -1;
+	}
+
+	/* Overlap, but zero-sized first range */
+	if (range_intersection((size_t)10, (size_t)0, (size_t)0, (size_t)50)) {
+		fprintf(test_log, "Function range_intersection broken (test 3)...\n");
+		return -1;
+	}
+
+	/* Overlap, but zero-sized second range */
+	if (range_intersection((size_t)0, (size_t)50, (size_t)10, (size_t)0)) {
+		fprintf(test_log, "Function range_intersection broken (test 4)...\n");
+		return -1;
+	}
+
+	/* Overlap, identical ranges */
+	if (!range_intersection((size_t)100, (size_t)50, (size_t)100, (size_t)50)) {
+		fprintf(test_log, "Function range_intersection broken (test 5)...\n");
+		return -1;
+	}
+
+	/* Overlap, second contained within first */
+	if (!range_intersection((size_t)0, (size_t)50, (size_t)10, (size_t)1)) {
+		fprintf(test_log, "Function range_intersection broken (test 6)...\n");
+		return -1;
+	}
+
+	/* Overlap, first contained within second */
+	if (!range_intersection((size_t)10, (size_t)1, (size_t)0, (size_t)50)) {
+		fprintf(test_log, "Function range_intersection broken (test 7)...\n");
+		return -1;
+	}
+
+	/* Overlap, second begins within first */
+	if (!range_intersection((size_t)0, (size_t)50, (size_t)25, (size_t)50)) {
+		fprintf(test_log, "Function range_intersection broken (test 8)...\n");
+		return -1;
+	}
+
+	/* Overlap, first begins within second */
+	if (!range_intersection((size_t)25, (size_t)50, (size_t)0, (size_t)50)) {
+		fprintf(test_log, "Function range_intersection broken (test 9)...\n");
+		return -1;
+	}
+
+	/* Overlap at one point, end of first, start of second */
+	if (!range_intersection((size_t)0, (size_t)50, (size_t)49, (size_t)50)) {
+		fprintf(test_log, "Function range_intersection broken (test 10)...\n");
+		return -1;
+	}
+
+	/* Overlap at one point, start of first, end of second */
+	if (!range_intersection((size_t)99, (size_t)50, (size_t)0, (size_t)100)) {
+		fprintf(test_log, "Function range_intersection broken (test 11)...\n");
+		return -1;
+	}
+
+	/* Testing for non-zero return with NULL io_start */
+	fprintf(test_log, "Non-zero return code with NULL io_start: ");
+	ierr = get_io_elements(0, 1, 1, 1, NULL, &io_count[0]);
+	if (ierr != 0) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - A non-zero status was not returned\n");
+		errcount++;
+	}
+
+	/* Testing for non-zero return with NULL io_count */
+	fprintf(test_log, "Non-zero return code with NULL io_count: ");
+	ierr = get_io_elements(0,     /* comm_rank */
+	                       1, 1,  /* n_io_tasks, io_stride */
+	                       1,     /* n_io_elements */
+	                       &io_start[0], NULL);
+	if (ierr != 0) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - A non-zero status was not returned\n");
+		errcount++;
+	}
+
+	/* Test I/O decomp with zero I/O elements, one task */
+	fprintf(test_log, "Test I/O decomp with zero I/O elements, one task: ");
+	io_count[0] = (size_t)42;     /* any non-zero value will do... */
+	ierr = get_io_elements(0,     /* comm_rank */
+	                       1, 1,  /* n_io_tasks, io_stride */
+	                       0,     /* n_io_elements */
+	                       &io_start[0], &io_count[0]);
+	if (ierr == 0) {
+		if (io_count[0] == 0) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - Expected an io_count of 0 (%lu returned)\n",
+			        (unsigned long)io_count[0]);
+			errcount++;
+		}
+	} else {
+		fprintf(test_log, "FAIL - A non-zero value was returned\n");
+		errcount++;
+	}
+
+	/* Test I/O decomp with one I/O elements, one task */
+	fprintf(test_log, "Test I/O decomp with one I/O elements, one task: ");
+	io_count[0] = (size_t)42;     /* any non-zero value will do... */
+	ierr = get_io_elements(0,     /* comm_rank */
+	                       1, 1,  /* n_io_tasks, io_stride */
+	                       1,     /* n_io_elements */
+	                       &io_start[0], &io_count[0]);
+	if (ierr == 0) {
+		if (io_count[0] == 1) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - Expected an io_count of 1 (%lu returned)\n",
+			        (unsigned long)io_count[0]);
+			errcount++;
+		}
+	} else {
+		fprintf(test_log, "FAIL - A non-zero value was returned\n");
+		errcount++;
+	}
+
+	/* Test evenly divisible I/O element count, all tasks are I/O tasks */
+	fprintf(test_log, "Test evenly divisible I/O element count, all tasks are I/O tasks: ");
+	ierr = 0;
+	comm_size = 4;
+	n_io_elements = 100;
+	for (comm_rank = 0; comm_rank < comm_size; comm_rank++) {
+		ierr |= get_io_elements(comm_rank,
+		                        comm_size, 1,  /* n_io_tasks, io_stride */
+		                        n_io_elements,
+		                        &io_start[comm_rank], &io_count[comm_rank]);
+	}
+	if (ierr == 0) {
+		if (elements_covered(comm_size, io_start, io_count) == n_io_elements) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - Not all I/O elements covered by decomp\n");
+			errcount++;
+		}
+	} else {
+		fprintf(test_log, "FAIL - Non-zero return code for at least one rank\n");
+		errcount++;
+	}
+
+	/* Test un-evenly divisible I/O element count, all tasks are I/O tasks */
+	fprintf(test_log, "Test un-evenly divisible I/O element count, all tasks are I/O tasks: ");
+	ierr = 0;
+	comm_size = 4;
+	n_io_elements = 103;
+	for (comm_rank = 0; comm_rank < comm_size; comm_rank++) {
+		ierr |= get_io_elements(comm_rank,
+		                        comm_size, 1,  /* n_io_tasks, io_stride */
+		                        n_io_elements,
+		                        &io_start[comm_rank], &io_count[comm_rank]);
+	}
+	if (ierr == 0) {
+		if (elements_covered(comm_size, io_start, io_count) == n_io_elements) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - Not all I/O elements covered by decomp\n");
+			errcount++;
+		}
+	} else {
+		fprintf(test_log, "FAIL - Non-zero return code for at least one rank\n");
+		errcount++;
+	}
+
+	/* Test evenly divisible I/O element count, every second tasks is an I/O task */
+	fprintf(test_log, "Test evenly divisible I/O element count, every second task is an I/O task: ");
+	ierr = 0;
+	comm_size = 4;
+	n_io_elements = 100;
+	for (comm_rank = 0; comm_rank < comm_size; comm_rank++) {
+		ierr |= get_io_elements(comm_rank,
+		                        comm_size/2, 2,  /* n_io_tasks, io_stride */
+		                        n_io_elements,
+		                        &io_start[comm_rank], &io_count[comm_rank]);
+	}
+	if (ierr == 0) {
+		if (elements_covered(comm_size, io_start, io_count) == n_io_elements) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - Not all I/O elements covered by decomp\n");
+			errcount++;
+		}
+	} else {
+		fprintf(test_log, "FAIL - Non-zero return code for at least one rank\n");
+		errcount++;
+	}
+
+	/* Test un-evenly divisible I/O element count, every second task is an I/O task */
+	fprintf(test_log, "Test un-evenly divisible I/O element count, every second task is an I/O task: ");
+	ierr = 0;
+	comm_size = 4;
+	n_io_elements = 103;
+	for (comm_rank = 0; comm_rank < comm_size; comm_rank++) {
+		ierr |= get_io_elements(comm_rank,
+		                        comm_size/2, 2,  /* n_io_tasks, io_stride */
+		                        n_io_elements,
+		                        &io_start[comm_rank], &io_count[comm_rank]);
+	}
+	if (ierr == 0) {
+		if (elements_covered(comm_size, io_start, io_count) == n_io_elements) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - Not all I/O elements covered by decomp\n");
+			errcount++;
+		}
+	} else {
+		fprintf(test_log, "FAIL - Non-zero return code for at least one rank\n");
+		errcount++;
+	}
+
+	/* Test for more I/O tasks than I/O elements */
+	fprintf(test_log, "Test more I/O tasks than I/O elements: ");
+	ierr = 0;
+	comm_size = 16;
+	n_io_elements = 3;
+	for (comm_rank = 0; comm_rank < comm_size; comm_rank++) {
+		ierr |= get_io_elements(comm_rank,
+		                        comm_size/2, 2,  /* n_io_tasks, io_stride */
+		                        n_io_elements,
+		                        &io_start[comm_rank], &io_count[comm_rank]);
+	}
+	if (ierr == 0) {
+		if (elements_covered(comm_size, io_start, io_count) == n_io_elements) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - Not all I/O elements covered by decomp\n");
+			errcount++;
+		}
+	} else {
+		fprintf(test_log, "FAIL - Non-zero return code for at least one rank\n");
+		errcount++;
+	}
+
+	/* Test more than 2^32 I/O elements */
+	fprintf(test_log, "Test more than 2^32 I/O elements: ");
+	ierr = 0;
+	comm_size = 16;
+	n_io_elements = 65536000002;
+	for (comm_rank = 0; comm_rank < comm_size; comm_rank++) {
+		ierr |= get_io_elements(comm_rank,
+		                        comm_size/2, 2,       /* n_io_tasks, io_stride */
+		                        n_io_elements,
+		                        &io_start[comm_rank], &io_count[comm_rank]);
+	}
+	if (ierr == 0) {
+		if (elements_covered(comm_size, io_start, io_count) == n_io_elements) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - Not all I/O elements covered by decomp\n");
+			errcount++;
+		}
+	} else {
+		fprintf(test_log, "FAIL - Non-zero return code for at least one rank\n");
+		errcount++;
+	}
+
+	fflush(test_log);
+	fprintf(test_log, "\n");
+
+	return errcount;
+}
+
 
 /********************************************************************************
  *
@@ -2539,4 +2845,105 @@ int compare_decomps(struct SMIOL_decomp *decomp,
 	}
 
 	return 0;
+}
+
+
+/********************************************************************************
+ *
+ * elements_covered
+ *
+ * Return the number of I/O elements that would be read/written by all I/O tasks
+ *
+ * Given the io_start and io_count values for all I/O tasks, compute the total
+ * number of I/O elements that are read/written.
+ *
+ * If any of the I/O ranges overlap, a value of 0 is returned. In principle,
+ * there is enough information available to determine exactly how many elements
+ * will be read/written, and to return that value, but at present it is
+ * considered an error to have overlapping ranges of I/O elements.
+ *
+ * If none of the I/O ranges overlap, this routine returns the sum of all
+ * io_count values.
+ *
+ * Note: This routine has computation cost O(n^2), for n = comm_size.
+ *
+ ********************************************************************************/
+size_t elements_covered(int comm_size, size_t *io_start, size_t *io_count)
+{
+	int i, j;
+	size_t n_elems;
+
+	/*
+	 * Check that no ranges are overlapping
+	 */
+	for (i = 0; i < comm_size; i++) {
+		for (j = 0; j < comm_size; j++) {
+			if (j == i) {
+				continue;
+			}
+
+			/* Does the range of task i intersect the range of task j? */
+			if (range_intersection(io_start[i], io_count[i],
+			                       io_start[j], io_count[j])) {
+				return (size_t)0;
+			}
+		}
+	}
+
+	/*
+	 * Get total number of I/O elements across all tasks
+	 */
+	n_elems = 0;
+	for (i = 0; i < comm_size; i++) {
+		n_elems += io_count[i];
+	}
+
+	return n_elems;
+}
+
+
+/********************************************************************************
+ *
+ * range_intersection
+ *
+ * Return 1 if two ranges given by (start,count) pairs overlap,
+ * and 0 if they do not.
+ *
+ ********************************************************************************/
+int range_intersection(size_t start1, size_t count1, size_t start2, size_t count2)
+{
+	size_t s1, e1, s2, e2;
+
+	/* If either range has zero size, no intersection is possible */
+	if (count1 == (size_t)0 || count2 == (size_t)0) {
+		return (size_t)0;
+	}
+
+	s1 = start1;
+	e1 = start1 + count1 - 1;
+
+	s2 = start2;
+	e2 = start2 + count2 - 1;
+
+	/* Is the end of the first range within the second? */
+	if (e1 >= s2 && e1 <= e2) {
+		return 1;
+	}
+
+	/* Is the start of the first range within the second? */
+	if (s1 >= s2 && s1 <= e2) {
+		return 1;
+	}
+
+	/* Is the end of the second range within the first? */
+	if (e2 >= s1 && e2 <= e1) {
+		return 1;
+	}
+
+	/* Is the start of the second range within the first? */
+	if (s2 >= s1 && s2 <= e1) {
+		return 1;
+	}
+
+	return (size_t)0;
 }
