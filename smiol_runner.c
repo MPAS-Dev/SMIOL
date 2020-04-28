@@ -13,6 +13,7 @@ int test_open_close(FILE *test_log);
 int test_dimensions(FILE *test_log);
 int test_variables(FILE *test_log);
 int test_decomp(FILE *test_log);
+int test_build_exch(FILE *test_log);
 int test_transfer(FILE *test_log);
 int test_file_sync(FILE *test_log);
 int test_utils(FILE *test_log);
@@ -185,6 +186,18 @@ int main(int argc, char **argv)
 	 * Unit tests for SMIOL_create_decomp and SMIOL_free_decomp
 	 */
 	ierr = test_decomp(test_log);
+	if (ierr == 0) {
+		fprintf(test_log, "All tests PASSED!\n\n");
+	}
+	else {
+		fprintf(test_log, "%i tests FAILED!\n\n", ierr);
+	}
+
+
+	/*
+	 * Unit tests for build_exchange
+	 */
+	ierr = test_build_exch(test_log);
 	if (ierr == 0) {
 		fprintf(test_log, "All tests PASSED!\n\n");
 	}
@@ -1026,6 +1039,391 @@ int test_decomp(FILE *test_log)
 			}
 		}
 		ierr = SMIOL_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements, &decomp);
+		if (ierr == SMIOL_SUCCESS && decomp != NULL) {
+
+			/* The correct comp_list and io_list arrays, below, were verified manually */
+			if (comm_rank == 0) {
+				SMIOL_Offset comp_list_correct[] = { 1, 1, 8, 7, 6, 5, 4, 3, 2, 1, 0 };
+				SMIOL_Offset io_list_correct[] = { 0 };
+
+				ierr = compare_decomps(decomp, (size_t)11, comp_list_correct, (size_t)1, io_list_correct);
+			} else {
+				SMIOL_Offset comp_list_correct[] = { 0 };
+				SMIOL_Offset io_list_correct[] = { 1, 0, 8, 0, 1, 2, 3, 4, 5, 6, 7 };
+
+				ierr = compare_decomps(decomp, (size_t)1, comp_list_correct, (size_t)11, io_list_correct);
+			}
+
+			if (ierr == 0) {
+				fprintf(test_log, "PASS\n");
+			} else {
+				fprintf(test_log, "FAIL - the decomp did not contain the expected values\n");
+				errcount++;
+			}
+		} else {
+			fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned or decomp was NULL\n");
+			errcount++;
+		}
+		free(compute_elements);
+		free(io_elements);
+
+		ierr = SMIOL_free_decomp(&decomp);
+		if (ierr != SMIOL_SUCCESS || decomp != NULL) {
+			fprintf(test_log, "After previous unit test, SMIOL_free_decomp was unsuccessful: FAIL\n");
+			errcount++;
+		}
+
+	} else {
+		fprintf(test_log, "<<< Tests that require exactly 2 MPI tasks will not be run >>>\n");
+	}
+
+	/* Free the SMIOL context */
+	ierr = SMIOL_finalize(&context);
+	if (ierr != SMIOL_SUCCESS || context != NULL) {
+		fprintf(test_log, "Failed to free SMIOL context...\n");
+		return -1;
+	}
+
+	fflush(test_log);
+	ierr = MPI_Barrier(MPI_COMM_WORLD);
+
+	fprintf(test_log, "\n");
+
+	return errcount;
+}
+
+int test_build_exch(FILE *test_log)
+{
+	int ierr;
+	int errcount = 0;
+	int comm_rank;
+	int comm_size;
+	size_t i;
+	size_t n_compute_elements, n_io_elements;
+	SMIOL_Offset *compute_elements = NULL, *io_elements = NULL;
+	struct SMIOL_context *context = NULL;
+	struct SMIOL_decomp *decomp = NULL;
+
+	fprintf(test_log, "********************************************************************************\n");
+	fprintf(test_log, "************************* build_exchange unit tests ****************************\n");
+	fprintf(test_log, "\n");
+
+	ierr = MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+	if (ierr != MPI_SUCCESS) {
+		fprintf(test_log, "Failed to get MPI rank...\n");
+		return -1;
+	}
+
+	ierr = MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+	if (ierr != MPI_SUCCESS) {
+		fprintf(test_log, "Failed to get MPI size...\n");
+		return -1;
+	}
+
+	/* Create a SMIOL context for testing decomp routines */
+	ierr = SMIOL_init(MPI_COMM_WORLD, &context);
+	if (ierr != SMIOL_SUCCESS || context == NULL) {
+		fprintf(test_log, "Failed to create SMIOL context...\n");
+		return -1;
+	}
+
+	/* Test create decomp with io_elements and compute_elements == NULL and
+	 * n_io_elements and n_compute != 0 */
+	fprintf(test_log, "Testing build_exchange with NULL elements and n_elements != 0: ");
+	n_compute_elements = 1;
+	n_io_elements = 1;
+	ierr = build_exchange(context, n_compute_elements, compute_elements, n_io_elements, io_elements, &decomp);
+	if (ierr == SMIOL_INVALID_ARGUMENT && decomp == NULL) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - Either SMIOL_INVALID_ARGUMENT was not returned or DECOMP was not NULL\n");
+		errcount++;
+	}
+
+	fprintf(test_log, "Everything OK (SMIOL_free_decomp) with NULL elements: ");
+	ierr = SMIOL_free_decomp(&decomp);
+	if (ierr == SMIOL_SUCCESS && decomp == NULL) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr == SMIOL_SUCCESS && decomp != NULL) {
+		fprintf(test_log, "FAIL - Returned SMIOL_SUCCESS but, decomp was not NULL\n");
+		errcount++;
+	} else if (ierr != SMIOL_SUCCESS && decomp == NULL) {
+		fprintf(test_log, "FAIL - decomp was NULL but did not returned SMIOL_SUCCESS\n");
+		errcount++;
+	}
+
+
+	/* Create and Free Decomp with elements == 0 */
+	fprintf(test_log, "Everything OK (build_exchange) with 0 elements: ");
+	n_compute_elements = 0;
+	n_io_elements = 0;
+	compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
+	io_elements = malloc(sizeof(SMIOL_Offset) * n_io_elements);
+	ierr = build_exchange(context, n_compute_elements, compute_elements, n_io_elements, io_elements, &decomp);
+	if (ierr == SMIOL_SUCCESS && decomp != NULL) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned or decomp was NULL\n");
+		errcount++;
+	}
+	free(compute_elements);
+	free(io_elements);
+
+	fprintf(test_log, "Everything OK (SMIOL_free_decomp) with 0 elements: ");
+	ierr = SMIOL_free_decomp(&decomp);
+	if (ierr == SMIOL_SUCCESS && decomp == NULL) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr == SMIOL_SUCCESS && decomp != NULL) {
+		fprintf(test_log, "FAIL - Returned SMIOL_SUCCESS but, decomp was not NULL\n");
+		errcount++;
+	} else if (ierr != SMIOL_SUCCESS && decomp == NULL) {
+		fprintf(test_log, "FAIL - decomp was NULL but did not returned SMIOL_SUCCESS\n");
+		errcount++;
+	}
+
+	/* In case an error occured above, free the decomp to continue testing */
+	if (decomp != NULL) {
+		free(decomp);
+		decomp = NULL;
+	}
+
+	/* Create and Free Decomp with elements == 1 */
+	fprintf(test_log, "Everything OK (build_exchange) with 1 elements: ");
+	n_compute_elements = 1;
+	n_io_elements = 1;
+	compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
+	io_elements = malloc(sizeof(SMIOL_Offset) * n_io_elements);
+	memset((void *)compute_elements, 0, sizeof(SMIOL_Offset) * n_compute_elements);
+	memset((void *)io_elements, 0, sizeof(SMIOL_Offset) * n_io_elements);
+	ierr = build_exchange(context, n_compute_elements, compute_elements, n_io_elements, io_elements, &decomp);
+	if (ierr == SMIOL_SUCCESS && decomp != NULL) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned or decomp was NULL\n");
+		errcount++;
+	}
+	free(compute_elements);
+	free(io_elements);
+
+	fprintf(test_log, "Everything OK (SMIOL_free_decomp) with 1 elements: ");
+	ierr = SMIOL_free_decomp(&decomp);
+	if (ierr == SMIOL_SUCCESS && decomp == NULL) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr == SMIOL_SUCCESS && decomp != NULL) {
+		fprintf(test_log, "FAIL - Returned SMIOL_SUCCESS but, decomp was not NULL\n");
+		errcount++;
+	} else if (ierr != SMIOL_SUCCESS && decomp == NULL) {
+		fprintf(test_log, "FAIL - decomp was NULL but did not returned SMIOL_SUCCESS\n");
+		errcount++;
+	}
+
+	if (decomp != NULL) {
+		free(decomp);
+		decomp = NULL;
+	}
+
+	/* Create and Free Decomp with large amount of elements */
+	fprintf(test_log, "Everything OK (build_exchange) with large amount of elements: ");
+	n_compute_elements = 1000000;
+	n_io_elements = 1000000;
+	compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
+	io_elements = malloc(sizeof(SMIOL_Offset) * n_io_elements);
+	memset((void *)compute_elements, 0, sizeof(SMIOL_Offset) * n_compute_elements);
+	memset((void *)io_elements, 0, sizeof(SMIOL_Offset) * n_io_elements);
+	ierr = build_exchange(context, n_compute_elements, compute_elements, n_io_elements, io_elements, &decomp);
+	if (ierr == SMIOL_SUCCESS && decomp != NULL) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned or decomp was NULL\n");
+		errcount++;
+	}
+	free(compute_elements);
+	free(io_elements);
+
+	fprintf(test_log, "Everything OK (SMIOL_free_decomp) with large amount of elements: ");
+	ierr = SMIOL_free_decomp(&decomp);
+	if (ierr == SMIOL_SUCCESS && decomp == NULL) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr == SMIOL_SUCCESS && decomp != NULL) {
+		fprintf(test_log, "FAIL - Returned SMIOL_SUCCESS but, decomp was not NULL\n");
+		errcount++;
+	} else if (ierr != SMIOL_SUCCESS && decomp == NULL) {
+		fprintf(test_log, "FAIL - decomp was NULL but did not returned SMIOL_SUCCESS\n");
+		errcount++;
+	}
+
+	if (decomp != NULL) {
+		free(decomp);
+		decomp = NULL;
+	}
+
+	/* Free a decomp that has already been freed */
+	fprintf(test_log, "Everything OK (SMIOL_free_decomp) freeing a NULL decomp: ");
+	ierr = SMIOL_free_decomp(&decomp);
+	if (ierr == SMIOL_SUCCESS && decomp == NULL) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr == SMIOL_SUCCESS && decomp != NULL) {
+		fprintf(test_log, "FAIL - Returned SMIOL_SUCCESS but, decomp was not NULL\n");
+		errcount++;
+	} else if (ierr != SMIOL_SUCCESS && decomp == NULL) {
+		fprintf(test_log, "FAIL - decomp was NULL but did not returned SMIOL_SUCCESS\n");
+		errcount++;
+	}
+
+	/*
+	 * The following tests will only be run if there are exactly two MPI tasks.
+	 * In principle, as long as there are at least two MPI ranks in MPI_COMM_WORLD,
+	 * an intracommunicator with exactly two ranks could be created for these tests.
+	 */
+	if (comm_size == 2) {
+
+		/* Even/odd compute, half/half I/O */
+		fprintf(test_log, "Even/odd compute, half/half I/O: ");
+		n_compute_elements = 4;
+		n_io_elements = 4;
+		compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
+		io_elements = malloc(sizeof(SMIOL_Offset) * n_io_elements);
+
+		if (comm_rank == 0) {
+			for (i = 0; i < n_compute_elements; i++) {
+				compute_elements[i] = (SMIOL_Offset)(2 * i + 1);    /* Odd elements */
+			}
+			for (i = 0; i < n_io_elements; i++) {
+				io_elements[i] = (SMIOL_Offset)i;                   /* First half of elements */
+			}
+		} else {
+			for (i = 0; i < n_compute_elements; i++) {
+				compute_elements[i] = (SMIOL_Offset)(2 * i);        /* Even elements */
+			}
+			for (i = 0; i < n_io_elements; i++) {
+				io_elements[i] = (SMIOL_Offset)(4 + i);             /* Second half of elements */
+			}
+		}
+		ierr = build_exchange(context, n_compute_elements, compute_elements, n_io_elements, io_elements, &decomp);
+		if (ierr == SMIOL_SUCCESS && decomp != NULL) {
+
+			/* The correct comp_list and io_list arrays, below, were verified manually */
+			if (comm_rank == 0) {
+				SMIOL_Offset comp_list_correct[] = { 2, 0, 2, 0, 1, 1, 2, 2, 3 };
+				SMIOL_Offset io_list_correct[] = { 2, 0, 2, 1, 3, 1, 2, 0, 2 };
+
+				ierr = compare_decomps(decomp, (size_t)9, comp_list_correct, (size_t)9, io_list_correct);
+			} else {
+				SMIOL_Offset comp_list_correct[] = { 2, 0, 2, 0, 1, 1, 2, 2, 3 };
+				SMIOL_Offset io_list_correct[] = { 2, 0, 2, 1, 3, 1, 2, 0, 2 };
+
+				ierr = compare_decomps(decomp, (size_t)9, comp_list_correct, (size_t)9, io_list_correct);
+			}
+
+			if (ierr == 0) {
+				fprintf(test_log, "PASS\n");
+			} else {
+				fprintf(test_log, "FAIL - the decomp did not contain the expected values\n");
+				errcount++;
+			}
+		} else {
+			fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned or decomp was NULL\n");
+			errcount++;
+		}
+
+		free(compute_elements);
+		free(io_elements);
+
+		ierr = SMIOL_free_decomp(&decomp);
+		if (ierr != SMIOL_SUCCESS || decomp != NULL) {
+			fprintf(test_log, "After previous unit test, SMIOL_free_decomp was unsuccessful: FAIL\n");
+			errcount++;
+		}
+
+
+		/* Even/odd compute, nothing/all I/O */
+		fprintf(test_log, "Even/odd compute, nothing/all I/O: ");
+		n_compute_elements = 4;
+		if (comm_rank == 0) {
+			n_io_elements = 0;
+		} else {
+			n_io_elements = 8;
+		}
+		compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
+		io_elements = malloc(sizeof(SMIOL_Offset) * n_io_elements);
+
+		if (comm_rank == 0) {
+			for (i = 0; i < n_compute_elements; i++) {
+				compute_elements[i] = (SMIOL_Offset)(2 * i + 1);    /* Odd elements */
+			}
+
+			/* No I/O elements */
+		} else {
+			for (i = 0; i < n_compute_elements; i++) {
+				compute_elements[i] = (SMIOL_Offset)(2 * i);        /* Even elements */
+			}
+
+			for (i = 0; i < n_io_elements; i++) {
+				io_elements[i] = (SMIOL_Offset)i;                   /* All I/O elements */
+			}
+		}
+		ierr = build_exchange(context, n_compute_elements, compute_elements, n_io_elements, io_elements, &decomp);
+		if (ierr == SMIOL_SUCCESS && decomp != NULL) {
+
+			/* The correct comp_list and io_list arrays, below, were verified manually */
+			if (comm_rank == 0) {
+				SMIOL_Offset comp_list_correct[] = { 1, 1, 4, 0, 1, 2, 3 };
+				SMIOL_Offset io_list_correct[] = { 0 };
+
+				ierr = compare_decomps(decomp, (size_t)7, comp_list_correct, (size_t)1, io_list_correct);
+			} else {
+				SMIOL_Offset comp_list_correct[] = { 1, 1, 4, 0, 1, 2, 3 };
+				SMIOL_Offset io_list_correct[] = { 2, 0, 4, 1, 3, 5, 7, 1, 4, 0, 2, 4, 6 };
+
+				ierr = compare_decomps(decomp, (size_t)7, comp_list_correct, (size_t)13, io_list_correct);
+			}
+
+			if (ierr == 0) {
+				fprintf(test_log, "PASS\n");
+			} else {
+				fprintf(test_log, "FAIL - the decomp did not contain the expected values\n");
+				errcount++;
+			}
+		} else {
+			fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned or decomp was NULL\n");
+			errcount++;
+		}
+		free(compute_elements);
+		free(io_elements);
+
+		ierr = SMIOL_free_decomp(&decomp);
+		if (ierr != SMIOL_SUCCESS || decomp != NULL) {
+			fprintf(test_log, "After previous unit test, SMIOL_free_decomp was unsuccessful: FAIL\n");
+			errcount++;
+		}
+
+
+		/* All/nothing compute, nothing/all I/O */
+		fprintf(test_log, "All/nothing compute, nothing/all I/O: ");
+		if (comm_rank == 0) {
+			n_compute_elements = 8;
+			n_io_elements = 0;
+		} else {
+			n_compute_elements = 0;
+			n_io_elements = 8;
+		}
+		compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
+		io_elements = malloc(sizeof(SMIOL_Offset) * n_io_elements);
+
+		if (comm_rank == 0) {
+			for (i = 0; i < n_compute_elements; i++) {
+				compute_elements[i] = (SMIOL_Offset)(n_compute_elements - 1 - i);    /* All compute elements */
+			}
+
+			/* No I/O elements */
+		} else {
+			/* No compute elements */
+
+			for (i = 0; i < n_io_elements; i++) {
+				io_elements[i] = (SMIOL_Offset)i;                   /* All I/O elements */
+			}
+		}
+		ierr = build_exchange(context, n_compute_elements, compute_elements, n_io_elements, io_elements, &decomp);
 		if (ierr == SMIOL_SUCCESS && decomp != NULL) {
 
 			/* The correct comp_list and io_list arrays, below, were verified manually */
