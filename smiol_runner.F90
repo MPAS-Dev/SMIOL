@@ -12,9 +12,8 @@ program smiol_runner
     integer :: my_proc_id
     integer :: test_log = 42
     integer(kind=c_size_t) :: n_compute_elements = 1
-    integer(kind=c_size_t) :: n_io_elements = 1
+    integer :: num_io_tasks, io_stride
     integer(kind=SMIOL_offset_kind), dimension(:), pointer :: compute_elements
-    integer(kind=SMIOL_offset_kind), dimension(:), pointer :: io_elements
     type (SMIOLf_decomp), pointer :: decomp => null()
     type (SMIOLf_context), pointer :: context => null()
     type (SMIOLf_file), pointer :: file => null()
@@ -123,20 +122,20 @@ program smiol_runner
         stop 1
     end if
 
+    n_compute_elements = 100
     allocate(compute_elements(n_compute_elements))
-    allocate(io_elements(n_io_elements))
-
     compute_elements(:) = 0
-    io_elements(:) = 0
+
+    num_io_tasks = 16
+    io_stride = 4
 
     if (SMIOLf_create_decomp(context, n_compute_elements, compute_elements, &
-                             n_io_elements, io_elements, decomp) /= SMIOL_SUCCESS) then
+                             num_io_tasks, io_stride, decomp) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "Error: SMIOLf_create_decomp was not called successfully"
         stop 1
     endif
 
     deallocate(compute_elements)
-    deallocate(io_elements)
 
     if (SMIOLf_free_decomp(decomp) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "Error: SMIOLf_free_decomp was not called successfully"
@@ -531,10 +530,8 @@ contains
         integer :: comm_size
         integer :: comm_rank
         integer(kind=c_size_t) :: n_compute_elements
-        integer(kind=c_size_t) :: n_io_elements
         integer(kind=c_size_t) :: i
         integer(kind=SMIOL_offset_kind), dimension(:), pointer :: compute_elements
-        integer(kind=SMIOL_offset_kind), dimension(:), pointer :: io_elements
         type (SMIOLf_context), pointer :: context
         type (SMIOLf_decomp), pointer :: decomp => null()
         logical :: matched
@@ -570,10 +567,8 @@ contains
         ! Test with 0 elements
         write(test_log,'(a)',advance='no') 'Everything OK for SMIOLf_create_decomp with 0 elements: '
         n_compute_elements = 0
-        n_io_elements = 0
         allocate(compute_elements(n_compute_elements))
-        allocate(io_elements(n_io_elements))
-        ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements, decomp)
+        ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, comm_size, 1, decomp)
         if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
             write(test_log,'(a)') "PASS"
         else
@@ -582,7 +577,6 @@ contains
         endif
 
         deallocate(compute_elements)
-        deallocate(io_elements)
 
         ! Free Decomp
         write(test_log,'(a)',advance='no') 'Everything OK for SMIOLf_free_decomp with 0 elements: '
@@ -600,12 +594,9 @@ contains
         ! Small number of Compute and IO Elements
         write(test_log,'(a)',advance='no') 'Everything OK for SMIOLf_create_decomp 1 element: '
         n_compute_elements = 1
-        n_io_elements = 1
         allocate(compute_elements(n_compute_elements))
-        allocate(io_elements(n_io_elements))
         compute_elements(:) = 0
-        io_elements(:) = 0
-        ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements, decomp)
+        ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, comm_size, 1, decomp)
         if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
             write(test_log,'(a)') "PASS"
         else
@@ -614,7 +605,6 @@ contains
         endif
 
         deallocate(compute_elements)
-        deallocate(io_elements)
 
         ! Free Decomp
         write(test_log,'(a)',advance='no') 'Everything OK for SMIOLf_free_decomp with 1 element: '
@@ -632,12 +622,9 @@ contains
         ! Large number of Compute and IO Elements
         write(test_log,'(a)',advance='no') 'Everything OK for SMIOLf_create_decomp large number of elements: '
         n_compute_elements = 1000000
-        n_io_elements = 1000000
         allocate(compute_elements(n_compute_elements))
-        allocate(io_elements(n_io_elements))
         compute_elements(:) = 0
-        io_elements(:) = 0
-        ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements, decomp)
+        ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, comm_size, 1, decomp)
         if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
             write(test_log,'(a)') "PASS"
         else
@@ -646,7 +633,6 @@ contains
         endif
 
         deallocate(compute_elements)
-        deallocate(io_elements)
 
         ! Free Decomp
         write(test_log,'(a)',advance='no') 'Everything OK for SMIOLf_free_decomp large number of elements: '
@@ -681,30 +667,22 @@ contains
         !
         if (comm_size == 2) then
 
-            ! Even/odd compute, half/half I/O
-            write(test_log,'(a)',advance='no') 'Even/odd compute, half/half I/O: '
+            ! Odd/even compute, half/half I/O
+            write(test_log,'(a)',advance='no') 'Odd/even compute, half/half I/O: '
             n_compute_elements = 4
-            n_io_elements = 4
             allocate(compute_elements(n_compute_elements))
-            allocate(io_elements(n_io_elements))
 
             if (comm_rank == 0) then
                 do i = 1, n_compute_elements
                     compute_elements(i) = 2 * (i-1) + 1      ! Odd elements
                 end do
-                do i = 1, n_io_elements
-                    io_elements(i) = (i-1)                   ! First half of elements
-                end do
             else
                 do i = 1, n_compute_elements
                     compute_elements(i) = 2 * (i-1)          ! Even elements
                 end do
-                do i = 1, n_io_elements
-                    io_elements(i) = 4 + (i-1)               ! Second half of elements
-                end do
             end if
 
-            ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements, decomp)
+            ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, 2, 1, decomp)
             if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
 
                 ! The correct comp_list and io_list arrays, below, were verified manually
@@ -730,7 +708,6 @@ contains
             end if
 
             deallocate(compute_elements)
-            deallocate(io_elements)
 
             ierr = SMIOLf_free_decomp(decomp)
             if (ierr /= SMIOL_SUCCESS .or. associated(decomp)) then
@@ -739,44 +716,33 @@ contains
             end if
 
 
-            ! Even/odd compute, nothing/all I/O
-            write(test_log,'(a)',advance='no') 'Even/odd compute, nothing/all I/O: '
+            ! Even/odd compute, all/nothing I/O
+            write(test_log,'(a)',advance='no') 'Even/odd compute, all/nothing I/O: '
             n_compute_elements = 4
-            if (comm_rank == 0) then
-                n_io_elements = 0
-            else
-                n_io_elements = 8
-            end if
             allocate(compute_elements(n_compute_elements))
-            allocate(io_elements(n_io_elements))
 
             if (comm_rank == 0) then
-                do i = 1, n_compute_elements
-                    compute_elements(i) = 2 * (i-1) + 1      ! Odd elements
-                end do
-
-                ! No I/O elements
-            else
                 do i = 1, n_compute_elements
                     compute_elements(i) = 2 * (i-1)          ! Even elements
                 end do
-                do i = 1, n_io_elements
-                    io_elements(i) = (i-1)                   ! All I/O elements
+            else
+                do i = 1, n_compute_elements
+                    compute_elements(i) = 2 * (i-1) + 1      ! Odd elements
                 end do
             end if
 
-            ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements, decomp)
+            ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, 1, 2, decomp)
             if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
 
                 ! The correct comp_list and io_list arrays, below, were verified manually
                 if (comm_rank == 0) then
                     matched = compare_decomps(decomp, &
-                                              [ integer(kind=SMIOL_offset_kind) :: 1, 1, 4, 0, 1, 2, 3 ], &
+                                              [ integer(kind=SMIOL_offset_kind) :: 1, 0, 4, 0, 1, 2, 3 ], &
+                                              [ integer(kind=SMIOL_offset_kind) :: 2, 0, 4, 0, 2, 4, 6, 1, 4, 1, 3, 5, 7 ])
+                else
+                    matched = compare_decomps(decomp, &
+                                              [ integer(kind=SMIOL_offset_kind) :: 1, 0, 4, 0, 1, 2, 3 ], &
                                               [ integer(kind=SMIOL_offset_kind) :: 0 ])
-                else
-                    matched = compare_decomps(decomp, &
-                                              [ integer(kind=SMIOL_offset_kind) :: 1, 1, 4, 0, 1, 2, 3 ], &
-                                              [ integer(kind=SMIOL_offset_kind) :: 2, 0, 4, 1, 3, 5, 7, 1, 4, 0, 2, 4, 6 ])
                 end if
 
                 if (matched) then
@@ -791,7 +757,6 @@ contains
             end if
 
             deallocate(compute_elements)
-            deallocate(io_elements)
 
             ierr = SMIOLf_free_decomp(decomp)
             if (ierr /= SMIOL_SUCCESS .or. associated(decomp)) then
@@ -800,44 +765,35 @@ contains
             end if
 
 
-            ! All/nothing compute, nothing/all I/O
-            write(test_log,'(a)',advance='no') 'All/nothing compute, nothing/all I/O: '
+            ! Nothing/all compute, all/nothing I/O
+            write(test_log,'(a)',advance='no') 'Nothing/all compute, all/nothing I/O: '
             if (comm_rank == 0) then
-                n_compute_elements = 8
-                n_io_elements = 0
-            else
                 n_compute_elements = 0
-                n_io_elements = 8
+            else
+                n_compute_elements = 8
             end if
             allocate(compute_elements(n_compute_elements))
-            allocate(io_elements(n_io_elements))
 
             if (comm_rank == 0) then
+                ! No compute elements
+            else
                 do i = 1, n_compute_elements
                     compute_elements(i) = (n_compute_elements - i)      ! All compute elements
                 end do
-
-                ! No I/O elements
-            else
-                ! No compute elements
-
-                do i = 1, n_io_elements
-                    io_elements(i) = (i-1)                   ! All I/O elements
-                end do
             end if
 
-            ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, n_io_elements, io_elements, decomp)
+            ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, 1, 2, decomp)
             if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
 
                 ! The correct comp_list and io_list arrays, below, were verified manually
                 if (comm_rank == 0) then
                     matched = compare_decomps(decomp, &
-                                              [ integer(kind=SMIOL_offset_kind) :: 1, 1, 8, 7, 6, 5, 4, 3, 2, 1, 0 ], &
-                                              [ integer(kind=SMIOL_offset_kind) :: 0 ])
+                                              [ integer(kind=SMIOL_offset_kind) :: 0 ], &
+                                              [ integer(kind=SMIOL_offset_kind) :: 1, 1, 8, 0, 1, 2, 3, 4, 5, 6, 7 ])
                 else
                     matched = compare_decomps(decomp, &
-                                              [ integer(kind=SMIOL_offset_kind) :: 0], &
-                                              [ integer(kind=SMIOL_offset_kind) :: 1, 0, 8, 0, 1, 2, 3, 4, 5, 6, 7 ])
+                                              [ integer(kind=SMIOL_offset_kind) :: 1, 0, 8, 7, 6, 5, 4, 3, 2, 1, 0 ], &
+                                              [ integer(kind=SMIOL_offset_kind) :: 0 ])
                 end if
 
                 if (matched) then
@@ -852,7 +808,6 @@ contains
             end if
 
             deallocate(compute_elements)
-            deallocate(io_elements)
 
             ierr = SMIOLf_free_decomp(decomp)
             if (ierr /= SMIOL_SUCCESS .or. associated(decomp)) then
