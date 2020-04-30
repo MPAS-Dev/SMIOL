@@ -370,6 +370,49 @@ int transfer_field(const struct SMIOL_decomp *decomp, int dir,
 
 /*******************************************************************************
  *
+ * get_io_elements
+ *
+ * Returns a contiguous range of I/O elements for an MPI task
+ *
+ * Given the rank of a task, a description of the I/O task arrangement --
+ * the number of I/O tasks and the stride between I/O tasks -- as well as the
+ * total number of elements to read or write, compute the offset of the first
+ * I/O element as well as the number of elements to read or write for the task.
+ *
+ * If this routine is successful in producing a valid io_start and io_count,
+ * a value of 0 is returned; otherwise, a non-zero value is returned.
+ *
+ *******************************************************************************/
+int get_io_elements(int comm_rank, int num_io_tasks, int io_stride,
+                    size_t n_io_elements, size_t *io_start, size_t *io_count)
+{
+	if (io_start == NULL || io_count == NULL) {
+		return 1;
+	}
+
+	*io_start = 0;
+	*io_count = 0;
+
+	if (comm_rank % io_stride == 0) {
+		size_t io_rank = (size_t)(comm_rank / io_stride);
+		size_t elems_per_task = (n_io_elements / (size_t)num_io_tasks);
+
+		*io_start = io_rank * elems_per_task;
+		*io_count = elems_per_task;
+
+		if (io_rank + 1 == (size_t)num_io_tasks) {
+			size_t remainder = n_io_elements
+			                   - (size_t)num_io_tasks * elems_per_task;
+			*io_count += remainder;
+		}
+	}
+
+	return 0;
+}
+
+
+/*******************************************************************************
+ *
  * print_lists
  *
  * Writes the contents of comp_list and io_list arrays to a text file
