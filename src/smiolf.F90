@@ -35,7 +35,8 @@ module SMIOLf
               SMIOLf_create_decomp, &
               SMIOLf_free_decomp, &
               SMIOLf_set_frame, &
-              SMIOLf_get_frame
+              SMIOLf_get_frame, &
+              SMIOLf_f_to_c_string
 
 
     integer, parameter :: SMIOL_offset_kind = c_int64_t   ! Must match SMIOL_Offset in smiol_types.h
@@ -1915,5 +1916,44 @@ contains
         end if
 
     end function SMIOLf_free_decomp
+
+    !-----------------------------------------------------------------------
+    !  routine SMIOLf_f_to_c_string
+    !
+    !> \brief Convert a Fortran string to a C null-terminated character array
+    !> \details
+    !>  Converts a Fortran string to a C null-terminated character array.
+    !>  The cstring output argument must be large enough to contain the trimmed
+    !>  Fortran string plus at least one c_null_char character. Any characters
+    !>  beyond len_trim(fstring) of cstring will be filled with c_null_char
+    !>  characters. If the size of cstring  is less than len_trim(fstring)+1,
+    !>  then only size(cstring)-1 characters from fstring will be copied into
+    !>  cstring before the final c_null_char character is added.
+    !
+    !-----------------------------------------------------------------------
+    subroutine SMIOLf_f_to_c_string(fstring, cstring)
+
+        use iso_c_binding, only : c_char, c_null_char
+
+        implicit none
+
+        character(len=*), intent(in) :: fstring
+        character(kind=c_char), dimension(:), intent(out) :: cstring
+
+        integer :: i
+        integer :: nchar
+
+        if (size(cstring) <= 0) then
+            return
+        end if
+
+        nchar = min(size(cstring)-1, len_trim(fstring))
+
+        do i = 1, nchar
+            cstring(i) = fstring(i:i)
+        end do
+        cstring(nchar+1:size(cstring)) = c_null_char
+
+    end subroutine SMIOLf_f_to_c_string
 
 end module SMIOLf
