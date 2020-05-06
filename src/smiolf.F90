@@ -282,9 +282,7 @@ contains
         type (c_ptr) :: c_context = c_null_ptr
         type (c_ptr) :: c_file = c_null_ptr
         integer(kind=c_int) :: c_mode
-        character(kind=c_char), dimension(:), pointer :: c_filename => null()
-
-        integer :: i
+        character(kind=c_char), dimension(:), pointer :: c_filename
 
         ! C interface definitions
         interface
@@ -306,10 +304,7 @@ contains
         ! Convert Fortran string to C character array
         !
         allocate(c_filename(len_trim(filename) + 1))
-        do i=1,len_trim(filename)
-            c_filename(i) = filename(i:i)
-        end do
-        c_filename(i) = c_null_char
+        call SMIOLf_f_to_c_string(filename, c_filename)
 
         c_mode = mode
 
@@ -416,8 +411,6 @@ contains
         type (c_ptr) :: c_file
         character(kind=c_char), dimension(:), pointer :: c_dimname
 
-        integer :: i
-
         ! C interface definitions
         interface
             function SMIOL_define_dim(file, dimname, dimsize) result(ierr) bind(C, name='SMIOL_define_dim')
@@ -438,10 +431,7 @@ contains
         ! Convert Fortran string to C character array
         !
         allocate(c_dimname(len_trim(dimname) + 1))
-        do i=1,len_trim(dimname)
-            c_dimname(i) = dimname(i:i)
-        end do
-        c_dimname(i) = c_null_char
+        call SMIOLf_f_to_c_string(dimname, c_dimname)
 
         ierr = SMIOL_define_dim(c_file, c_dimname, dimsize)
 
@@ -487,7 +477,6 @@ contains
         type (c_ptr) :: c_dimsize_ptr
         type (c_ptr) :: c_is_unlimited_ptr
 
-        integer :: i
 
         ! C interface definitions
         interface
@@ -510,10 +499,7 @@ contains
         ! Convert Fortran string to C character array
         !
         allocate(c_dimname(len_trim(dimname) + 1))
-        do i=1,len_trim(dimname)
-            c_dimname(i) = dimname(i:i)
-        end do
-        c_dimname(i) = c_null_char
+        call SMIOLf_f_to_c_string(dimname, c_dimname)
 
         !
         ! Set C dimsize
@@ -627,10 +613,7 @@ contains
         ! Convert Fortran string to C character array
         !
         allocate(c_varname(len_trim(varname) + 1))
-        do i=1,len_trim(varname)
-            c_varname(i) = varname(i:i)
-        end do
-        c_varname(i) = c_null_char
+        call SMIOLf_f_to_c_string(varname, c_varname)
 
         !
         ! Convert vartype and ndims
@@ -736,10 +719,7 @@ contains
         ! Convert variable name string
         !
         allocate(c_varname(len_trim(varname) + 1))
-        do i=1,len_trim(varname)
-            c_varname(i) = varname(i:i)
-        end do
-        c_varname(i) = c_null_char
+        call SMIOLf_f_to_c_string(varname, c_varname)
 
         !
         ! Set C pointer for variable type
