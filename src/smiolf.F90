@@ -410,16 +410,21 @@ contains
     !
     !> \brief Inquires about an existing dimension in a file
     !> \details
-    !>  Inquires about the size of an existing dimension in a file. For record
-    !>  dimensions, the current size of the dimension is returned; future writes of
-    !>  additional records to a file can lead to different return sizes for record
-    !>  dimensions.
+    !>  Inquire about an existing dimension's size or if a dimension is the
+    !>  unlimited dimension or not. If dimsize is present, the size of the dimension
+    !>  will be returned in it; likewise, if is_unlimited is present, is_unlimited
+    !>  will return either .true. or .false. depending on whether or not the dimension
+    !>  is the unlimited dimension or not.
+    !>
+    !>  For unlimited dimensions, the current size of the dimension is returned;
+    !>  future writes of additional records to a file can lead to different return
+    !>  sizes for unlimited dimensions.
     !>
     !>  Upon successful completion, SMIOL_SUCCESS is returned; otherwise, an error
     !>  code is returned.
     !
     !-----------------------------------------------------------------------
-    integer function SMIOLf_inquire_dim(file, dimname, dimsize) result(ierr)
+    integer function SMIOLf_inquire_dim(file, dimname, dimsize, is_unlimited) result(ierr)
 
         use iso_c_binding, only : c_char, c_null_char, c_loc, c_ptr, c_null_ptr, c_associated
 
@@ -427,21 +432,27 @@ contains
 
         type (SMIOLf_file), target :: file
         character(len=*), intent(in) :: dimname
-        integer(kind=SMIOL_offset_kind), intent(out) :: dimsize
+        integer(kind=SMIOL_offset_kind), intent(out), optional :: dimsize
+        logical, intent(out), optional :: is_unlimited
 
         type (c_ptr) :: c_file
         character(kind=c_char), dimension(:), pointer :: c_dimname
+        integer (kind=SMIOL_offset_kind), target :: c_dimsize
+        integer (kind=c_int), target :: c_is_unlimited
+        type (c_ptr) :: c_dimsize_ptr
+        type (c_ptr) :: c_is_unlimited_ptr
 
         integer :: i
 
         ! C interface definitions
         interface
-            function SMIOL_inquire_dim(file, dimname, dimsize) result(ierr) bind(C, name='SMIOL_inquire_dim')
+            function SMIOL_inquire_dim(file, dimname, dimsize, is_unlimited) result(ierr) bind(C, name='SMIOL_inquire_dim')
                 use iso_c_binding, only : c_ptr, c_char, c_int
                 import SMIOL_offset_kind
                 type (c_ptr), value :: file
                 character(kind=c_char), dimension(*) :: dimname
-                integer(kind=SMIOL_offset_kind) :: dimsize
+                type (c_ptr), value :: dimsize
+                type (c_ptr), value :: is_unlimited
                 integer(kind=c_int) :: ierr
             end function
         end interface
@@ -459,7 +470,37 @@ contains
         end do
         c_dimname(i) = c_null_char
 
-        ierr = SMIOL_inquire_dim(c_file, c_dimname, dimsize)
+        !
+        ! Set C dimsize
+        !
+        if (present(dimsize)) then
+            c_dimsize_ptr = c_loc(c_dimsize)
+        else
+            c_dimsize_ptr = c_null_ptr
+        endif
+
+        !
+        ! Set C pointer for unlimited dimension inquiry argument
+        !
+        if (present(is_unlimited)) then
+            c_is_unlimited_ptr = c_loc(c_is_unlimited)
+        else
+            c_is_unlimited_ptr = c_null_ptr
+        end if
+
+        ierr = SMIOL_inquire_dim(c_file, c_dimname, c_dimsize_ptr, c_is_unlimited_ptr)
+
+        if (present(dimsize)) then
+            dimsize = c_dimsize
+        end if
+
+        if (present(is_unlimited)) then
+            if (c_is_unlimited == 1) then
+                is_unlimited = .true.
+            else
+                is_unlimited = .false.
+            end if
+        end if
 
         deallocate(c_dimname)
 
