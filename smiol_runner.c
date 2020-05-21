@@ -1330,6 +1330,7 @@ int test_dimensions(FILE *test_log)
 {
 	int ierr;
 	int errcount;
+	int is_unlimited;
 	SMIOL_Offset dimsize;
 	struct SMIOL_context *context;
 	struct SMIOL_file *file;
@@ -1414,7 +1415,7 @@ int test_dimensions(FILE *test_log)
 
 	/* Handle NULL file handle */
 	fprintf(test_log, "Handle NULL file handle (SMIOL_inquire_dim): ");
-	ierr = SMIOL_inquire_dim(NULL, "invalid_dim", &dimsize, NULL);
+	ierr = SMIOL_inquire_dim(NULL, "invalid_dim", NULL, NULL);
 	if (ierr != SMIOL_SUCCESS) {
 		fprintf(test_log, "PASS\n");
 	}
@@ -1437,7 +1438,7 @@ int test_dimensions(FILE *test_log)
 	/* Handle NULL dimension size */
 	fprintf(test_log, "Handle NULL dimension size and NULL unlimited argument (SMIOL_inquire_dim): ");
 	ierr = SMIOL_inquire_dim(file, "nCells", NULL, NULL);
-	if (ierr == SMIOL_INVALID_ARGUMENT) {
+	if (ierr != SMIOL_SUCCESS) {
 		fprintf(test_log, "PASS\n");
 	}
 	else {
@@ -1532,6 +1533,42 @@ int test_dimensions(FILE *test_log)
 		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned\n");
 		errcount++;
 	}
+
+	/* Inquire about the unlimited dimension */
+	fprintf(test_log, "Everything OK - checking if Time is the unlimited dimension (SMIOL_inquire_dim): ");
+	ierr = SMIOL_inquire_dim(file, "Time", NULL, &is_unlimited);
+	if (ierr == SMIOL_SUCCESS) {
+#ifdef SMIOL_PNETCDF
+		if (is_unlimited == 1) {
+#else
+		if (is_unlimited == 0) {
+#endif
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "is_unlimited: %d\n", is_unlimited);
+			fprintf(test_log, "FAIL - SMIOL_inquire_dim reported that the Time dim was not the unlimited dim\n");
+			errcount++;
+		}
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+
+	fprintf(test_log, "Everything OK - checking if nCells is not the unlimited dimension (SMIOL_inquire_dim): ");
+	ierr = SMIOL_inquire_dim(file, "nCells", NULL, &is_unlimited);
+	if (ierr == SMIOL_SUCCESS) {
+		if (!is_unlimited) {
+			fprintf(test_log, "PASS\n");
+		}
+		else {
+			fprintf(test_log, "FAIL - SMIOL_inquire_dim reported that the nCells dim *was* the unlimited dim\n");
+			errcount++;
+		}
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+
 
 	/* Close the SMIOL file */
 	ierr = SMIOL_close_file(&file);
