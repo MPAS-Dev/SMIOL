@@ -370,6 +370,528 @@ int transfer_field(const struct SMIOL_decomp *decomp, int dir,
 
 /*******************************************************************************
  *
+ * get_io_elements
+ *
+ * Returns a contiguous range of I/O elements for an MPI task
+ *
+ * Given the rank of a task, a description of the I/O task arrangement --
+ * the number of I/O tasks and the stride between I/O tasks -- as well as the
+ * total number of elements to read or write, compute the offset of the first
+ * I/O element as well as the number of elements to read or write for the task.
+ *
+ * If this routine is successful in producing a valid io_start and io_count,
+ * a value of 0 is returned; otherwise, a non-zero value is returned.
+ *
+ *******************************************************************************/
+int get_io_elements(int comm_rank, int num_io_tasks, int io_stride,
+                    size_t n_io_elements, size_t *io_start, size_t *io_count)
+{
+	if (io_start == NULL || io_count == NULL) {
+		return 1;
+	}
+
+	*io_start = 0;
+	*io_count = 0;
+
+	if (comm_rank % io_stride == 0) {
+		size_t io_rank = (size_t)(comm_rank / io_stride);
+		size_t elems_per_task = (n_io_elements / (size_t)num_io_tasks);
+
+		*io_start = io_rank * elems_per_task;
+		*io_count = elems_per_task;
+
+		if (io_rank + 1 == (size_t)num_io_tasks) {
+			size_t remainder = n_io_elements
+			                   - (size_t)num_io_tasks * elems_per_task;
+			*io_count += remainder;
+		}
+	}
+
+	return 0;
+}
+
+
+/*******************************************************************************
+ *
+ * build_exchange
+ *
+ * Builds a mapping between compute elements and I/O elements.
+ *
+ * Given arrays of global element IDs that each task computes and global element
+ * IDs that each task reads/writes, this routine works out a mapping of elements
+ * between compute and I/O tasks.
+ *
+ * If all input arguments are determined to be valid and if the routine is
+ * successful in working out a mapping, the decomp pointer is allocated and
+ * given valid contents, and SMIOL_SUCCESS is returned; otherwise a non-success
+ * error code is returned and the decomp pointer is NULL.
+ *
+ *******************************************************************************/
+int build_exchange(struct SMIOL_context *context,
+                   size_t n_compute_elements, SMIOL_Offset *compute_elements,
+                   size_t n_io_elements, SMIOL_Offset *io_elements,
+                   struct SMIOL_decomp **decomp)
+{
+	MPI_Comm comm;
+	int comm_size;
+	int comm_rank;
+	int ierr;
+	int i, j;
+	int count;
+	int nbuf_in, nbuf_out;
+	SMIOL_Offset *compute_ids;
+	SMIOL_Offset *io_ids;
+	SMIOL_Offset *buf_in, *buf_out;
+	SMIOL_Offset *io_list, *comp_list;
+	SMIOL_Offset neighbor;
+	MPI_Request req_in, req_out;
+	size_t ii;
+	size_t idx;
+	size_t n_neighbors;
+	size_t n_xfer;
+	size_t n_xfer_total;
+	size_t n_list;
+
+	const SMIOL_Offset UNKNOWN_TASK = (SMIOL_Offset)(-1);
+
+
+	if (context == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	if (compute_elements == NULL && n_compute_elements != 0) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	if (io_elements == NULL && n_io_elements != 0) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+
+	comm = MPI_Comm_f2c(context->fcomm);
+	comm_size = context->comm_size;
+	comm_rank = context->comm_rank;
+
+
+	/*
+	 * Because the count argument to MPI_Isend and MPI_Irecv is an int, at
+	 * most 2^31-1 elements can be transmitted at a time. In this routine,
+	 * arrays of pairs of SMIOL_Offset values will be transmitted as arrays
+	 * of bytes, so n_compute_elements and n_io_elements can be at most
+	 * 2^31-1 / sizeof(SMIOL_Offset) / 2.
+	 */
+	i = 0;
+	if (n_compute_elements > (((size_t)1 << 31) - 1)
+	                         / sizeof(SMIOL_Offset)
+	                         / (size_t)2) {
+		i = 1;
+	}
+	if (n_io_elements > (((size_t)1 << 31) - 1)
+	                    / sizeof(SMIOL_Offset)
+	                    / (size_t)2) {
+		i = 1;
+	}
+
+	ierr = MPI_Allreduce((const void *)&i, (void *)&j, 1, MPI_INT, MPI_MAX,
+	                     comm);
+	if (j > 0) {
+		return SMIOL_INVALID_ARGUMENT;
+	} else if (ierr != MPI_SUCCESS) {
+		return SMIOL_MPI_ERROR;
+	}
+
+
+	/*
+	 * Allocate an array, compute_ids, with three entries for each compute
+	 * element
+	 *    [0] - element global ID
+	 *    [1] - element local ID
+	 *    [2] - I/O task that reads/writes this element
+	 */
+	compute_ids = (SMIOL_Offset *)malloc(sizeof(SMIOL_Offset) * TRIPLET_SIZE
+	                                     * n_compute_elements);
+	if (compute_ids == NULL) {
+		return SMIOL_MALLOC_FAILURE;
+	}
+
+	/*
+	 * Fill in compute_ids array with global and local IDs; rank of I/O task
+	 * is not yet known
+	 */
+	for (ii = 0; ii < n_compute_elements; ii++) {
+		compute_ids[TRIPLET_SIZE*ii] = compute_elements[ii]; /* global ID */
+		compute_ids[TRIPLET_SIZE*ii+1] = (SMIOL_Offset)ii;   /* local ID */
+		compute_ids[TRIPLET_SIZE*ii+2] = UNKNOWN_TASK;       /* I/O task rank */
+	}
+
+	/*
+	 * Sort the compute_ids array on global element ID
+	 * (first entry for each element)
+	 */
+	sort_triplet_array(n_compute_elements, compute_ids, 0);
+
+	/*
+	 * Allocate buffer with two entries for each I/O element
+	 *    [0] - I/O element global ID
+	 *    [1] - task that computes this element
+	 */
+	nbuf_out = (int)n_io_elements;
+	buf_out = (SMIOL_Offset *)malloc(sizeof(SMIOL_Offset) * (size_t)2
+	                                 * (size_t)nbuf_out);
+	if (buf_out == NULL) {
+		free(compute_ids);
+		return SMIOL_MALLOC_FAILURE;
+	}
+
+	/*
+	 * Fill buffer with I/O element IDs; compute task is not yet known
+	 */
+	for (ii = 0; ii < n_io_elements; ii++) {
+		buf_out[2*ii] = io_elements[ii];
+		buf_out[2*ii+1] = UNKNOWN_TASK;
+	}
+
+	/*
+	 * Iterate through all ranks in the communicator, receiving from "left"
+	 * neighbor and sending to "right" neighbor in each iteration.
+	 * The objective is to identify, for each I/O element, which MPI rank
+	 * computes that element. At the end of iteration, each rank will have
+	 * seen the I/O element list from all other ranks.
+	 */
+	for (i = 0; i < comm_size; i++) {
+		/*
+		 * Compute the rank whose buffer will be received this iteration
+		 */
+		SMIOL_Offset src_rank = (comm_rank - 1 - i + comm_size)
+		                        % comm_size;
+
+		/*
+		 * Initiate send of outgoing buffer size and receive of incoming
+		 * buffer size
+		 */
+		ierr = MPI_Irecv((void *)&nbuf_in, 1, MPI_INT,
+		                 (comm_rank - 1 + comm_size) % comm_size,
+		                 (comm_rank + i), comm, &req_in);
+
+		ierr = MPI_Isend((const void *)&nbuf_out, 1, MPI_INT,
+		                 (comm_rank + 1) % comm_size,
+		                 ((comm_rank + 1) % comm_size + i), comm,
+		                 &req_out);
+
+		/*
+		 * Wait until the incoming buffer size has been received
+		 */
+		ierr = MPI_Wait(&req_in, MPI_STATUS_IGNORE);
+
+		/*
+		 * Allocate incoming buffer
+		 */
+		buf_in = (SMIOL_Offset *)malloc(sizeof(SMIOL_Offset) * (size_t)2
+		                                * (size_t)nbuf_in);
+
+		/*
+		 * Initiate receive of incoming buffer
+		 */
+		count = 2 * nbuf_in;
+		count *= (int)sizeof(SMIOL_Offset);
+		ierr = MPI_Irecv((void *)buf_in, count, MPI_BYTE,
+		                 (comm_rank - 1 + comm_size) % comm_size,
+		                 (comm_rank + i), comm, &req_in);
+
+		/*
+		 * Wait until the outgoing buffer size has been sent
+		 */
+		ierr = MPI_Wait(&req_out, MPI_STATUS_IGNORE);
+
+		/*
+		 * Initiate send of outgoing buffer
+		 */
+		count = 2 * nbuf_out;
+		count *= (int)sizeof(SMIOL_Offset);
+		ierr = MPI_Isend((const void *)buf_out, count, MPI_BYTE,
+		                 (comm_rank + 1) % comm_size,
+		                 ((comm_rank + 1) % comm_size + i), comm,
+		                 &req_out);
+
+		/*
+		 * Wait until the incoming buffer has been received
+		 */
+		ierr = MPI_Wait(&req_in, MPI_STATUS_IGNORE);
+
+		/*
+		 * Loop through the incoming buffer, marking all elements that
+		 * are computed on this task
+		 */
+		for (j = 0; j < nbuf_in; j++) {
+			/*
+			 * If I/O element does not yet have a computing task...
+			 */
+			if (buf_in[2*j+1] == UNKNOWN_TASK) {
+				SMIOL_Offset *elem;
+
+				/*
+				 * and if this element is computed on this task...
+				 */
+				elem = search_triplet_array(buf_in[2*j],
+				                            n_compute_elements,
+				                            compute_ids, 0);
+				if (elem != NULL) {
+					/*
+					 * then mark the element as being
+					 * computed on this task
+					 */
+					buf_in[2*j+1] = (SMIOL_Offset)comm_rank;
+
+					/*
+					 * and note locally which task will
+					 * read/write this element
+					 */
+					elem[2] = src_rank;
+				}
+			}
+		}
+
+		/*
+		 * Wait until we have sent the outgoing buffer
+		 */
+		ierr = MPI_Wait(&req_out, MPI_STATUS_IGNORE);
+
+		/*
+		 * Free outgoing buffer and make the input buffer into
+		 * the output buffer for next iteration
+		 */
+		free(buf_out);
+		buf_out = buf_in;
+		nbuf_out = nbuf_in;
+	}
+
+	/*
+	 * The output buffer is now the initial buffer with the compute tasks
+	 * for each I/O element identified
+	 */
+
+	/*
+	 * Allocate an array, io_ids, with three entries for each I/O element
+	 *    [0] - element global ID
+	 *    [1] - element local ID
+	 *    [2] - compute task that operates on this element
+	 */
+	io_ids = (SMIOL_Offset *)malloc(sizeof(SMIOL_Offset) * TRIPLET_SIZE
+	                                * n_io_elements);
+	if (io_ids == NULL) {
+		free(compute_ids);
+		free(buf_out);
+		return SMIOL_MALLOC_FAILURE;
+	}
+
+	/*
+	 * Fill in io_ids array with global and local IDs, plus the rank of
+	 * the task that computes each element
+	 */
+	for (ii = 0; ii < n_io_elements; ii++) {
+		io_ids[TRIPLET_SIZE*ii] = buf_out[2*ii+0];    /* global ID */
+		io_ids[TRIPLET_SIZE*ii+1] = (SMIOL_Offset)ii; /* local ID */
+		io_ids[TRIPLET_SIZE*ii+2] = buf_out[2*ii+1];  /* computing task rank */
+	}
+
+	free(buf_out);
+
+	/*
+	 * Sort io_ids array on task ID (third entry for each element)
+	 */
+	sort_triplet_array(n_io_elements, io_ids, 2);
+
+	*decomp = (struct SMIOL_decomp *)malloc(sizeof(struct SMIOL_decomp));
+	if ((*decomp) == NULL) {
+		free(compute_ids);
+		free(io_ids);
+		return SMIOL_MALLOC_FAILURE;
+	}
+
+	(*decomp)->context = context;
+
+
+	/*
+	 * Scan through io_ids to determine number of unique neighbors that
+	 * compute elements read/written on this task, and also determine
+	 * the total number of elements
+	 * computed on other tasks that are read/written on this task
+	 */
+	ii = 0;
+	n_neighbors = 0;
+	n_xfer_total = 0;
+	while (ii < n_io_elements) {
+		/* Task that computes this element */
+		neighbor = io_ids[TRIPLET_SIZE*ii + 2];
+
+		/* Number of elements to read/write for neighbor */
+		n_xfer = 0;
+
+		/*
+		 * Since io_ids is sorted on task, as long as task is unchanged,
+		 * increment n_xfer
+		 */
+		while (ii < n_io_elements
+		       && io_ids[TRIPLET_SIZE*ii+2] == neighbor) {
+			n_xfer++;
+			ii++;
+		}
+		if (neighbor != UNKNOWN_TASK) {
+			n_neighbors++;
+			n_xfer_total += n_xfer;
+		}
+	}
+
+	/*
+	 * Based on number of neighbors and total number of elements to transfer
+	 * allocate the io_list
+	 */
+	n_list = sizeof(SMIOL_Offset) * ((size_t)1
+	                                 + (size_t)2 * n_neighbors
+	                                 + n_xfer_total);
+	(*decomp)->io_list = (SMIOL_Offset *)malloc(n_list);
+	if ((*decomp)->io_list == NULL) {
+		free(compute_ids);
+		free(io_ids);
+		free(*decomp);
+		*decomp = NULL;
+		return SMIOL_MALLOC_FAILURE;
+	}
+	io_list = (*decomp)->io_list;
+
+	/*
+	 * Scan through io_ids a second time, filling in the io_list
+	 */
+	io_list[0] = (SMIOL_Offset)n_neighbors;
+	idx = 1; /* Index in io_list where neighbor ID will be written, followed
+	            by number of elements and element local IDs */
+
+	ii = 0;
+	while (ii < n_io_elements) {
+		/* Task that computes this element */
+		neighbor = io_ids[TRIPLET_SIZE*ii + 2];
+
+		/* Number of elements to read/write for neighbor */
+		n_xfer = 0;
+
+		/*
+		 * Since io_ids is sorted on task, as long as task is unchanged,
+		 * increment n_xfer
+		 */
+		while (ii < n_io_elements
+		       && io_ids[TRIPLET_SIZE*ii+2] == neighbor) {
+			if (neighbor != UNKNOWN_TASK) {
+				/* Save local element ID in list */
+				io_list[idx+2+n_xfer] = io_ids[TRIPLET_SIZE*ii+1];
+				n_xfer++;
+			}
+			ii++;
+		}
+		if (neighbor != UNKNOWN_TASK) {
+			io_list[idx] = neighbor;
+			io_list[idx+1] = (SMIOL_Offset)n_xfer;
+			idx += (2 + n_xfer);
+		}
+	}
+
+	free(io_ids);
+
+	/*
+	 * Sort compute_ids array on task ID (third entry for each element)
+	 */
+	sort_triplet_array(n_compute_elements, compute_ids, 2);
+
+	/*
+	 * Scan through compute_ids to determine number of unique neighbors that
+	 * read/write elements computed on this task, and also determine
+	 * the total number of elements read/written on other tasks that are
+	 * computed on this task
+	 */
+	ii = 0;
+	n_neighbors = 0;
+	n_xfer_total = 0;
+	while (ii < n_compute_elements) {
+		/* Task that reads/writes this element */
+		neighbor = compute_ids[TRIPLET_SIZE*ii + 2];
+
+		/* Number of elements to compute for neighbor */
+		n_xfer = 0;
+
+		/*
+		 * Since compute_ids is sorted on task, as long as task is
+		 * unchanged, increment n_xfer
+		 */
+		while (ii < n_compute_elements
+		       && compute_ids[TRIPLET_SIZE*ii+2] == neighbor) {
+			n_xfer++;
+			ii++;
+		}
+		if (neighbor != UNKNOWN_TASK) {
+			n_neighbors++;
+			n_xfer_total += n_xfer;
+		}
+	}
+
+	/*
+	 * Based on number of neighbors and total number of elements to transfer
+	 * allocate the comp_list
+	 */
+	n_list = sizeof(SMIOL_Offset) * ((size_t)1
+	                                 + (size_t)2 * n_neighbors
+	                                 + n_xfer_total);
+	(*decomp)->comp_list = (SMIOL_Offset *)malloc(n_list);
+	if ((*decomp)->comp_list == NULL) {
+		free(compute_ids);
+		free((*decomp)->io_list);
+		free(*decomp);
+		*decomp = NULL;
+		return SMIOL_MALLOC_FAILURE;
+	}
+	comp_list = (*decomp)->comp_list;
+
+	/*
+	 * Scan through compute_ids a second time, filling in the comp_list
+	 */
+	comp_list[0] = (SMIOL_Offset)n_neighbors;
+	idx = 1; /* Index in compute_list where neighbor ID will be written,
+	            followed by number of elements and element local IDs */
+
+	ii = 0;
+	while (ii < n_compute_elements) {
+		/* Task that reads/writes this element */
+		neighbor = compute_ids[TRIPLET_SIZE*ii + 2];
+
+		/* Number of elements to compute for neighbor */
+		n_xfer = 0;
+
+		/*
+		 * Since compute_ids is sorted on task, as long as task is
+		 * unchanged, increment n_xfer
+		 */
+		while (ii < n_compute_elements
+		       && compute_ids[TRIPLET_SIZE*ii+2] == neighbor) {
+			if (neighbor != UNKNOWN_TASK) {
+				/* Save local element ID in list */
+				comp_list[idx+2+n_xfer] = compute_ids[TRIPLET_SIZE*ii+1];
+				n_xfer++;
+			}
+			ii++;
+		}
+		if (neighbor != UNKNOWN_TASK) {
+			comp_list[idx] = neighbor;
+			comp_list[idx+1] = (SMIOL_Offset)n_xfer;
+			idx += (2 + n_xfer);
+		}
+	}
+
+	free(compute_ids);
+
+	return SMIOL_SUCCESS;
+}
+
+
+/*******************************************************************************
+ *
  * print_lists
  *
  * Writes the contents of comp_list and io_list arrays to a text file
