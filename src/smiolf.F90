@@ -82,6 +82,19 @@ module SMIOLf
         module procedure SMIOLf_define_att_text
     end interface
 
+    ! C interface definitions used in multiple routines
+    interface
+        function SMIOL_define_att(file, varname, att_name, att_type, att) result(ierr) bind(C, name='SMIOL_define_att')
+            use iso_c_binding, only : c_ptr, c_char, c_int
+            type (c_ptr), value :: file
+            type (c_ptr), value :: varname
+            character(kind=c_char), dimension(*) :: att_name
+            integer(kind=c_int), value :: att_type
+            type (c_ptr), value :: att
+            integer(kind=c_int) :: ierr
+        end function
+    end interface
+
 
 contains
 
@@ -820,18 +833,6 @@ contains
         type (c_ptr) :: att_ptr
         type (c_ptr) :: c_varname_ptr
 
-        ! C interface definitions
-        interface
-            function SMIOL_define_att(file, varname, att_name, att_type, att) result(ierr) bind(C, name='SMIOL_define_att')
-                use iso_c_binding, only : c_ptr, c_char, c_int
-                type (c_ptr), value :: file
-                type (c_ptr), value :: varname
-                character(kind=c_char), dimension(*) :: att_name
-                integer(kind=c_int), value :: att_type
-                type (c_ptr), value :: att
-                integer(kind=c_int) :: ierr
-            end function
-        end interface
 
         c_file = c_loc(file)
 
@@ -899,18 +900,6 @@ contains
         type (c_ptr) :: att_ptr
         type (c_ptr) :: c_varname_ptr
 
-        ! C interface definitions
-        interface
-            function SMIOL_define_att(file, varname, att_name, att_type, att) result(ierr) bind(C, name='SMIOL_define_att')
-                use iso_c_binding, only : c_ptr, c_char, c_int
-                type (c_ptr), value :: file
-                type (c_ptr), value :: varname
-                character(kind=c_char), dimension(*) :: att_name
-                integer(kind=c_int), value :: att_type
-                type (c_ptr), value :: att
-                integer(kind=c_int) :: ierr
-            end function
-        end interface
 
         c_file = c_loc(file)
 
@@ -978,18 +967,6 @@ contains
         type (c_ptr) :: att_ptr
         type (c_ptr) :: c_varname_ptr
 
-        ! C interface definitions
-        interface
-            function SMIOL_define_att(file, varname, att_name, att_type, att) result(ierr) bind(C, name='SMIOL_define_att')
-                use iso_c_binding, only : c_ptr, c_char, c_int
-                type (c_ptr), value :: file
-                type (c_ptr), value :: varname
-                character(kind=c_char), dimension(*) :: att_name
-                integer(kind=c_int), value :: att_type
-                type (c_ptr), value :: att
-                integer(kind=c_int) :: ierr
-            end function
-        end interface
 
         c_file = c_loc(file)
 
@@ -1058,18 +1035,6 @@ contains
         type (c_ptr) :: att_ptr
         type (c_ptr) :: c_varname_ptr
 
-        ! C interface definitions
-        interface
-            function SMIOL_define_att(file, varname, att_name, att_type, att) result(ierr) bind(C, name='SMIOL_define_att')
-                use iso_c_binding, only : c_ptr, c_char, c_int
-                type (c_ptr), value :: file
-                type (c_ptr), value :: varname
-                character(kind=c_char), dimension(*) :: att_name
-                integer(kind=c_int), value :: att_type
-                type (c_ptr), value :: att
-                integer(kind=c_int) :: ierr
-            end function
-        end interface
 
         c_file = c_loc(file)
 
