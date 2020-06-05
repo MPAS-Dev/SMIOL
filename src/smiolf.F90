@@ -75,6 +75,13 @@ module SMIOLf
         integer(c_size_t) :: io_count;  ! The number of elements for I/O by a task
     end type SMIOLf_decomp
 
+    interface SMIOLf_define_att
+        module procedure SMIOLf_define_att_int
+        module procedure SMIOLf_define_att_float
+        module procedure SMIOLf_define_att_double
+        module procedure SMIOLf_define_att_text
+    end interface
+
 
 contains
 
@@ -782,20 +789,327 @@ contains
     !
 
     !-----------------------------------------------------------------------
-    !  routine SMIOLf_define_att
+    !  routine SMIOLf_define_att_int
     !
-    !> \brief Defines a new attribute in a file
+    !> \brief Defines a new integer attribute
     !> \details
-    !>  Detailed description of what this routine does.
+    !>  Defines a new integer attribute for a variable if varname is not
+    !>  an empty string, or a global attribute otherwise.
+    !>
+    !>  If the attribute has been successfully defined for the variable or file,
+    !>  SMIOL_SUCCESS is returned.
     !
     !-----------------------------------------------------------------------
-    integer function SMIOLf_define_att() result(ierr)
+    integer function SMIOLf_define_att_int(file, varname, att_name, att) result(ierr)
+
+        use iso_c_binding, only : c_char, c_int, c_null_char, c_null_ptr, c_ptr, c_loc
 
         implicit none
 
-        ierr = 0
+        ! Arguments
+        type (SMIOLf_file), target :: file
+        character(len=*), intent(in) :: varname
+        character(len=*), intent(in) :: att_name
+        integer(kind=c_int), intent(in), target :: att
 
-    end function SMIOLf_define_att
+        ! Local variables
+        integer :: i
+        type (c_ptr) :: c_file
+        character(kind=c_char), dimension(:), allocatable, target :: c_varname
+        character(kind=c_char), dimension(:), pointer :: c_att_name
+        type (c_ptr) :: att_ptr
+        type (c_ptr) :: c_varname_ptr
+
+        ! C interface definitions
+        interface
+            function SMIOL_define_att(file, varname, att_name, att_type, att) result(ierr) bind(C, name='SMIOL_define_att')
+                use iso_c_binding, only : c_ptr, c_char, c_int
+                type (c_ptr), value :: file
+                type (c_ptr), value :: varname
+                character(kind=c_char), dimension(*) :: att_name
+                integer(kind=c_int), value :: att_type
+                type (c_ptr), value :: att
+                integer(kind=c_int) :: ierr
+            end function
+        end interface
+
+        c_file = c_loc(file)
+
+        !
+        ! Convert Fortran string to C character array
+        !
+        if (len_trim(varname) > 0) then
+            allocate(c_varname(len_trim(varname) + 1))
+            do i=1,len_trim(varname)
+                c_varname(i) = varname(i:i)
+            end do
+            c_varname(i) = c_null_char
+            c_varname_ptr = c_loc(c_varname)
+        else
+            c_varname_ptr = c_null_ptr
+        end if
+
+        allocate(c_att_name(len_trim(att_name) + 1))
+        do i=1,len_trim(att_name)
+            c_att_name(i) = att_name(i:i)
+        end do
+        c_att_name(i) = c_null_char
+
+        att_ptr = c_loc(att)
+
+        ierr = SMIOL_define_att(c_file, c_varname_ptr, c_att_name, SMIOL_INT32, att_ptr)
+
+        if (len_trim(varname) > 0) then
+            deallocate(c_varname)
+        end if
+        deallocate(c_att_name)
+
+    end function SMIOLf_define_att_int
+
+
+    !-----------------------------------------------------------------------
+    !  routine SMIOLf_define_att_float
+    !
+    !> \brief Defines a new float attribute
+    !> \details
+    !>  Defines a new float attribute for a variable if varname is not an empty
+    !>  string, or a global attribute otherwise.
+    !>
+    !>  If the attribute has been successfully defined for the variable or file,
+    !>  SMIOL_SUCCESS is returned.
+    !
+    !-----------------------------------------------------------------------
+    integer function SMIOLf_define_att_float(file, varname, att_name, att) result(ierr)
+
+        use iso_c_binding, only : c_char, c_float, c_null_char, c_null_ptr, c_ptr, c_loc
+
+        implicit none
+
+        ! Arguments
+        type (SMIOLf_file), target :: file
+        character(len=*), intent(in) :: varname
+        character(len=*), intent(in) :: att_name
+        real(kind=c_float), intent(in), target :: att
+
+        ! Local variables
+        integer :: i
+        type (c_ptr) :: c_file
+        character(kind=c_char), dimension(:), allocatable, target :: c_varname
+        character(kind=c_char), dimension(:), pointer :: c_att_name
+        type (c_ptr) :: att_ptr
+        type (c_ptr) :: c_varname_ptr
+
+        ! C interface definitions
+        interface
+            function SMIOL_define_att(file, varname, att_name, att_type, att) result(ierr) bind(C, name='SMIOL_define_att')
+                use iso_c_binding, only : c_ptr, c_char, c_int
+                type (c_ptr), value :: file
+                type (c_ptr), value :: varname
+                character(kind=c_char), dimension(*) :: att_name
+                integer(kind=c_int), value :: att_type
+                type (c_ptr), value :: att
+                integer(kind=c_int) :: ierr
+            end function
+        end interface
+
+        c_file = c_loc(file)
+
+        !
+        ! Convert Fortran string to C character array
+        !
+        if (len_trim(varname) > 0) then
+            allocate(c_varname(len_trim(varname) + 1))
+            do i=1,len_trim(varname)
+                c_varname(i) = varname(i:i)
+            end do
+            c_varname(i) = c_null_char
+            c_varname_ptr = c_loc(c_varname)
+        else
+            c_varname_ptr = c_null_ptr
+        end if
+
+        allocate(c_att_name(len_trim(att_name) + 1))
+        do i=1,len_trim(att_name)
+            c_att_name(i) = att_name(i:i)
+        end do
+        c_att_name(i) = c_null_char
+
+        att_ptr = c_loc(att)
+
+        ierr = SMIOL_define_att(c_file, c_varname_ptr, c_att_name, SMIOL_REAL32, att_ptr)
+
+        if (len_trim(varname) > 0) then
+            deallocate(c_varname)
+        end if
+        deallocate(c_att_name)
+
+    end function SMIOLf_define_att_float
+
+
+    !-----------------------------------------------------------------------
+    !  routine SMIOLf_define_att_double
+    !
+    !> \brief Defines a new double attribute
+    !> \details
+    !>  Defines a new double attribute for a variable if varname is not an empty
+    !>  string, or a global attribute otherwise.
+    !>
+    !>  If the attribute has been successfully defined for the variable or file,
+    !>  SMIOL_SUCCESS is returned.
+    !
+    !-----------------------------------------------------------------------
+    integer function SMIOLf_define_att_double(file, varname, att_name, att) result(ierr)
+
+        use iso_c_binding, only : c_char, c_double, c_null_char, c_null_ptr, c_ptr, c_loc
+
+        implicit none
+
+        ! Arguments
+        type (SMIOLf_file), target :: file
+        character(len=*), intent(in) :: varname
+        character(len=*), intent(in) :: att_name
+        real(kind=c_double), intent(in), target :: att
+
+        ! Local variables
+        integer :: i
+        type (c_ptr) :: c_file
+        character(kind=c_char), dimension(:), allocatable, target :: c_varname
+        character(kind=c_char), dimension(:), pointer :: c_att_name
+        type (c_ptr) :: att_ptr
+        type (c_ptr) :: c_varname_ptr
+
+        ! C interface definitions
+        interface
+            function SMIOL_define_att(file, varname, att_name, att_type, att) result(ierr) bind(C, name='SMIOL_define_att')
+                use iso_c_binding, only : c_ptr, c_char, c_int
+                type (c_ptr), value :: file
+                type (c_ptr), value :: varname
+                character(kind=c_char), dimension(*) :: att_name
+                integer(kind=c_int), value :: att_type
+                type (c_ptr), value :: att
+                integer(kind=c_int) :: ierr
+            end function
+        end interface
+
+        c_file = c_loc(file)
+
+        !
+        ! Convert Fortran string to C character array
+        !
+        if (len_trim(varname) > 0) then
+            allocate(c_varname(len_trim(varname) + 1))
+            do i=1,len_trim(varname)
+                c_varname(i) = varname(i:i)
+            end do
+            c_varname(i) = c_null_char
+            c_varname_ptr = c_loc(c_varname)
+        else
+            c_varname_ptr = c_null_ptr
+        end if
+
+        allocate(c_att_name(len_trim(att_name) + 1))
+        do i=1,len_trim(att_name)
+            c_att_name(i) = att_name(i:i)
+        end do
+        c_att_name(i) = c_null_char
+
+        att_ptr = c_loc(att)
+
+        ierr = SMIOL_define_att(c_file, c_varname_ptr, c_att_name, SMIOL_REAL64, att_ptr)
+
+        if (len_trim(varname) > 0) then
+            deallocate(c_varname)
+        end if
+        deallocate(c_att_name)
+
+    end function SMIOLf_define_att_double
+
+
+    !-----------------------------------------------------------------------
+    !  routine SMIOLf_define_att_text
+    !
+    !> \brief Defines a new text attribute
+    !> \details
+    !>  Defines a new text attribute for a variable if varname is not an empty
+    !>  string, or a global attribute otherwise.
+    !>
+    !>  If the attribute has been successfully defined for the variable or file,
+    !>  SMIOL_SUCCESS is returned.
+    !
+    !-----------------------------------------------------------------------
+    integer function SMIOLf_define_att_text(file, varname, att_name, att) result(ierr)
+
+        use iso_c_binding, only : c_char, c_null_char, c_null_ptr, c_ptr, c_loc
+
+        implicit none
+
+        ! Arguments
+        type (SMIOLf_file), target :: file
+        character(len=*), intent(in) :: varname
+        character(len=*), intent(in) :: att_name
+        character(len=*), intent(in) :: att
+
+        ! Local variables
+        integer :: i
+        type (c_ptr) :: c_file
+        character(kind=c_char), dimension(:), allocatable, target :: c_varname
+        character(kind=c_char), dimension(:), pointer :: c_att_name
+        character(kind=c_char), dimension(:), allocatable, target :: c_att
+        type (c_ptr) :: att_ptr
+        type (c_ptr) :: c_varname_ptr
+
+        ! C interface definitions
+        interface
+            function SMIOL_define_att(file, varname, att_name, att_type, att) result(ierr) bind(C, name='SMIOL_define_att')
+                use iso_c_binding, only : c_ptr, c_char, c_int
+                type (c_ptr), value :: file
+                type (c_ptr), value :: varname
+                character(kind=c_char), dimension(*) :: att_name
+                integer(kind=c_int), value :: att_type
+                type (c_ptr), value :: att
+                integer(kind=c_int) :: ierr
+            end function
+        end interface
+
+        c_file = c_loc(file)
+
+        !
+        ! Convert Fortran string to C character array
+        !
+        if (len_trim(varname) > 0) then
+            allocate(c_varname(len_trim(varname) + 1))
+            do i=1,len_trim(varname)
+                c_varname(i) = varname(i:i)
+            end do
+            c_varname(i) = c_null_char
+            c_varname_ptr = c_loc(c_varname)
+        else
+            c_varname_ptr = c_null_ptr
+        end if
+
+        allocate(c_att_name(len_trim(att_name) + 1))
+        do i=1,len_trim(att_name)
+            c_att_name(i) = att_name(i:i)
+        end do
+        c_att_name(i) = c_null_char
+
+        allocate(c_att(len_trim(att) + 1))
+        do i=1,len_trim(att)
+            c_att(i) = att(i:i)
+        end do
+        c_att(i) = c_null_char
+
+        att_ptr = c_loc(c_att)
+
+        ierr = SMIOL_define_att(c_file, c_varname_ptr, c_att_name, SMIOL_CHAR, att_ptr)
+
+        if (len_trim(varname) > 0) then
+            deallocate(c_varname)
+        end if
+        deallocate(c_att_name)
+        deallocate(c_att)
+
+    end function SMIOLf_define_att_text
 
 
     !-----------------------------------------------------------------------

@@ -100,6 +100,8 @@ transfer_type(transfer_char, char)
 int main(int argc, char **argv)
 {
 	int ierr;
+	int i;
+	float f;
 	int my_proc_id;
 	SMIOL_Offset dimsize;
 	size_t n_compute_elements;
@@ -337,6 +339,29 @@ int main(int argc, char **argv)
 	free(dimnames[1]);
 	free(dimnames);
 
+	i = 2;
+	if ((ierr = SMIOL_define_att(file, "theta", "time_levels", SMIOL_INT32,
+	                             (const void *)&i)) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_define_att: %s ",
+			SMIOL_error_string(ierr));
+		return 1;
+	}
+
+	f = (float)3.14159265;
+	if ((ierr = SMIOL_define_att(file, NULL, "pi", SMIOL_REAL32,
+	                             (const void *)&f)) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_define_att: %s ",
+			SMIOL_error_string(ierr));
+		return 1;
+	}
+
+	if ((ierr = SMIOL_define_att(file, NULL, "title", SMIOL_CHAR,
+	                             "MPAS-Atmosphere v7.0")) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_define_att: %s ",
+			SMIOL_error_string(ierr));
+		return 1;
+	}
+
 	if ((ierr = SMIOL_close_file(&file)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_close_file: %s ", SMIOL_error_string(ierr));
 		return 1;
@@ -350,12 +375,6 @@ int main(int argc, char **argv)
 
 	if ((ierr = SMIOL_get_var()) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_get_var: %s ",
-			SMIOL_error_string(ierr));
-		return 1;
-	}
-		
-	if ((ierr = SMIOL_define_att()) != SMIOL_SUCCESS) {
-		fprintf(test_log, "ERROR: SMIOL_define_att: %s ",
 			SMIOL_error_string(ierr));
 		return 1;
 	}

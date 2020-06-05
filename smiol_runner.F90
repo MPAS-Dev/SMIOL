@@ -9,6 +9,8 @@ program smiol_runner
     implicit none
 
     integer :: ierr
+    integer :: i
+    real :: f
     integer :: my_proc_id
     integer :: test_log = 42
     integer(kind=c_size_t) :: n_compute_elements = 1
@@ -190,6 +192,23 @@ program smiol_runner
         stop 1
     endif
 
+    i = 2
+    if (SMIOLf_define_att(file, 'theta', 'time_levels', i) /= SMIOL_SUCCESS) then
+        write(test_log,'(a)') "ERROR: 'SMIOLf_define_att' was not called successfully"
+        stop 1
+    endif
+
+    f = 3.14159265
+    if (SMIOLf_define_att(file, '', 'pi', f) /= SMIOL_SUCCESS) then
+        write(test_log,'(a)') "ERROR: 'SMIOLf_define_att' was not called successfully"
+        stop 1
+    endif
+
+    if (SMIOLf_define_att(file, '', 'title', 'MPAS-Atmosphere v7.0') /= SMIOL_SUCCESS) then
+        write(test_log,'(a)') "ERROR: 'SMIOLf_define_att' was not called successfully"
+        stop 1
+    endif
+
     if (SMIOLf_close_file(file) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_close_file' was not called successfully"
         stop 1
@@ -202,11 +221,6 @@ program smiol_runner
 
     if (SMIOLf_get_var() /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_get_var' was not called successfully"
-        stop 1
-    endif
-
-    if (SMIOLf_define_att() /= SMIOL_SUCCESS) then
-        write(test_log,'(a)') "ERROR: 'SMIOLf_define_att' was not called successfully"
         stop 1
     endif
 

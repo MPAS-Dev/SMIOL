@@ -38,7 +38,8 @@ int SMIOL_get_var(void);
 /*
  * Attribute methods
  */
-int SMIOL_define_att(void);
+int SMIOL_define_att(struct SMIOL_file *file, const char *varname,
+                     const char *att_name, int att_type, const void *att);
 int SMIOL_inquire_att(void);
 
 /*
