@@ -362,6 +362,12 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+	if ((ierr = SMIOL_inquire_att(file, NULL, "title", NULL, NULL, NULL)) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_inquire_att: %s ",
+			SMIOL_error_string(ierr));
+		return 1;
+	}
+
 	if ((ierr = SMIOL_close_file(&file)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_close_file: %s ", SMIOL_error_string(ierr));
 		return 1;
@@ -375,12 +381,6 @@ int main(int argc, char **argv)
 
 	if ((ierr = SMIOL_get_var()) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_get_var: %s ",
-			SMIOL_error_string(ierr));
-		return 1;
-	}
-
-	if ((ierr = SMIOL_inquire_att()) != SMIOL_SUCCESS) {
-		fprintf(test_log, "ERROR: SMIOL_inquire_att: %s ",
 			SMIOL_error_string(ierr));
 		return 1;
 	}

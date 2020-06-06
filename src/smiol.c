@@ -853,11 +853,119 @@ int SMIOL_define_att(struct SMIOL_file *file, const char *varname,
  *
  * Inquires about an attribute in a file.
  *
- * Detailed description.
+ * Inquires about a variable attribute if varname is not NULL, or a global
+ * attribute otherwise.
+ *
+ * If the requested attribute is found, SMIOL_SUCCESS is returned and the memory
+ * pointed to by the att argument will contain the attribute value.
+ *
+ * For character string attributes, no bytes beyond the length of the attribute
+ * in the file will be modified in the att argument, and no '\0' character will
+ * be added. Therefore, calling code may benefit from initializing character
+ * strings before calling this routine.
+ *
+ * If SMIOL was not compiled with support for any file library, the att_type
+ * output argument will always be set to SMIOL_UNKNOWN_VAR_TYPE, and the att_len
+ * output argument will always be set to -1; the value of the att output
+ * argument will be unchanged.
  *
  ********************************************************************************/
-int SMIOL_inquire_att(void)
+int SMIOL_inquire_att(struct SMIOL_file *file, const char *varname,                                                                  
+                      const char *att_name, int *att_type,
+                      SMIOL_Offset *att_len, void *att)
 {
+#ifdef SMIOL_PNETCDF
+	int ierr;
+	int varidp;
+	nc_type xtypep;
+	MPI_Offset lenp;
+#endif
+
+	/*
+	 * Check validity of arguments
+	 */
+	if (file == NULL || att_name == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	/*
+	 * Set output arguments in case no library sets them later
+	 */
+	if (att_len != NULL) {
+		*att_len = (SMIOL_Offset)-1;
+	}
+
+	if (att_type != NULL) {
+		*att_type = SMIOL_UNKNOWN_VAR_TYPE;
+	}
+
+#ifdef SMIOL_PNETCDF
+	/*
+	 * If varname was provided, get the variable ID; else, the inquiry is
+	 * is for a global attribute not associated with a specific variable
+	 */
+	if (varname != NULL) {
+		ierr = ncmpi_inq_varid(file->ncidp, varname, &varidp);
+		if (ierr != NC_NOERR) {
+			file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+			file->context->lib_ierr = ierr;
+			return SMIOL_LIBRARY_ERROR;
+		}
+	} else {
+		varidp = NC_GLOBAL;
+	}
+
+	/*
+	 * Inquire about attribute type and length
+	 */
+	if (att_type != NULL || att_len != NULL) {
+		ierr = ncmpi_inq_att(file->ncidp, varidp, att_name,
+		                     &xtypep, &lenp);
+		if (ierr != NC_NOERR) {
+			file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+			file->context->lib_ierr = ierr;
+			return SMIOL_LIBRARY_ERROR;
+		}
+
+		if (att_type != NULL) {
+			/* Convert parallel-netCDF type to SMIOL type */
+			switch (xtypep) {
+				case NC_FLOAT:
+					*att_type = SMIOL_REAL32;
+					break;
+				case NC_DOUBLE:
+					*att_type = SMIOL_REAL64;
+					break;
+				case NC_INT:
+					*att_type = SMIOL_INT32;
+					break;
+				case NC_CHAR:
+					*att_type = SMIOL_CHAR;
+					break;
+				default:
+					*att_type = SMIOL_UNKNOWN_VAR_TYPE;
+			}
+		}
+
+		if (att_len != NULL) {
+			*att_len = lenp;
+		}
+	}
+
+
+	/*
+	 * Inquire about attribute value if requested
+	 */
+	if (att != NULL) {
+		ierr = ncmpi_get_att(file->ncidp, varidp, att_name, att);
+		if (ierr != NC_NOERR) {
+			file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+			file->context->lib_ierr = ierr;
+			return SMIOL_LIBRARY_ERROR;
+		}
+	}
+#endif
+
 	return SMIOL_SUCCESS;
 }
 

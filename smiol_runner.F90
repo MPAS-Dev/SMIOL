@@ -23,6 +23,7 @@ program smiol_runner
     character(len=32), dimension(2) :: dimnames
     integer(kind=SMIOL_offset_kind) :: dimsize
     integer :: ndims
+    character(len=32) :: tempstr
 
     call MPI_Init(ierr)
     if (ierr /= MPI_SUCCESS) then
@@ -209,6 +210,16 @@ program smiol_runner
         stop 1
     endif
 
+    if (SMIOLf_inquire_att(file, 'theta', 'time_levels', i) /= SMIOL_SUCCESS) then
+        write(test_log,'(a)') "ERROR: 'SMIOLf_inquire_att' was not called successfully"
+        stop 1
+    endif
+
+    if (SMIOLf_inquire_att(file, '', 'title', tempstr) /= SMIOL_SUCCESS) then
+        write(test_log,'(a)') "ERROR: 'SMIOLf_inquire_att' was not called successfully"
+        stop 1
+    endif
+
     if (SMIOLf_close_file(file) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_close_file' was not called successfully"
         stop 1
@@ -221,11 +232,6 @@ program smiol_runner
 
     if (SMIOLf_get_var() /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_get_var' was not called successfully"
-        stop 1
-    endif
-
-    if (SMIOLf_inquire_att() /= SMIOL_SUCCESS) then
-        write(test_log,'(a)') "ERROR: 'SMIOLf_inquire_att' was not called successfully"
         stop 1
     endif
 
