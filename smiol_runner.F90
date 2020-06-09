@@ -248,6 +248,10 @@ program smiol_runner
                trim(SMIOLf_error_string(SMIOL_LIBRARY_ERROR))
     write(test_log,'(a)') "Testing SMIOL_lib_error_string: Could not find matching library for the source of the error: ", &
                trim(SMIOLf_lib_error_string(context))
+    write(test_log,'(a)') "Testing SMIOL_error_string 'argument is of the wrong type': ", &
+               trim(SMIOLf_error_string(SMIOL_WRONG_ARG_TYPE))
+    write(test_log,'(a)') "Testing SMIOL_error_string 'argument is of insufficient size': ", &
+               trim(SMIOLf_error_string(SMIOL_INSUFFICIENT_ARG))
 
     if (SMIOLf_finalize(context) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_finalize' was not called successfully"

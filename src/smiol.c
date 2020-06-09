@@ -937,6 +937,10 @@ const char *SMIOL_error_string(int errno)
 		return "Fortran wrapper detected an inconsistency in C return values";
 	case SMIOL_LIBRARY_ERROR:
 		return "bad return code from a library call";
+	case SMIOL_WRONG_ARG_TYPE:
+		return "argument is of the wrong type";
+	case SMIOL_INSUFFICIENT_ARG:
+		return "argument is of insufficient size";
 	default:
 		return "Unknown error";
 	}

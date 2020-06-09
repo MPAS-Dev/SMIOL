@@ -405,9 +405,12 @@ int main(int argc, char **argv)
 		SMIOL_error_string(SMIOL_FORTRAN_ERROR));
 	fprintf(test_log, "SMIOL_error_string test 'bad return code from a library call': %s\n",
 		SMIOL_error_string(SMIOL_LIBRARY_ERROR));
-
 	fprintf(test_log, "SMIOL_lib_error_string 'Could not find matching library for the source of the error': %s\n",
 		SMIOL_lib_error_string(context));
+	fprintf(test_log, "SMIOL_error_string test 'argument is of the wrong type': %s\n",
+		SMIOL_error_string(SMIOL_WRONG_ARG_TYPE));
+	fprintf(test_log, "SMIOL_error_string test 'argument is of insufficient size': %s\n",
+		SMIOL_error_string(SMIOL_INSUFFICIENT_ARG));
 
 	if ((ierr = SMIOL_finalize(&context)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_finalize: %s ", SMIOL_error_string(ierr));
