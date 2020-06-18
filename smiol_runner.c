@@ -19,6 +19,7 @@ int test_file_sync(FILE *test_log);
 int test_utils(FILE *test_log);
 int test_io_decomp(FILE *test_log);
 int test_set_get_frame(FILE* test_log);
+int test_put_get_var(FILE *test_log);
 int compare_decomps(struct SMIOL_decomp *decomp,
                     size_t n_comp_list, SMIOL_Offset *comp_list_correct,
                     size_t n_io_list, SMIOL_Offset *io_list_correct);
@@ -246,10 +247,23 @@ int main(int argc, char **argv)
 		fprintf(test_log, "%i tests FAILED!\n\n", ierr);
 	}
 
+
 	/*
 	 * Unit tests for set, get frame
 	 */
 	ierr = test_set_get_frame(test_log);
+	if (ierr == 0) {
+		fprintf(test_log, "All tests PASSED!\n\n");
+	}
+	else {
+		fprintf(test_log, "%i tests FAILED!\n\n", ierr);
+	}
+
+
+	/*
+	 * Unit tests for put/get var routines
+	 */
+	ierr = test_put_get_var(test_log);
 	if (ierr == 0) {
 		fprintf(test_log, "All tests PASSED!\n\n");
 	}
@@ -332,6 +346,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+
 	dimnames = (char **)malloc((size_t)2 * sizeof(char *));
 	dimnames[0] = (char *)malloc((size_t)64 * sizeof(char));
 	dimnames[1] = (char *)malloc((size_t)64 * sizeof(char));
@@ -360,20 +375,12 @@ int main(int argc, char **argv)
 		fprintf(test_log, "ERROR: SMIOL_put_var %s ", SMIOL_error_string(ierr));
 		return 1;
 	}
-	free(char_buf);
-
-	if ((ierr = SMIOL_get_var()) != SMIOL_SUCCESS) {
+	memset(char_buf, '\0', 64);
+	if ((ierr = SMIOL_get_var(file, NULL, "xtime", char_buf)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_put_var %s ", SMIOL_error_string(ierr));
 		return 1;
 	}
-
-	memset(int_buf, (int) 0, (size_t) 40962);
-	if ((ierr = SMIOL_get_var(file, decomp, "indexToCellID", int_buf)) != SMIOL_SUCCESS) {
-		fprintf(test_log, "ERROR: SMIOL_get_var: %s ",
-			SMIOL_lib_error_string(file->context));
-		return 1;
-	}
-	free(int_buf);
+	free(char_buf);
 
 	if ((ierr = SMIOL_close_file(&file)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_close_file: %s ", SMIOL_error_string(ierr));
@@ -3224,6 +3231,7 @@ int test_io_decomp(FILE *test_log)
 	return errcount;
 }
 
+
 int test_set_get_frame(FILE* test_log)
 {
 
@@ -3352,6 +3360,407 @@ int test_set_get_frame(FILE* test_log)
 	}
 
 	fflush(test_log);
+	fprintf(test_log, "\n");
+
+	return errcount;
+}
+
+
+int test_put_get_var(FILE* test_log)
+{
+	int i;
+	int errcount;
+	int ierr;
+	SMIOL_Offset *compute_elements;
+	struct SMIOL_context *context;
+	struct SMIOL_decomp *decomp;
+	struct SMIOL_file *file;
+	char **dimnames;
+	int nCells = 10;
+	int nVertLevels = 10;
+	char *char_buf;
+	int *int_buf;
+#ifdef SMIOL_PNETCDF
+	int fail = 0;
+#endif
+	float *float_buf;
+	double *double_buf;
+
+	fprintf(test_log, "********************************************************************************\n");
+	fprintf(test_log, "************************** SMIOL_put/get_var tests **** ************************\n");
+	fprintf(test_log, "\n");
+
+	ierr = 0;
+	errcount = 0;
+
+	/* Create a SMIOL context for testing variable routines */
+	context = NULL;
+	ierr = SMIOL_init(MPI_COMM_WORLD, &context);
+	if (ierr != SMIOL_SUCCESS || context == NULL) {
+		fprintf(test_log, "Failed to create SMIOL context...\n");
+		return -1;
+	}
+
+	/* Create a SMIOL file for testing variable routines */
+	file = NULL;
+	ierr = SMIOL_open_file(context, "test_put_get.nc", SMIOL_FILE_CREATE, &file);
+	if (ierr != SMIOL_SUCCESS || file == NULL) {
+		fprintf(test_log, "Failed to create SMIOL file...\n");
+		return -1;
+	}
+
+
+	/* Define several dimensions in the file to be used when defining variables */
+	ierr = SMIOL_define_dim(file, "Time", (SMIOL_Offset)-1);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create dimension StrLen...\n");
+		return -1;
+	}
+
+	ierr = SMIOL_define_dim(file, "StrLen", (SMIOL_Offset)64);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create dimension StrLen...\n");
+		return -1;
+	}
+
+	ierr = SMIOL_define_dim(file, "nCells", (SMIOL_Offset)nCells);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create dimension nCells...\n");
+		return -1;
+	}
+
+	ierr = SMIOL_define_dim(file, "nVertLevels", (SMIOL_Offset)nVertLevels);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create dimension nVertLevels...\n");
+		return -1;
+	}
+
+	ierr = SMIOL_define_dim(file, "nMonths", (SMIOL_Offset)12);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create dimension maxEdges...\n");
+		return -1;
+	}
+
+	dimnames = (char **)malloc(sizeof(char *) * (size_t)6);
+	for (i = 0; i < 6; i++) {
+		dimnames[i] = (char *)malloc(sizeof(char *) * (size_t)32);
+	}
+
+	/* Create a 0D character field */
+	snprintf(dimnames[0], 32, "Time");
+	snprintf(dimnames[1], 32, "StrLen");
+	ierr = SMIOL_define_var(file, "xtime", SMIOL_CHAR, 2, (const char **)dimnames);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "FAIL - %s", SMIOL_error_string(ierr));
+		errcount++;
+	}
+
+	/* Create a 1D integer field */
+	snprintf(dimnames[0], 32, "nCells");
+	ierr = SMIOL_define_var(file, "i_1d", SMIOL_INT32, 1, (const char **)dimnames);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "FAIL - %s", SMIOL_error_string(ierr));
+		errcount++;
+	}
+
+	/* Create a 2D real field */
+	snprintf(dimnames[0], 32, "nCells");
+	snprintf(dimnames[1], 32, "nVertLevels");
+	ierr = SMIOL_define_var(file, "r_2d", SMIOL_REAL32, 2, (const char **)dimnames);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "FAIL - Error creating real_2d var");
+		errcount++;
+	}
+
+	/* Create a 3D real field */
+	snprintf(dimnames[0], 32, "nCells");
+	snprintf(dimnames[1], 32, "nVertLevels");
+	snprintf(dimnames[2], 32, "nMonths");
+	ierr = SMIOL_define_var(file, "d_3d", SMIOL_REAL64, 3, (const char **)dimnames);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "FAIL d_3d - %s\n", SMIOL_lib_error_string(context));
+		errcount++;
+	}
+
+	/*
+	 * Only preforme these tests if there are two mpi tasks
+	 */
+	if (context->comm_size == 2) {
+		/* Create a decomp for nCells */
+		compute_elements = malloc(sizeof(SMIOL_Offset) * (nCells / 2));
+		for (i = 0; i < (nCells / 2); i++) {
+			if (context->comm_rank == 0) {
+				compute_elements[i] = (SMIOL_Offset) i;
+			} else {
+				compute_elements[i] = (SMIOL_Offset) (i + (nCells / 2));
+			}
+		}
+
+		ierr = SMIOL_create_decomp(context, (size_t) (nCells / 2), compute_elements, 1, 2, &decomp);
+		free(compute_elements);
+
+		/*
+		 * Putting a character variable
+		 */
+		fprintf(test_log, "Testing get/put var on a char field: ");
+		char_buf = malloc(sizeof(char) * 64);
+		memset(char_buf, '\0', 64);
+		sprintf(char_buf, "YYYY-MM-DD_hh:mm:ss");
+		ierr = SMIOL_put_var(file, NULL, "xtime", char_buf);
+		if (ierr != SMIOL_SUCCESS) {
+			fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned on put var %s\n", SMIOL_error_string(ierr));
+			errcount++;
+		}
+		memset(char_buf, '\0', 64);
+		ierr = SMIOL_get_var(file, NULL, "xtime", char_buf);
+		if (ierr != SMIOL_SUCCESS) {
+			fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned on get var %s\n", SMIOL_error_string(ierr));
+			errcount++;
+		}
+#ifdef SMIOL_PNETCDF
+		if (strcmp(char_buf, "YYYY-MM-DD_hh:mm:ss") == 0) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - String from get var was not the same!\n");
+			errcount++;
+		}
+#else
+		if (ierr == SMIOL_SUCCESS) {
+			fprintf(test_log, "PASS\n");
+		}
+#endif
+
+		/*
+		 * Change the frame by 1 and write a new xtime
+		 */
+		fprintf(test_log, "Testing put/get different unlimited frames: ");
+		if (SMIOL_set_frame(file, (SMIOL_Offset) 1) != SMIOL_SUCCESS) {
+			fprintf(test_log, "Failed to change frame to 1\n");
+			return -1;
+		}
+
+		// Write xtime at frame 1
+		sprintf(char_buf, "2323-02-04_13:00:00");
+		ierr = SMIOL_put_var(file, NULL, "xtime", char_buf);
+		if (ierr != SMIOL_SUCCESS) {
+			fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned when putting xtime at frame 1");
+			errcount++;
+		}
+
+		// Write xtime at 4,300,000,000
+		if (SMIOL_set_frame(file, (SMIOL_Offset) 4300000000) != SMIOL_SUCCESS) {
+			fprintf(test_log, "Failed to change frame to 4,300,000,000\n");
+			return -1;
+		}
+		sprintf(char_buf, "1900-01-02_15:30:00");
+		ierr = SMIOL_put_var(file, NULL, "xtime", char_buf);
+		if (ierr != SMIOL_SUCCESS) {
+			fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned when putting xtime at frame large value");
+			errcount++;
+		}
+
+		// Now set frame back to 0  and check char_buf
+		if (SMIOL_set_frame(file, (SMIOL_Offset) 1) != SMIOL_SUCCESS) {
+			fprintf(test_log, "Failed to change frame to 1\n");
+			return -1;
+		}
+		memset(char_buf, '\0', 64);
+		ierr = SMIOL_get_var(file, NULL, "xtime", char_buf);
+		if (ierr != SMIOL_SUCCESS) {
+			fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned on get var %s\n", SMIOL_error_string(ierr));
+			errcount++;
+		}
+#ifdef SMIOL_PNETCDF
+		if (strcmp(char_buf, "2323-02-04_13:00:00") != 0) {
+			fprintf(test_log, "FAIL - String from get var was not the same for frame 1!\n");
+			fprintf(test_log, "%s\n", char_buf);
+			errcount++;
+		}
+#endif
+
+		// Set frame to 4,300,000,000 and see if xtime value is correct
+		if (SMIOL_set_frame(file, (SMIOL_Offset) 4300000000) != SMIOL_SUCCESS) {
+			fprintf(test_log, "Failed to change frame to 4,300,000,000\n");
+			return -1;
+		}
+		memset(char_buf, '\0', 64);
+		ierr = SMIOL_get_var(file, NULL, "xtime", char_buf);
+		if (ierr != SMIOL_SUCCESS) {
+			fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned on get var %s\n", SMIOL_error_string(ierr));
+			errcount++;
+		}
+#ifdef SMIOL_PNETCDF
+		if (strcmp(char_buf, "1900-01-02_15:30:00") != 0) {
+			fprintf(test_log, "FAIL - String from get var was not the same for large value frame!\n");
+			fprintf(test_log, "%s\n", char_buf);
+			errcount++;
+		}
+#endif
+		if (ierr == SMIOL_SUCCESS) {
+			fprintf(test_log, "PASS\n");
+		}
+		free(char_buf);
+
+		/*
+		 * Putting a 1d integer (int_1d)
+		 */
+		fprintf(test_log, "Testing get/put var on 1D int field: ");
+		int_buf = malloc(sizeof(int) * (size_t) (nCells / 2));
+		for (i = 0; i < nCells / 2; i++) {
+			int_buf[i] = 42 * (context->comm_rank + 1);
+		}
+		ierr = SMIOL_put_var(file, decomp, "i_1d", int_buf);
+		if (ierr != SMIOL_SUCCESS) {
+			fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned on put var\n");
+			errcount++;
+		}
+
+		// Get var
+		memset(int_buf, 0, sizeof(int) * (nCells / 2));
+		ierr = SMIOL_get_var(file, decomp, "i_1d", int_buf);
+		if (ierr != SMIOL_SUCCESS) {
+			fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned in get var\n");
+			errcount++;
+		}
+#ifdef SMIOL_PNETCDF
+		for (i = 0; i < (nCells / 2); i++) {
+			if (int_buf[i] != 42 * (context->comm_rank + 1)) {
+				fail++;
+			}
+		}
+		if (fail) {
+			fprintf(test_log, "FAIL - SMIOL_get_var returned %d wrong elements\n", fail);
+			errcount++;
+		} else {
+			fprintf(test_log, "PASS\n");
+		}
+#else
+		if (ierr == SMIOL_SUCCESS) {
+			fprintf(test_log, "PASS\n");
+		}		
+#endif
+		free(int_buf);
+
+		/*
+		 * Putting a 2d float (r_2d)
+		 */
+		fprintf(test_log, "Testing get/put var on 2D float field: ");
+		float_buf = malloc(sizeof(float) * (size_t) (nCells / 2 * nVertLevels));
+		for (i = 0; i < (nCells / 2) * nVertLevels; i++) {
+			float_buf[i] = 3.14 * (context->comm_rank + 1);
+		}
+		ierr = SMIOL_put_var(file, decomp, "r_2d", float_buf);
+		if (ierr != SMIOL_SUCCESS) {
+			fprintf(test_log, "FAIL - SMIOL_SUCCESS not returned\n");
+			errcount++;
+		}
+
+		for (i = 0; i < (nCells / 2) * nVertLevels; i++) {
+			float_buf[i] = 0.0;
+		}
+		ierr = SMIOL_get_var(file, decomp, "r_2d", float_buf);
+		if (ierr != SMIOL_SUCCESS) {
+			fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned in get var\n");
+		}
+#ifdef SMIOL_PNETCDF
+		fail = 0;
+		for (i = 0; i < (nCells / 2) * nVertLevels; i++) {
+			if (float_buf[i] == 3.14 * (context->comm_rank + 1)) {
+				fail++;
+			}
+		}
+		if (fail) {
+			fprintf(test_log, "FAIL - SMIOL_get_var returned %d wrong elements\n", fail);
+			errcount++;
+		} else {
+			fprintf(test_log, "PASS\n");
+		}
+#else
+		if (ierr == SMIOL_SUCCESS) {
+			fprintf(test_log, "PASS\n");
+		}
+#endif
+		free(float_buf);
+
+
+		/*
+		 * Putting a 3d double (d_3d)
+		 */
+		fprintf(test_log, "Testing get/put var on 3D double field: ");
+		double_buf = malloc(sizeof(double) * (size_t) (nCells / 2 * nVertLevels * 12));
+		for (i = 0; i < (nCells / 2) * nVertLevels * 12; i++) {
+			double_buf[i] = (double) (3.14 * (context->comm_rank + 1));
+		}
+		ierr = SMIOL_put_var(file, decomp, "d_3d", double_buf);
+		if (ierr != SMIOL_SUCCESS) {
+			fprintf(test_log, "FAIL - SMIOL_SUCCESS not returned in put var\n");
+			errcount++;
+		}
+
+		// Get var
+		for (i = 0; i < (nCells / 2) * nVertLevels; i++) {
+			double_buf[i] = (double) (0.0);
+		}
+		ierr = SMIOL_get_var(file, decomp, "d_3d", double_buf);
+		if (ierr != SMIOL_SUCCESS) {
+			fprintf(test_log, "FAIL - SMIOL_SUCCESS not returned in put var\n");
+			errcount++;
+		}
+#ifdef SMIOL_PNETCDF
+		fail = 0;
+		for (i = 0; i < (nCells / 2) * nVertLevels; i++) {
+			if (double_buf[i] != (double) (3.14 * (context->comm_rank + 1))){
+				fail++;
+			}
+		}
+		if (fail) {
+			fprintf(test_log, "FAIL - SMIOL_get_var returned %d wrong elements\n", fail);
+			errcount++;
+		} else {
+			fprintf(test_log, "PASS\n");
+		}
+#else
+		if (ierr == SMIOL_SUCCESS) {
+			fprintf(test_log, "PASS\n");
+		}
+#endif
+		free(double_buf);
+
+		/* Free decomp */
+		if ((ierr = SMIOL_free_decomp(&decomp)) != SMIOL_SUCCESS) {
+			fprintf(test_log, "ERROR: SMIOL_free_decomp: %s ",
+				SMIOL_error_string(ierr));
+			return 1;
+		}
+	}
+
+	/*
+	 * Finalize test
+	 */
+	for (i = 0; i < 6; i++) {
+		free(dimnames[i]);
+	}
+	free(dimnames);
+
+	/* Close the SMIOL file */
+	ierr = SMIOL_close_file(&file);
+	if (ierr != SMIOL_SUCCESS || file != NULL) {
+		fprintf(test_log, "Failed to close SMIOL file...\n");
+		return -1;
+	}
+
+	/* Free the SMIOL context */
+	ierr = SMIOL_finalize(&context);
+	if (ierr != SMIOL_SUCCESS || context != NULL) {
+		fprintf(test_log, "Failed to free SMIOL context...\n");
+		return -1;
+	}
+
+	fflush(test_log);
+	if (MPI_Barrier(MPI_COMM_WORLD) != MPI_SUCCESS) {
+		fprintf(stderr, "Error: MPI_Barrier failed.\n");
+		return -1;
+	}
 	fprintf(test_log, "\n");
 
 	return errcount;
