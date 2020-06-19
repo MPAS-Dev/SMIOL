@@ -388,16 +388,23 @@ int SMIOL_define_dim(struct SMIOL_file *file, const char *dimname, SMIOL_Offset 
  *
  * Inquires about an existing dimension in a file.
  *
- * Inquires about the size of an existing dimension in a file. For record
+ * Inquire about the size of an existing dimension and optionally inquire if the
+ * given dimension is the unlimited dimension or not. If dimsize is a non-NULL
+ * pointer then the dimension size will be returned in dimsize. For unlimited
  * dimensions, the current size of the dimension is returned; future writes of
- * additional records to a file can lead to different return sizes for record
- * dimensions.
+ * additional records to a file can lead to different return sizes for
+ * unlimited dimensions.
+ *
+ * If is_unlimited is a non-NULL pointer and if the inquired dimension is the
+ * unlimited dimension, is_unlimited will be set to 1; if the inquired
+ * dimension is not the unlimited dimension then is_unlimited will be set to 0.
  *
  * Upon successful completion, SMIOL_SUCCESS is returned; otherwise, an error
  * code is returned.
  *
  ********************************************************************************/
-int SMIOL_inquire_dim(struct SMIOL_file *file, const char *dimname, SMIOL_Offset *dimsize)
+int SMIOL_inquire_dim(struct SMIOL_file *file, const char *dimname,
+                      SMIOL_Offset *dimsize, int *is_unlimited)
 {
 #ifdef SMIOL_PNETCDF
 	int dimidp;
@@ -421,11 +428,17 @@ int SMIOL_inquire_dim(struct SMIOL_file *file, const char *dimname, SMIOL_Offset
 	/*
 	 * Check that dimension size is not NULL
 	 */
-	if (dimsize == NULL) {
+	if (dimsize == NULL && is_unlimited == NULL) {
 		return SMIOL_INVALID_ARGUMENT;
 	}
 
-	(*dimsize) = (int64_t)0;   /* Default dimension size if no library provides a value */
+	if (dimsize != NULL) {
+		(*dimsize) = (SMIOL_Offset)0;   /* Default dimension size if no library provides a value */
+	}
+
+	if (is_unlimited != NULL) {
+		(*is_unlimited) = 0; /* Return 0 if no library provides a value */
+	}
 
 #ifdef SMIOL_PNETCDF
 	if ((ierr = ncmpi_inq_dimid(file->ncidp, dimname, &dimidp)) != NC_NOERR) {
@@ -435,14 +448,39 @@ int SMIOL_inquire_dim(struct SMIOL_file *file, const char *dimname, SMIOL_Offset
 		return SMIOL_LIBRARY_ERROR;
 	}
 
-	if ((ierr = ncmpi_inq_dimlen(file->ncidp, dimidp, &len)) != NC_NOERR) {
-		(*dimsize) = (SMIOL_Offset)(-1);  /* TODO: should there be a well-defined invalid size? */
-		file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
-		file->context->lib_ierr = ierr;
-		return SMIOL_LIBRARY_ERROR;
+	/*
+	 * Inquire about dimsize
+	 */
+	if (dimsize != NULL) {
+		ierr = ncmpi_inq_dimlen(file->ncidp, dimidp, &len);
+		if (ierr != NC_NOERR) {
+			(*dimsize) = (SMIOL_Offset)(-1);  /* TODO: should there be a well-defined invalid size? */
+			file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+			file->context->lib_ierr = ierr;
+			return SMIOL_LIBRARY_ERROR;
+		}
+
+		(*dimsize) = (SMIOL_Offset)len;
 	}
 
-	(*dimsize) = (SMIOL_Offset)len;
+
+	/*
+	 * Inquire if this dimension is the unlimited dimension
+	 */
+	if (is_unlimited != NULL) {
+		int unlimdimidp;
+		ierr = ncmpi_inq_unlimdim(file->ncidp, &unlimdimidp);
+		if (ierr != NC_NOERR) {
+			file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+			file->context->lib_ierr = ierr;
+			return SMIOL_LIBRARY_ERROR;
+		}
+		if (unlimdimidp == dimidp) {
+			(*is_unlimited) = 1;
+		} else {
+			(*is_unlimited) = 0; // Not the unlimited dim
+		}
+	}
 #endif
 
 	return SMIOL_SUCCESS;

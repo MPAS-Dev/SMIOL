@@ -312,7 +312,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if ((ierr = SMIOL_inquire_dim(file, "nCells", &dimsize)) != SMIOL_SUCCESS) {
+	if ((ierr = SMIOL_inquire_dim(file, "nCells", &dimsize, NULL)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_inquire_dim: %s ", SMIOL_error_string(ierr));
 		return 1;
 	}
@@ -1681,6 +1681,7 @@ int test_dimensions(FILE *test_log)
 {
 	int ierr;
 	int errcount;
+	int is_unlimited;
 	SMIOL_Offset dimsize;
 	struct SMIOL_context *context;
 	struct SMIOL_file *file;
@@ -1765,7 +1766,7 @@ int test_dimensions(FILE *test_log)
 
 	/* Handle NULL file handle */
 	fprintf(test_log, "Handle NULL file handle (SMIOL_inquire_dim): ");
-	ierr = SMIOL_inquire_dim(NULL, "invalid_dim", &dimsize);
+	ierr = SMIOL_inquire_dim(NULL, "invalid_dim", NULL, NULL);
 	if (ierr != SMIOL_SUCCESS) {
 		fprintf(test_log, "PASS\n");
 	}
@@ -1776,7 +1777,7 @@ int test_dimensions(FILE *test_log)
 
 	/* Handle NULL dimension name */
 	fprintf(test_log, "Handle NULL dimension name (SMIOL_inquire_dim): ");
-	ierr = SMIOL_inquire_dim(file, NULL, &dimsize);
+	ierr = SMIOL_inquire_dim(file, NULL, &dimsize, NULL);
 	if (ierr != SMIOL_SUCCESS) {
 		fprintf(test_log, "PASS\n");
 	}
@@ -1786,8 +1787,8 @@ int test_dimensions(FILE *test_log)
 	}
 
 	/* Handle NULL dimension size */
-	fprintf(test_log, "Handle NULL dimension size (SMIOL_inquire_dim): ");
-	ierr = SMIOL_inquire_dim(file, "nCells", NULL);
+	fprintf(test_log, "Handle NULL dimension size and NULL unlimited argument (SMIOL_inquire_dim): ");
+	ierr = SMIOL_inquire_dim(file, "nCells", NULL, NULL);
 	if (ierr != SMIOL_SUCCESS) {
 		fprintf(test_log, "PASS\n");
 	}
@@ -1798,7 +1799,7 @@ int test_dimensions(FILE *test_log)
 
 	/* Handle undefined dimension */
 	fprintf(test_log, "Handle undefined dimension (SMIOL_inquire_dim): ");
-	ierr = SMIOL_inquire_dim(file, "foobar", &dimsize);
+	ierr = SMIOL_inquire_dim(file, "foobar", &dimsize, NULL);
 #ifdef SMIOL_PNETCDF
 	if (ierr == SMIOL_LIBRARY_ERROR) {
 		fprintf(test_log, "PASS (%s)\n", SMIOL_lib_error_string(context));
@@ -1820,7 +1821,7 @@ int test_dimensions(FILE *test_log)
 	/* Everything OK for SMIOL_inquire_dim, unlimited dimension */
 	fprintf(test_log, "Everything OK - unlimited dimension (SMIOL_inquire_dim): ");
 	dimsize = (SMIOL_Offset)0;
-	ierr = SMIOL_inquire_dim(file, "Time", &dimsize);
+	ierr = SMIOL_inquire_dim(file, "Time", &dimsize, NULL);
 	if (ierr == SMIOL_SUCCESS) {
 		if (dimsize == (SMIOL_Offset)0) {
 			fprintf(test_log, "PASS\n");
@@ -1844,7 +1845,7 @@ int test_dimensions(FILE *test_log)
 #else
 	expected_dimsize = (SMIOL_Offset)0;
 #endif
-	ierr = SMIOL_inquire_dim(file, "nCells", &dimsize);
+	ierr = SMIOL_inquire_dim(file, "nCells", &dimsize, NULL);
 	if (ierr == SMIOL_SUCCESS) {
 		if (dimsize == expected_dimsize) {
 			fprintf(test_log, "PASS\n");
@@ -1868,7 +1869,7 @@ int test_dimensions(FILE *test_log)
 #else
 	expected_dimsize = (SMIOL_Offset)0;
 #endif
-	ierr = SMIOL_inquire_dim(file, "nElements", &dimsize);
+	ierr = SMIOL_inquire_dim(file, "nElements", &dimsize, NULL);
 	if (ierr == SMIOL_SUCCESS) {
 		if (dimsize == expected_dimsize) {
 			fprintf(test_log, "PASS\n");
@@ -1883,6 +1884,42 @@ int test_dimensions(FILE *test_log)
 		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned\n");
 		errcount++;
 	}
+
+	/* Inquire about the unlimited dimension */
+	fprintf(test_log, "Everything OK - checking if Time is the unlimited dimension (SMIOL_inquire_dim): ");
+	ierr = SMIOL_inquire_dim(file, "Time", NULL, &is_unlimited);
+	if (ierr == SMIOL_SUCCESS) {
+#ifdef SMIOL_PNETCDF
+		if (is_unlimited == 1) {
+#else
+		if (is_unlimited == 0) {
+#endif
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "is_unlimited: %d\n", is_unlimited);
+			fprintf(test_log, "FAIL - SMIOL_inquire_dim reported that the Time dim was not the unlimited dim\n");
+			errcount++;
+		}
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+
+	fprintf(test_log, "Everything OK - checking if nCells is not the unlimited dimension (SMIOL_inquire_dim): ");
+	ierr = SMIOL_inquire_dim(file, "nCells", NULL, &is_unlimited);
+	if (ierr == SMIOL_SUCCESS) {
+		if (!is_unlimited) {
+			fprintf(test_log, "PASS\n");
+		}
+		else {
+			fprintf(test_log, "FAIL - SMIOL_inquire_dim reported that the nCells dim *was* the unlimited dim\n");
+			errcount++;
+		}
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+
 
 	/* Close the SMIOL file */
 	ierr = SMIOL_close_file(&file);
@@ -1902,7 +1939,7 @@ int test_dimensions(FILE *test_log)
 	/* Existing file for SMIOL_inquire_dim, unlimited dimension */
 	fprintf(test_log, "Existing file - unlimited dimension (SMIOL_inquire_dim): ");
 	dimsize = (SMIOL_Offset)0;
-	ierr = SMIOL_inquire_dim(file, "Time", &dimsize);
+	ierr = SMIOL_inquire_dim(file, "Time", &dimsize, NULL);
 	if (ierr == SMIOL_SUCCESS) {
 		if (dimsize == (SMIOL_Offset)0) {
 			fprintf(test_log, "PASS\n");
@@ -1926,7 +1963,7 @@ int test_dimensions(FILE *test_log)
 #else
 	expected_dimsize = (SMIOL_Offset)0;
 #endif
-	ierr = SMIOL_inquire_dim(file, "nCells", &dimsize);
+	ierr = SMIOL_inquire_dim(file, "nCells", &dimsize, NULL);
 	if (ierr == SMIOL_SUCCESS) {
 		if (dimsize == expected_dimsize) {
 			fprintf(test_log, "PASS\n");
@@ -1950,7 +1987,7 @@ int test_dimensions(FILE *test_log)
 #else
 	expected_dimsize = (SMIOL_Offset)0;
 #endif
-	ierr = SMIOL_inquire_dim(file, "nElements", &dimsize);
+	ierr = SMIOL_inquire_dim(file, "nElements", &dimsize, NULL);
 	if (ierr == SMIOL_SUCCESS) {
 		if (dimsize == expected_dimsize) {
 			fprintf(test_log, "PASS\n");

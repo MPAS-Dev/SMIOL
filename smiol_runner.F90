@@ -842,6 +842,7 @@ contains
 #endif
         integer(kind=SMIOL_offset_kind) :: dimsize
         integer(kind=SMIOL_offset_kind) :: expected_dimsize
+        logical :: is_unlimited
 
         write(test_log,'(a)') '********************************************************************************'
         write(test_log,'(a)') '************ SMIOL_define_dim / SMIOL_inquire_dim unit tests *******************'
@@ -930,8 +931,52 @@ contains
         end if
 #endif
 
-        ! Everything OK for SMIOL_inquire_dim, unlimited dimension
-        write(test_log,'(a)',advance='no') 'Everything OK - unlimited dimension (SMIOLf_inquire_dim): '
+        ! Everything OK for SMIOL_inquire_dim, not asking for dimsize or is_unlimited
+        write(test_log,'(a)',advance='no') 'Everything OK - No dimsize or is_unlimited argument (SMIOLf_inquire_dim): '
+        ierr = SMIOLf_inquire_dim(file, 'nCells')
+        if (ierr == SMIOL_INVALID_ARGUMENT) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_INVALID_ARGUMENT was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Everything OK for SMIOL_inquire_dim, inquiry on the unlimited dimension
+        write(test_log,'(a)',advance='no') 'Everything OK - inquire if Time is the unlimited dim (SMIOLf_inquire_dim): '
+        ierr = SMIOLf_inquire_dim(file, 'Time', is_unlimited=is_unlimited)
+        if (ierr == SMIOL_SUCCESS) then
+#ifdef SMIOL_PNETCDF
+            if (is_unlimited) then
+#else
+            if (.not. is_unlimited) then
+#endif
+                write(test_log,'(a)') 'PASS'
+            else
+                write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was returned but is_unlimited return False'
+                ierrcount = ierrcount + 1
+            endif
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Everything OK for SMIOL_inquire_dim, unlimited inquiry a non-unlimited dimension
+        write(test_log,'(a)',advance='no') 'Everything OK - inquire if nCells is the unlimited dim (SMIOLf_inquire_dim): '
+        ierr = SMIOLf_inquire_dim(file, 'nCells', is_unlimited=is_unlimited)
+        if (ierr == SMIOL_SUCCESS) then
+            if (.not. is_unlimited) then
+                write(test_log,'(a)') 'PASS'
+            else
+                write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was returned but is_unlimited returned True'
+                ierrcount = ierrcount + 1
+            endif
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Everything OK for SMIOL_inquire_dim, unlimited dimension size
+        write(test_log,'(a)',advance='no') 'Everything OK - unlimited dimension size (SMIOLf_inquire_dim): '
         dimsize = 0_SMIOL_offset_kind
         ierr = SMIOLf_inquire_dim(file, 'Time', dimsize)
         if (ierr == SMIOL_SUCCESS) then
@@ -942,6 +987,25 @@ contains
                                ' (got ', dimsize, ', expected ', 0_SMIOL_offset_kind, ')'
                 ierrcount = ierrcount + 1
             end if
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Everything OK for SMIOL_inquire_dim, unlimited and dimsize inquiry
+        write(test_log,'(a)',advance='no') 'Everything OK - inquire about dimsize and is_unlimited: '
+        ierr = SMIOLf_inquire_dim(file, 'Time', dimsize, is_unlimited)
+        if (ierr == SMIOL_SUCCESS) then
+#ifdef SMIOL_PNETCDF
+            if (is_unlimited .and. dimsize == 0_SMIOL_offset_kind) then
+#else
+            if (.not. is_unlimited) then
+#endif
+                write(test_log,'(a)') 'PASS'
+            else
+                write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was returned but is_unlimited returned False or dimsize was incorrect'
+                ierrcount = ierrcount + 1
+            endif
         else
             write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned'
             ierrcount = ierrcount + 1
