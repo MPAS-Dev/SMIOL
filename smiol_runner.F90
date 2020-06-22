@@ -153,6 +153,19 @@ program smiol_runner
         write(test_log,'(a)') ''
     endif
 
+    !
+    ! Unit tests for SMIOL_put/get_var
+    !
+    ierr = test_put_get_var(test_log)
+    if (ierr == 0) then
+        write(test_log,'(a)') 'All tests PASSED!'
+        write(test_log,'(a)') ''
+    else
+        write(test_log,'(i3,a)') ierr, ' tests FAILED!'
+        write(test_log,'(a)') ''
+    endif
+
+
     if (SMIOLf_init(MPI_COMM_WORLD, context) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_init' was not called successfully"
         stop 1
@@ -2245,6 +2258,7 @@ contains
 
     end function test_file_sync
 
+
     function test_set_get_frame(test_log) result(ierrcount)
 
         implicit none
@@ -2364,6 +2378,320 @@ contains
         endif
 
     end function test_set_get_frame
+
+
+    function test_put_get_var(test_log) result(ierrcount)
+
+        implicit none
+
+        integer, parameter :: R4KIND = selected_real_kind(6)
+        integer, parameter :: R8KIND = selected_real_kind(12)
+
+        integer, intent(in) :: test_log
+        integer :: ierr
+        integer :: ierrcount
+        integer :: fail
+        integer(kind=c_size_t) :: i, j, k
+        integer(kind=c_size_t) :: n_compute_elements
+        integer(kind=SMIOL_offset_kind), dimension(:), pointer :: compute_elements
+        integer, dimension(:), allocatable, target :: int_buf
+        integer, dimension(:), pointer :: int_buf_p
+        real, dimension(:,:), allocatable, target :: real_buf
+        real, dimension(:,:), pointer :: real_buf_p
+        character(len=:), pointer :: char_buf
+        real(kind=R8KIND), dimension(:,:,:), allocatable, target :: double_buf
+        real(kind=R8KIND), dimension(:,:,:), pointer :: double_buf_p
+        type (SMIOLf_context), pointer :: context => null()
+        type (SMIOLf_file), pointer :: file => null()
+        character(len=32), dimension(6) :: dimnames
+
+        write(test_log,'(a)') '********************************************************************************'
+        write(test_log,'(a)') '************************* SMIOLf_put/get_var  tests ****************************'
+        write(test_log,'(a)') ''
+
+        ierrcount = 0
+        fail = 0
+
+        ! Create a SMIOL context for testing SMIOL_sync_file
+        ierr = SMIOLf_init(MPI_COMM_WORLD, context)
+        if (ierr /= SMIOL_SUCCESS .or. .not. associated(context)) then
+            write(test_log,'(a)') 'Failed to initalize a SMIOL context'
+            ierrcount = -1
+            return
+        end if
+
+        ! Create a SMIOL file for testing variable routines
+        nullify(file)
+        ierr = SMIOLf_open_file(context, 'ftran_put_get_var.nc', SMIOL_FILE_CREATE, file)
+        if (ierr /= SMIOL_SUCCESS .or. .not. associated(file)) then
+            write(test_log,'(a)') 'Failed to create a file...'
+            ierrcount = -1
+            return
+        end if
+
+        ! Define several dimensions in the file to be used when defining variables
+        if (SMIOLf_define_dim(file, 'Time', -1_SMIOL_offset_kind) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to create dimension Time...'
+            ierrcount = -1
+            return
+        end if
+
+        if (SMIOLf_define_dim(file, 'nCells', 10_SMIOL_offset_kind) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to create dimension nCells...'
+            ierrcount = -1
+            return
+        end if
+
+        if (SMIOLf_define_dim(file, 'nVertLevels', 52_SMIOL_offset_kind) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to create dimension nVertLevels...'
+            ierrcount = -1
+            return
+        end if
+
+        if (SMIOLf_define_dim(file, 'nMonths', 12_SMIOL_offset_kind) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to create dimension maxEdges...'
+            ierrcount = -1
+            return
+        end if
+
+        if (SMIOLf_define_dim(file, 'strlen', 64_SMIOL_offset_kind) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to create dimension StrLen...'
+            ierrcount = -1
+            return
+        end if
+
+        ! Integer 1d
+        dimnames(1) = 'Time'
+        dimnames(2) = 'strlen'
+        if (SMIOLf_define_var(file, 'xtime', SMIOL_CHAR, 2, dimnames) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to create xtime var...'
+            ierrcount = -1
+            return
+        endif
+
+        ! Integer 1d
+        dimnames(1) = 'nCells'
+        if (SMIOLf_define_var(file, 'i_1d', SMIOL_INT32, 1, dimnames) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to create i_1d var...'
+            ierrcount = -1
+            return
+        endif
+
+        ! Real 2d
+        dimnames(1) = 'nCells'
+        dimnames(2) = 'nVertLevels'
+        if (SMIOLf_define_var(file, 'r_2d', SMIOL_REAL32, 2, dimnames) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to create r_2d var...'
+            ierrcount = -1
+            return
+        endif
+
+        ! Double 3d
+        dimnames(1) = 'nCells'
+        dimnames(2) = 'nVertLevels'
+        dimnames(3) = 'nMonths'
+        if (SMIOLf_define_var(file, 'd_3d', SMIOL_REAL64, 3, dimnames) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to create r_3d var...'
+            ierrcount = -1
+            return
+        endif
+
+        !
+        ! Testing put/get var on a non-decomposed variable
+        !
+        write(test_log,'(a)',advance='no') "Everything Ok - Putting and getting a non-decomposed character var: "
+        allocate(character(len=64) :: char_buf)
+        char_buf = "YYYY-MM-DD_hh:mm:ss"
+        nullify(decomp)
+        ierr = SMIOLf_put_var(file, 'xtime', decomp, char_buf)
+        if (ierr /= SMIOL_SUCCESS) then
+            write(test_log, '(a)') "FAIL - SMIOL_SUCCESS was not returned"
+            ierrcount = ierrcount + 1
+        endif
+
+        ! Get var
+        char_buf = ""
+        ierr = SMIOLf_get_var(file, 'xtime', decomp, char_buf)
+        if (ierr /= SMIOL_SUCCESS) then
+            write(test_log, '(a)') "FAIL - SMIOL_SUCCESS was not returned"
+            ierrcount = ierrcount + 1
+        endif
+
+#ifdef SMIOL_PNETCDF
+        if (char_buf /= "YYYY-MM-DD_hh:mm:ss") then
+            write(test_log, '(a)') "FAIL - var retrieved from get_var was not correct"
+            ierrcount = ierrcount + 1
+        else
+            write(test_log, '(a)') "PASS"
+        endif
+#else
+        if (ierr == SMIOL_SUCCESS) then
+            write(test_log, '(a)') "PASS"
+        endif
+#endif
+        deallocate(char_buf)
+
+        ! Only preforme these tests with 2 MPI tasks
+        if (context % comm_size == 2) then
+            n_compute_elements = 5
+            allocate(compute_elements(n_compute_elements))
+
+            do i = 1, n_compute_elements
+                if (context % comm_rank == 0) then
+                    compute_elements(i) = i - 1
+                else
+                    compute_elements(i) = (i - 1) + (n_compute_elements)
+                endif
+            enddo
+
+            if (SMIOLf_create_decomp(context, n_compute_elements, compute_elements, 1, 2, decomp) /= SMIOL_SUCCESS) then
+                write(test_log,'(a)') "FAIL: SMIOLf_create_decomp was not called successfully"
+                ierrcount = -1
+                return
+            endif
+
+            deallocate(compute_elements)
+
+            !
+            ! Test 1d integer
+            !
+            write(test_log,'(a)',advance='no') "Everything Ok - Putting and getting a 1d integer: "
+            allocate(int_buf(n_compute_elements))
+            int_buf_p => int_buf
+            int_buf(:) = 42 * (context % comm_rank + 1)
+
+            ierr = SMIOLf_put_var(file, 'i_1d', decomp, int_buf_p)
+            if (ierr /= SMIOL_SUCCESS) then
+                write(test_log,'(a)') "FAIL - SMIOL_SUCCESS was not returned on put: ", SMIOLf_lib_error_string(context)
+                ierrcount = ierrcount + 1
+            endif
+
+            ! Get 1d int
+            int_buf(:) = -1
+            ierr = SMIOLf_get_var(file, 'i_1d', decomp, int_buf_p)
+            if (ierr /= SMIOL_SUCCESS) then
+                write(test_log,'(a)') "FAIL - SMIOL_SUCCESS was not returned on get: ", SMIOLf_lib_error_string(context)
+                ierrcount = ierrcount + 1
+            endif
+
+            do i = 1, n_compute_elements
+                if (int_buf(i) /= 42 * (context % comm_rank + 1)) then
+                    fail = fail + 1
+                endif
+            enddo
+
+            if (fail /= 0) then
+                write(test_log,'(a)') "FAIL - get_var retrived ", fail, ", number of wrong items"
+                ierrcount = ierrcount + 1
+            else
+                write(test_log,'(a)') "PASS"
+            endif
+            deallocate(int_buf)
+            nullify(int_buf_p)
+
+            !
+            ! Test 2d integer
+            !
+            fail = 0
+            write(test_log,'(a)',advance='no') "Everything Ok - Putting and getting a 2d real: "
+            allocate(real_buf(52, n_compute_elements))
+            real_buf_p => real_buf
+            real_buf(:,:) = 3.14 * (context % comm_rank + 1)
+
+            ierr = SMIOLf_put_var(file, 'r_2d', decomp, real_buf_p)
+            if (ierr /= SMIOL_SUCCESS) then
+                write(test_log,'(a)') "FAIL - SMIOL_SUCCESS was not returned on put: ", SMIOLf_lib_error_string(context)
+                ierrcount = ierrcount + 1
+            endif
+
+            ! Get
+            real_buf(:,:) = -1.0
+            ierr = SMIOLf_get_var(file, 'r_2d', decomp, real_buf_p)
+            if (ierr /= SMIOL_SUCCESS) then
+                write(test_log,'(a)') "FAIL - SMIOL_SUCCESS was not returned on get: ", SMIOLf_lib_error_string(context)
+                ierrcount = ierrcount + 1
+            endif
+
+            do i = 1, n_compute_elements
+                do j = 1, 52
+                    if (real_buf(j, i) /= 3.14 * (context % comm_rank + 1)) then
+                        fail = fail + 1
+                    endif
+                enddo
+            enddo
+
+            if (fail /= 0) then
+                write(test_log,'(a)') "FAIL - get_var retrived ", fail, ", number of wrong items"
+                ierrcount = ierrcount + 1
+            else
+                write(test_log,'(a)') "PASS"
+            endif
+            deallocate(real_buf)
+            nullify(real_buf_p)
+
+            !
+            ! 3D Double
+            !
+            write(test_log,'(a)',advance='no') "Everything Ok - Putting and getting a 3d double: "
+            fail = 0
+            allocate(double_buf(12, 52, n_compute_elements))
+            double_buf_p => double_buf
+            double_buf(:,:,:) = 3.141593653_R8KIND * (context % comm_rank + 1)
+            ierr = SMIOLf_put_var(file, 'd_3d', decomp, double_buf_p)
+            if (ierr /= SMIOL_SUCCESS) then
+                write(test_log,'(a)') "FAIL - SMIOL_SUCCESS was not returned on put: ", SMIOLf_lib_error_string(context)
+                ierrcount = ierrcount + 1
+            endif
+
+            ! Get
+            double_buf(:,:,:) = -1.0_R8KIND
+            ierr = SMIOLf_get_var(file, 'd_3d', decomp, double_buf_p)
+            if (ierr /= SMIOL_SUCCESS) then
+                write(test_log,'(a)') "FAIL - SMIOL_SUCCESS was not returned on get: ", SMIOLf_lib_error_string(context)
+                ierrcount = ierrcount + 1
+            endif
+
+            do i = 1, n_compute_elements
+                do j = 1, 52
+                    do k = 1, 12
+                        if (double_buf(k,j,i) /= 3.141593653_R8KIND * (context % comm_rank + 1)) then
+                            fail = fail + 1
+                        endif
+                    enddo
+                enddo
+            enddo
+            if (fail /= 0) then
+                write(test_log,'(a)') "FAIL - get_var retrived ", fail, ", number of wrong items"
+                ierrcount = ierrcount + 1
+            else
+                write(test_log,'(a)') "PASS"
+            endif
+            deallocate(double_buf)
+            nullify(double_buf_p)
+
+
+            if (SMIOLf_free_decomp(decomp) /= SMIOL_SUCCESS) then
+                write(test_log,'(a)') "FAIL: SMIOLf_free_decomp was not called successfully"
+                ierrcount = -1
+                return
+            endif
+        endif
+
+
+        if (SMIOLf_close_file(file) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') "ERROR: 'SMIOLf_close_file' was not called successfully"
+            stop 1
+        endif
+
+        ierr = SMIOLf_finalize(context)
+        if (ierr /= SMIOL_SUCCESS .or. associated(context)) then
+            ierrcount = -1
+            return
+        end if
+
+        write(test_log,'(a)') ''
+
+    end function test_put_get_var
 
 
     !-----------------------------------------------------------------------
