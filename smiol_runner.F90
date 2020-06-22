@@ -271,18 +271,18 @@ program smiol_runner
     endif
 #endif
 
+   ! if (SMIOLf_put_var() /= SMIOL_SUCCESS) then
+   !     write(test_log,'(a)') "ERROR: 'SMIOLf_put_var' was not called successfully"
+   !     stop 1
+   ! endif
+
+   ! if (SMIOLf_get_var() /= SMIOL_SUCCESS) then
+   !     write(test_log,'(a)') "ERROR: 'SMIOLf_get_var' was not called successfully"
+   !     stop 1
+   ! endif
+
     if (SMIOLf_close_file(file) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_close_file' was not called successfully"
-        stop 1
-    endif
-
-    if (SMIOLf_put_var() /= SMIOL_SUCCESS) then
-        write(test_log,'(a)') "ERROR: 'SMIOLf_put_var' was not called successfully"
-        stop 1
-    endif
-
-    if (SMIOLf_get_var() /= SMIOL_SUCCESS) then
-        write(test_log,'(a)') "ERROR: 'SMIOLf_get_var' was not called successfully"
         stop 1
     endif
 
