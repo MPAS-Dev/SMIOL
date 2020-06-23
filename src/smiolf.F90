@@ -33,7 +33,9 @@ module SMIOLf
               SMIOLf_lib_error_string, &
               SMIOLf_set_option, &
               SMIOLf_create_decomp, &
-              SMIOLf_free_decomp
+              SMIOLf_free_decomp, &
+              SMIOLf_set_frame, &
+              SMIOLf_get_frame
 
 
     integer, parameter :: SMIOL_offset_kind = c_int64_t   ! Must match SMIOL_Offset in smiol_types.h
@@ -50,6 +52,7 @@ module SMIOLf
 
     type, bind(C) :: SMIOLf_file
         type (c_ptr) :: context      ! Pointer to (struct SMIOL_context); the context within which the file was opened
+        integer(kind=SMIOL_offset_kind) :: frame      ! Current frame of the file
 #ifdef SMIOL_PNETCDF
         integer(c_int) :: state      ! parallel-netCDF file state (i.e. Define or data mode)
         integer(c_int) :: ncidp      ! parallel-netCDF file handle
@@ -1016,6 +1019,84 @@ contains
         ierr = 0
 
     end function SMIOLf_set_option
+
+    !-----------------------------------------------------------------------
+    !  routine SMIOLf_set_frame
+    !
+    !> \brief Set the frame of an open file
+    !> \details
+    !> For an open SMIOL file handle, set the frame for the unlimited dimension.
+    !> After setting the frame for a file, writing to a variable that is
+    !> dimensioned by the unlimited dimension will write to the last set frame,
+    !> overwriting any current data that maybe present in that frame.
+    !>
+    !> SMIOL_SUCCESS will be returned if the frame is successfully set otherwise an
+    !> error will return.
+    !
+    !-----------------------------------------------------------------------
+    integer function SMIOLf_set_frame(file, frame) result(ierr)
+
+        use iso_c_binding, only : c_loc, c_ptr
+
+        implicit none
+
+        type (SMIOLf_file), target :: file
+        integer (kind=SMIOL_offset_kind), value, intent(in) :: frame
+
+        type (c_ptr) :: c_file
+
+        ! C interface definitions
+        interface
+            function SMIOL_set_frame(file, frame) result(ierr) bind(C, name='SMIOL_set_frame')
+                use iso_c_binding, only : c_ptr, c_int
+                import SMIOL_offset_kind
+                type (c_ptr), value :: file
+                integer (kind=SMIOL_offset_kind), value :: frame
+                integer (kind=c_int) :: ierr
+            end function
+        end interface
+
+        c_file = c_loc(file)
+        ierr = SMIOL_set_frame(c_file, frame)
+
+    end function SMIOLf_set_frame
+
+    !-----------------------------------------------------------------------
+    !  routine SMIOLf_get_frame
+    !
+    !> \brief Get the frame of an open file
+    !> \details
+    !> Get the current frame of an open file. Upon success, SMIOL_SUCCESS will be
+    !> returned, otherwise an error will be returned.
+    !
+    !-----------------------------------------------------------------------
+    integer function SMIOLf_get_frame(file, frame) result(ierr)
+
+        use iso_c_binding, only : c_ptr, c_loc
+
+        implicit none
+
+        type (SMIOLf_file), target, intent(in) :: file
+        integer (kind=SMIOL_offset_kind), target, intent(out) :: frame
+
+        type (c_ptr) :: c_file
+        type (c_ptr) :: c_frame
+
+        ! C interface definitions
+        interface
+            function SMIOL_get_frame(file, frame) result(ierr) bind(C, name='SMIOL_get_frame')
+                use iso_c_binding, only : c_ptr, c_int
+                type (c_ptr), value :: file
+                type (c_ptr), value :: frame
+                integer (kind=c_int) :: ierr
+            end function
+        end interface
+
+        c_file = c_loc(file)
+        c_frame = c_loc(frame)
+        ierr = SMIOL_get_frame(c_file, c_frame)
+
+    end function SMIOLf_get_frame
 
 
     !-----------------------------------------------------------------------
