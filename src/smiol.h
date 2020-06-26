@@ -49,6 +49,8 @@ int SMIOL_sync_file(struct SMIOL_file *file);
 const char *SMIOL_error_string(int errno);
 const char *SMIOL_lib_error_string(struct SMIOL_context *context);
 int SMIOL_set_option(void);
+int SMIOL_set_frame(struct SMIOL_file *file, SMIOL_Offset frame);
+int SMIOL_get_frame(struct SMIOL_file *file, SMIOL_Offset *frame);
 
 /*
  * Decomposition methods

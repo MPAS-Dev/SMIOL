@@ -173,8 +173,9 @@ int SMIOL_inquire(void)
  * Depending on the specified file mode, creates or opens the file specified
  * by filename within the provided SMIOL context.
  *
- * Upon successful completion, SMIOL_SUCCESS is returned, and the file handle argument
- * will point to a valid file handle. Otherwise, the file handle is NULL and an error
+ * Upon successful completion, SMIOL_SUCCESS is returned, and the file handle
+ * argument will point to a valid file handle and the current frame for the
+ * file will be set to zero. Otherwise, the file handle is NULL and an error
  * code other than SMIOL_SUCCESS is returned.
  *
  ********************************************************************************/
@@ -208,6 +209,7 @@ int SMIOL_open_file(struct SMIOL_context *context, const char *filename, int mod
 	 * Save pointer to context for this file
 	 */
 	(*file)->context = context;
+	(*file)->frame = (SMIOL_Offset) 0;
 
 	if (mode & SMIOL_FILE_CREATE) {
 #ifdef SMIOL_PNETCDF
@@ -933,6 +935,49 @@ const char *SMIOL_lib_error_string(struct SMIOL_context *context)
  ********************************************************************************/
 int SMIOL_set_option(void)
 {
+	return SMIOL_SUCCESS;
+}
+
+/********************************************************************************
+ *
+ * SMIOL_set_frame
+ *
+ * Set the frame for the unlimited dimension for an open file
+ *
+ * For an open SMIOL file handle, set the frame for the unlimited dimension.
+ * After setting the frame for a file, writing to a variable that is
+ * dimensioned by the unlimited dimension will write to the last set frame,
+ * overwriting any current data that maybe present in that frame.
+ *
+ * SMIOL_SUCCESS will be returned if the frame is successfully set otherwise an
+ * error will return.
+ *
+ ********************************************************************************/
+int SMIOL_set_frame(struct SMIOL_file *file, SMIOL_Offset frame)
+{
+	if (file == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+	file->frame = frame;
+	return SMIOL_SUCCESS;
+}
+
+/********************************************************************************
+ *
+ * SMIOL_get_frame
+ *
+ * Return the current frame of an open file
+ *
+ * Get the current frame of an open file. Upon success, SMIOL_SUCCESS will be
+ * returned, otherwise an error will be returned.
+ *
+ ********************************************************************************/
+int SMIOL_get_frame(struct SMIOL_file *file, SMIOL_Offset *frame)
+{
+	if (file == NULL || frame == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+	*frame = file->frame;
 	return SMIOL_SUCCESS;
 }
 

@@ -18,6 +18,7 @@ int test_transfer(FILE *test_log);
 int test_file_sync(FILE *test_log);
 int test_utils(FILE *test_log);
 int test_io_decomp(FILE *test_log);
+int test_set_get_frame(FILE* test_log);
 int compare_decomps(struct SMIOL_decomp *decomp,
                     size_t n_comp_list, SMIOL_Offset *comp_list_correct,
                     size_t n_io_list, SMIOL_Offset *io_list_correct);
@@ -243,6 +244,18 @@ int main(int argc, char **argv)
 	else {
 		fprintf(test_log, "%i tests FAILED!\n\n", ierr);
 	}
+
+	/*
+	 * Unit tests for set, get frame
+	 */
+	ierr = test_set_get_frame(test_log);
+	if (ierr == 0) {
+		fprintf(test_log, "All tests PASSED!\n\n");
+	}
+	else {
+		fprintf(test_log, "%i tests FAILED!\n\n", ierr);
+	}
+
 
 	if ((ierr = SMIOL_init(MPI_COMM_WORLD, &context)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_init: %s ", SMIOL_error_string(ierr));
@@ -3187,6 +3200,138 @@ int test_io_decomp(FILE *test_log)
 	return errcount;
 }
 
+int test_set_get_frame(FILE* test_log)
+{
+
+	int errcount;
+	int ierr;
+	struct SMIOL_context *context;
+	struct SMIOL_file *file;
+	SMIOL_Offset frame;
+
+	fprintf(test_log, "********************************************************************************\n");
+	fprintf(test_log, "************************** SMIOL_set/get_frame tests ***************************\n");
+	fprintf(test_log, "\n");
+
+	errcount = 0;
+
+	/* Create a SMIOL context for testing variable routines */
+	context = NULL;
+	ierr = SMIOL_init(MPI_COMM_WORLD, &context);
+	if (ierr != SMIOL_SUCCESS || context == NULL) {
+		fprintf(test_log, "Failed to create SMIOL context...\n");
+		return -1;
+	}
+
+	/* See if the frame is set correctly when opening a file */
+	fprintf(test_log, "Everything OK - Frame set correct on file open: ");
+	file = NULL;
+	ierr = SMIOL_open_file(context, "test_frame.nc", SMIOL_FILE_CREATE, &file);
+	if (ierr != SMIOL_SUCCESS || file == NULL) {
+		fprintf(test_log, "Failed to create SMIOL file...\n");
+		return -1;
+	}
+	if (file->frame != 0) {
+		fprintf(test_log, "FAIL - Frame was not '0'\n");
+		errcount++;
+	} else {
+		fprintf(test_log, "PASS\n");
+	}
+
+
+	/* Set the frame to 1 */
+	fprintf(test_log, "Everything OK - Setting the frame to one: ");
+	ierr = SMIOL_set_frame(file, (SMIOL_Offset) 1);
+	if (ierr == SMIOL_SUCCESS && file->frame == 1) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr != SMIOL_SUCCESS && file->frame == 1) {
+		fprintf(test_log, "FAIL - frame was 1, but SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	} else if (ierr == SMIOL_SUCCESS && file->frame != 1) {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was returned, but frame was not 1\n");
+		errcount++;
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned and frame was not 1\n");
+	}
+
+	fprintf(test_log, "Everything OK - Get frame returns 1: ");
+	ierr = SMIOL_get_frame(file, &frame);
+	if (ierr == SMIOL_SUCCESS && frame == 1) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr != SMIOL_SUCCESS && frame == 1) {
+		fprintf(test_log, "FAIL - frame was 1, but SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	} else if (ierr == SMIOL_SUCCESS && frame != 1) {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was returned, but frame was not 1\n");
+		errcount++;
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned and frame was not 1\n");
+	}
+
+	/* Set the frame to a large number */
+	fprintf(test_log, "Everything OK - Setting the frame to a large record number: ");
+	ierr = SMIOL_set_frame(file, (SMIOL_Offset) 4300000000);
+	if (ierr == SMIOL_SUCCESS && file->frame == (SMIOL_Offset) 4300000000) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr != SMIOL_SUCCESS && file->frame == (SMIOL_Offset) 4300000000) {
+		fprintf(test_log, "FAIL - frame was 1, but SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	} else if (ierr == SMIOL_SUCCESS && file->frame != (SMIOL_Offset) 430000000) {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was returned, but frame was not 4,300,000,000\n");
+		errcount++;
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned and frame was not 4,300,000,000\n");
+	}
+
+
+	fprintf(test_log, "Everything OK - Get frame returns large record number: ");
+	ierr = SMIOL_get_frame(file, &frame);
+	if (ierr == SMIOL_SUCCESS && frame == (SMIOL_Offset) 4300000000) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr != SMIOL_SUCCESS && frame == (SMIOL_Offset) 4300000000) {
+		fprintf(test_log, "FAIL - frame was 4,300,000,000, but SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	} else if (ierr == SMIOL_SUCCESS && frame != (SMIOL_Offset) 4300000000) {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was returned, but frame was not 4,300,000,000\n");
+		errcount++;
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned and frame was not 4,300,000,000\n");
+	}
+
+	fprintf(test_log, "Everything OK - Testing set frame with a NULL file: ");
+	ierr = SMIOL_set_frame(NULL, 1);
+	if (ierr == SMIOL_INVALID_ARGUMENT) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - Set frame did not return SMIOL_INVALID_ARGUMENT\n");
+	}
+
+	fprintf(test_log, "Everything OK - Testing get frame with a NULL file: ");
+	ierr = SMIOL_get_frame(NULL, &frame);
+	if (ierr == SMIOL_INVALID_ARGUMENT) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - Get frame did not return SMIOL_INVALID_ARGUMENT\n");
+	}
+
+	/* Close the file */
+	ierr = SMIOL_close_file(&file);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to close file\n");
+		return -1;
+	}
+
+	ierr = SMIOL_finalize(&context);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to free SMIOL context...\n");
+		return -1;
+	}
+
+	fflush(test_log);
+	fprintf(test_log, "\n");
+
+	return errcount;
+}
 
 /********************************************************************************
  *

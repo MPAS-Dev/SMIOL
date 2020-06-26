@@ -112,6 +112,18 @@ program smiol_runner
         write(test_log,'(a)') ''
     endif
 
+    !
+    ! Unit tests for SMIOL_set/get_Frame
+    !
+    ierr = test_set_get_frame(test_log)
+    if (ierr == 0) then
+        write(test_log,'(a)') 'All tests PASSED!'
+        write(test_log,'(a)') ''
+    else
+        write(test_log,'(i3,a)') ierr, ' tests FAILED!'
+        write(test_log,'(a)') ''
+    endif
+
     if (SMIOLf_init(MPI_COMM_WORLD, context) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_init' was not called successfully"
         stop 1
@@ -1754,6 +1766,126 @@ contains
         write(test_log,'(a)') ''
 
     end function test_file_sync
+
+    function test_set_get_frame(test_log) result(ierrcount)
+
+        implicit none
+
+        integer, intent(in) :: test_log
+        integer :: ierr
+        integer :: ierrcount
+        integer (kind=SMIOL_offset_kind) :: frame
+        type (SMIOLf_context), pointer :: context => null()
+        type (SMIOLf_file), pointer :: file => null()
+
+        write(test_log,'(a)') '********************************************************************************'
+        write(test_log,'(a)') '************************ SMIOLf_set/get_frame tests ****************************'
+        write(test_log,'(a)') ''
+
+        ierrcount = 0
+        frame = -1
+
+        ! Create a SMIOL context for testing SMIOL__file
+        ierr = SMIOLf_init(MPI_COMM_WORLD, context)
+        if (ierr /= SMIOL_SUCCESS .or. .not. associated(context)) then
+            write(test_log,'(a)') 'Failed to initalize a SMIOL context'
+            ierrcount = -1
+            return
+        end if
+
+        ! Testing to see if frame is set to 0 when a file is opened
+        ierr = SMIOLf_open_file(context, 'smiolf_frame_test.nc', SMIOL_FILE_CREATE, file)
+        if (ierr /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') "Failed to open file"
+            ierrcount = -1
+            return
+        end if
+
+        write(test_log,'(a)',advance='no') "Seeing if SMIOLf_open_file sets the frame to 0: "
+        if (file % frame == 0) then
+            write(test_log, '(a)') "PASS"
+        else
+            write(test_log, '(a)') "FAIL - frame was not set to 0"
+            ierrcount = ierrcount + 1
+        endif
+
+        ! Testing set_frame with 1
+        write(test_log,'(a)',advance='no') "Everything OK - Setting the frame to 1: "
+        ierr = SMIOLf_set_frame(file, 1_SMIOL_offset_kind)
+        if (ierr == SMIOL_SUCCESS .and. file % frame == 1) then
+            write(test_log,'(a)') "PASS"
+        else if (ierr /= SMIOL_SUCCESS .and. file % frame == 1) then
+            write(test_log,'(a)') "FAIL - frame was 1, but SMIOL_SUCCESS was not returned"
+            ierrcount = ierrcount + 1
+        else if (ierr == SMIOL_SUCCESS .and. file % frame /= 1) then
+            write(test_log,'(a)') "FAIL - SMIOL_SUCCESS was returned, but frame was not 1"
+            ierrcount = ierrcount + 1
+        else
+            write(test_log,'(a)') "FAIL - SMIOL_SUCCESS was not returned, and frame was not 1"
+            ierrcount = ierrcount + 1
+        endif
+
+        ! Testing get frame with 1
+        write(test_log,'(a)',advance='no') "Everything OK - SMIOL_get_frame with frame == 1: "
+        ierr = SMIOLf_get_frame(file, frame)
+        if (ierr == SMIOL_SUCCESS .and. frame == 1) then
+            write(test_log,'(a)') "PASS"
+        else if (ierr /= SMIOL_SUCCESS .and. frame == 1) then
+            write(test_log,'(a)') "FAIL - frame was 1, but SMIOL_SUCCESS was not returned"
+            ierrcount = ierrcount + 1
+        else if (ierr == SMIOL_SUCCESS .and. frame /= 1) then
+            write(test_log,'(a)') "FAIL - SMIOL_SUCCESS was returned, but frame was not 1"
+            ierrcount = ierrcount + 1
+        else
+            write(test_log,'(a)') "FAIL - SMIOL_SUCCESS was not returned, and frame was not 1"
+            ierrcount = ierrcount + 1
+        endif
+
+        ! Testing set_frame to a large value
+        write(test_log,'(a)',advance='no') "Everything OK - Setting the frame to a large value: "
+        ierr = SMIOLf_set_frame(file, 4300000000_SMIOL_offset_kind)
+        if (ierr == SMIOL_SUCCESS .and. file % frame == 4300000000_SMIOL_offset_kind) then
+            write(test_log,'(a)') "PASS"
+        else if (ierr /= SMIOL_SUCCESS .and. file % frame == 4300000000_SMIOL_offset_kind) then
+            write(test_log,'(a)') "FAIL - frame was 1, but SMIOL_SUCCESS was not returned"
+            ierrcount = ierrcount + 1
+        else if (ierr == SMIOL_SUCCESS .and. file % frame /= 4300000000_SMIOL_offset_kind) then
+            write(test_log,'(a)') "FAIL - SMIOL_SUCCESS was returned, but frame was not 4,300,000,000"
+            ierrcount = ierrcount + 1
+        else
+            write(test_log,'(a)') "FAIL - SMIOL_SUCCESS was not returned, and frame was not 4,300,000,000"
+            ierrcount = ierrcount + 1
+        endif
+
+        ! Testing get_frame with a large value
+        write(test_log,'(a)',advance='no') "Everything OK - SMIOL_get_frame with large value frame: "
+        ierr = SMIOLf_get_frame(file, frame)
+        if (ierr == SMIOL_SUCCESS .and. frame == 4300000000_SMIOL_offset_kind) then
+            write(test_log,'(a)') "PASS"
+        else if (ierr /= SMIOL_SUCCESS .and. frame == 4300000000_SMIOL_offset_kind) then
+            write(test_log,'(a)') "FAIL - frame was 4,300,000,000, but SMIOL_SUCCESS was not returned"
+            ierrcount = ierrcount + 1
+        else if (ierr == SMIOL_SUCCESS .and. frame /= 4300000000_SMIOL_offset_kind) then
+            write(test_log,'(a)') "FAIL - SMIOL_SUCCESS was returned, but frame was not 4,300,000,000"
+            ierrcount = ierrcount + 1
+        else
+            write(test_log,'(a)') "FAIL - SMIOL_SUCCESS was not returned, and frame was not 4,300,000,000"
+            ierrcount = ierrcount + 1
+        endif
+
+        if (SMIOLf_close_file(file) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') "ERROR: 'SMIOLf_close_file' was not called successfully"
+            ierrcount = -1
+            return
+        endif
+
+        if (SMIOLf_finalize(context) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') "ERROR: 'SMIOLf_finalize' was not called successfully"
+            ierrcount = -1
+            return
+        endif
+
+    end function test_set_get_frame
 
 
     !-----------------------------------------------------------------------

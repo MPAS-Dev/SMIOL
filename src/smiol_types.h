@@ -29,6 +29,7 @@ struct SMIOL_context {
 
 struct SMIOL_file {
 	struct SMIOL_context *context; /* Context for this file */
+	SMIOL_Offset frame; /* Current frame of the file */
 #ifdef SMIOL_PNETCDF
 	int state; /* parallel-netCDF file state (i.e. Define or data mode) */
 	int ncidp; /* parallel-netCDF file handle */
