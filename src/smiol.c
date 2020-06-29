@@ -1,6 +1,7 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include "smiol.h"
 #include "smiol_utils.h"
 
@@ -788,11 +789,100 @@ int SMIOL_get_var(void)
  *
  * Defines a new attribute in a file.
  *
- * Detailed description.
+ * Defines a new attribute for a variable if varname is not NULL,
+ * or a global attribute otherwise. The type of the attribute must be one
+ * of SMIOL_REAL32, SMIOL_REAL64, SMIOL_INT32, or SMIOL_CHAR.
+ *
+ * If the attribute has been successfully defined for the variable or file,
+ * SMIOL_SUCCESS is returned.
  *
  ********************************************************************************/
-int SMIOL_define_att(void)
+int SMIOL_define_att(struct SMIOL_file *file, const char *varname,
+                     const char *att_name, int att_type, const void *att)
 {
+#ifdef SMIOL_PNETCDF
+	int ierr;
+	int varidp;
+	nc_type xtype;
+#endif
+
+	/*
+	 * Check validity of arguments
+	 */
+	if (file == NULL || att_name == NULL || att == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	/*
+	 * Checks for valid attribute type are handled in library-specific
+	 * code, below
+	 */
+
+#ifdef SMIOL_PNETCDF
+	/*
+	 * If varname was provided, get the variable ID; else, the attribute
+	 * is a global attribute not associated with a specific variable
+	 */
+	if (varname != NULL) {
+		ierr = ncmpi_inq_varid(file->ncidp, varname, &varidp);
+		if (ierr != NC_NOERR) {
+			file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+			file->context->lib_ierr = ierr;
+			return SMIOL_LIBRARY_ERROR;
+		}
+	} else {
+		varidp = NC_GLOBAL;
+	}
+
+	/*
+	 * Translate SMIOL variable type to parallel-netcdf type
+	 */
+	switch (att_type) {
+		case SMIOL_REAL32:
+			xtype = NC_FLOAT;
+			break;
+		case SMIOL_REAL64:
+			xtype = NC_DOUBLE;
+			break;
+		case SMIOL_INT32:
+			xtype = NC_INT;
+			break;
+		case SMIOL_CHAR:
+			xtype = NC_CHAR;
+			break;
+		default:
+			return SMIOL_INVALID_ARGUMENT;
+	}
+
+	/*
+	 * If the file is in data mode, then switch it to define mode
+	 */
+	if (file->state == PNETCDF_DATA_MODE) {
+		if ((ierr = ncmpi_redef(file->ncidp)) != NC_NOERR) {
+			file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+			file->context->lib_ierr = ierr;
+			return SMIOL_LIBRARY_ERROR;
+		}
+		file->state = PNETCDF_DEFINE_MODE;
+	}
+
+	/*
+	 * Add the attribute to the file
+	 */
+	if (att_type == SMIOL_CHAR) {
+		ierr = ncmpi_put_att(file->ncidp, varidp, att_name, xtype,
+		                     (MPI_Offset)strlen(att), (const char *)att);
+	} else {
+		ierr = ncmpi_put_att(file->ncidp, varidp, att_name, xtype,
+		                     (MPI_Offset)1, (const char *)att);
+	}
+	if (ierr != NC_NOERR) {
+		file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+		file->context->lib_ierr = ierr;
+		return SMIOL_LIBRARY_ERROR;
+	}
+#endif
+
 	return SMIOL_SUCCESS;
 }
 
@@ -803,11 +893,119 @@ int SMIOL_define_att(void)
  *
  * Inquires about an attribute in a file.
  *
- * Detailed description.
+ * Inquires about a variable attribute if varname is not NULL, or a global
+ * attribute otherwise.
+ *
+ * If the requested attribute is found, SMIOL_SUCCESS is returned and the memory
+ * pointed to by the att argument will contain the attribute value.
+ *
+ * For character string attributes, no bytes beyond the length of the attribute
+ * in the file will be modified in the att argument, and no '\0' character will
+ * be added. Therefore, calling code may benefit from initializing character
+ * strings before calling this routine.
+ *
+ * If SMIOL was not compiled with support for any file library, the att_type
+ * output argument will always be set to SMIOL_UNKNOWN_VAR_TYPE, and the att_len
+ * output argument will always be set to -1; the value of the att output
+ * argument will be unchanged.
  *
  ********************************************************************************/
-int SMIOL_inquire_att(void)
+int SMIOL_inquire_att(struct SMIOL_file *file, const char *varname,                                                                  
+                      const char *att_name, int *att_type,
+                      SMIOL_Offset *att_len, void *att)
 {
+#ifdef SMIOL_PNETCDF
+	int ierr;
+	int varidp;
+	nc_type xtypep;
+	MPI_Offset lenp;
+#endif
+
+	/*
+	 * Check validity of arguments
+	 */
+	if (file == NULL || att_name == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	/*
+	 * Set output arguments in case no library sets them later
+	 */
+	if (att_len != NULL) {
+		*att_len = (SMIOL_Offset)-1;
+	}
+
+	if (att_type != NULL) {
+		*att_type = SMIOL_UNKNOWN_VAR_TYPE;
+	}
+
+#ifdef SMIOL_PNETCDF
+	/*
+	 * If varname was provided, get the variable ID; else, the inquiry is
+	 * is for a global attribute not associated with a specific variable
+	 */
+	if (varname != NULL) {
+		ierr = ncmpi_inq_varid(file->ncidp, varname, &varidp);
+		if (ierr != NC_NOERR) {
+			file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+			file->context->lib_ierr = ierr;
+			return SMIOL_LIBRARY_ERROR;
+		}
+	} else {
+		varidp = NC_GLOBAL;
+	}
+
+	/*
+	 * Inquire about attribute type and length
+	 */
+	if (att_type != NULL || att_len != NULL) {
+		ierr = ncmpi_inq_att(file->ncidp, varidp, att_name,
+		                     &xtypep, &lenp);
+		if (ierr != NC_NOERR) {
+			file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+			file->context->lib_ierr = ierr;
+			return SMIOL_LIBRARY_ERROR;
+		}
+
+		if (att_type != NULL) {
+			/* Convert parallel-netCDF type to SMIOL type */
+			switch (xtypep) {
+				case NC_FLOAT:
+					*att_type = SMIOL_REAL32;
+					break;
+				case NC_DOUBLE:
+					*att_type = SMIOL_REAL64;
+					break;
+				case NC_INT:
+					*att_type = SMIOL_INT32;
+					break;
+				case NC_CHAR:
+					*att_type = SMIOL_CHAR;
+					break;
+				default:
+					*att_type = SMIOL_UNKNOWN_VAR_TYPE;
+			}
+		}
+
+		if (att_len != NULL) {
+			*att_len = lenp;
+		}
+	}
+
+
+	/*
+	 * Inquire about attribute value if requested
+	 */
+	if (att != NULL) {
+		ierr = ncmpi_get_att(file->ncidp, varidp, att_name, att);
+		if (ierr != NC_NOERR) {
+			file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+			file->context->lib_ierr = ierr;
+			return SMIOL_LIBRARY_ERROR;
+		}
+	}
+#endif
+
 	return SMIOL_SUCCESS;
 }
 
@@ -887,6 +1085,10 @@ const char *SMIOL_error_string(int errno)
 		return "Fortran wrapper detected an inconsistency in C return values";
 	case SMIOL_LIBRARY_ERROR:
 		return "bad return code from a library call";
+	case SMIOL_WRONG_ARG_TYPE:
+		return "argument is of the wrong type";
+	case SMIOL_INSUFFICIENT_ARG:
+		return "argument is of insufficient size";
 	default:
 		return "Unknown error";
 	}

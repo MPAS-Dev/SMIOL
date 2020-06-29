@@ -12,6 +12,7 @@ int test_init_finalize(FILE *test_log);
 int test_open_close(FILE *test_log);
 int test_dimensions(FILE *test_log);
 int test_variables(FILE *test_log);
+int test_attributes(FILE *test_log);
 int test_decomp(FILE *test_log);
 int test_build_exch(FILE *test_log);
 int test_transfer(FILE *test_log);
@@ -101,6 +102,8 @@ transfer_type(transfer_char, char)
 int main(int argc, char **argv)
 {
 	int ierr;
+	int i;
+	float f;
 	int my_proc_id;
 	SMIOL_Offset dimsize;
 	size_t n_compute_elements;
@@ -169,6 +172,18 @@ int main(int argc, char **argv)
 	 * Unit tests for variables
 	 */
 	ierr = test_variables(test_log);
+	if (ierr == 0) {
+		fprintf(test_log, "All tests PASSED!\n\n");
+	}
+	else {
+		fprintf(test_log, "%i tests FAILED!\n\n", ierr);
+	}
+
+
+	/*
+	 * Unit tests for attributes
+	 */
+	ierr = test_attributes(test_log);
 	if (ierr == 0) {
 		fprintf(test_log, "All tests PASSED!\n\n");
 	}
@@ -350,6 +365,35 @@ int main(int argc, char **argv)
 	free(dimnames[1]);
 	free(dimnames);
 
+	i = 2;
+	if ((ierr = SMIOL_define_att(file, "theta", "time_levels", SMIOL_INT32,
+	                             (const void *)&i)) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_define_att: %s ",
+			SMIOL_error_string(ierr));
+		return 1;
+	}
+
+	f = (float)3.14159265;
+	if ((ierr = SMIOL_define_att(file, NULL, "pi", SMIOL_REAL32,
+	                             (const void *)&f)) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_define_att: %s ",
+			SMIOL_error_string(ierr));
+		return 1;
+	}
+
+	if ((ierr = SMIOL_define_att(file, NULL, "title", SMIOL_CHAR,
+	                             "MPAS-Atmosphere v7.0")) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_define_att: %s ",
+			SMIOL_error_string(ierr));
+		return 1;
+	}
+
+	if ((ierr = SMIOL_inquire_att(file, NULL, "title", NULL, NULL, NULL)) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_inquire_att: %s ",
+			SMIOL_error_string(ierr));
+		return 1;
+	}
+
 	if ((ierr = SMIOL_close_file(&file)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_close_file: %s ", SMIOL_error_string(ierr));
 		return 1;
@@ -363,18 +407,6 @@ int main(int argc, char **argv)
 
 	if ((ierr = SMIOL_get_var()) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_get_var: %s ",
-			SMIOL_error_string(ierr));
-		return 1;
-	}
-		
-	if ((ierr = SMIOL_define_att()) != SMIOL_SUCCESS) {
-		fprintf(test_log, "ERROR: SMIOL_define_att: %s ",
-			SMIOL_error_string(ierr));
-		return 1;
-	}
-
-	if ((ierr = SMIOL_inquire_att()) != SMIOL_SUCCESS) {
-		fprintf(test_log, "ERROR: SMIOL_inquire_att: %s ",
 			SMIOL_error_string(ierr));
 		return 1;
 	}
@@ -399,9 +431,12 @@ int main(int argc, char **argv)
 		SMIOL_error_string(SMIOL_FORTRAN_ERROR));
 	fprintf(test_log, "SMIOL_error_string test 'bad return code from a library call': %s\n",
 		SMIOL_error_string(SMIOL_LIBRARY_ERROR));
-
 	fprintf(test_log, "SMIOL_lib_error_string 'Could not find matching library for the source of the error': %s\n",
 		SMIOL_lib_error_string(context));
+	fprintf(test_log, "SMIOL_error_string test 'argument is of the wrong type': %s\n",
+		SMIOL_error_string(SMIOL_WRONG_ARG_TYPE));
+	fprintf(test_log, "SMIOL_error_string test 'argument is of insufficient size': %s\n",
+		SMIOL_error_string(SMIOL_INSUFFICIENT_ARG));
 
 	if ((ierr = SMIOL_finalize(&context)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_finalize: %s ", SMIOL_error_string(ierr));
@@ -2501,6 +2536,463 @@ int test_variables(FILE *test_log)
 		fprintf(test_log, "Failed to close SMIOL file...\n");
 		return -1;
 	}
+
+	/* Free the SMIOL context */
+	ierr = SMIOL_finalize(&context);
+	if (ierr != SMIOL_SUCCESS || context != NULL) {
+		fprintf(test_log, "Failed to free SMIOL context...\n");
+		return -1;
+	}
+
+	fflush(test_log);
+	ierr = MPI_Barrier(MPI_COMM_WORLD);
+
+	fprintf(test_log, "\n");
+
+	return errcount;
+}
+
+int test_attributes(FILE *test_log)
+{
+	int errcount;
+	int ierr;
+	int i;
+	char **dimnames;
+	struct SMIOL_context *context;
+	struct SMIOL_file *file;
+	float real32_att;
+	double real64_att;
+	int int32_att;
+	char text_att[32];
+
+
+	fprintf(test_log, "********************************************************************************\n");
+	fprintf(test_log, "************ SMIOL_define_att / SMIOL_inquire_att ******************************\n");
+	fprintf(test_log, "\n");
+
+	errcount = 0;
+
+	/* Create a SMIOL context for testing attribute routines */
+	context = NULL;
+	ierr = SMIOL_init(MPI_COMM_WORLD, &context);
+	if (ierr != SMIOL_SUCCESS || context == NULL) {
+		fprintf(test_log, "Failed to create SMIOL context...\n");
+		return -1;
+	}
+
+	/* Create a SMIOL file for testing attribute routines */
+	file = NULL;
+	ierr = SMIOL_open_file(context, "test_atts.nc", SMIOL_FILE_CREATE, &file);
+	if (ierr != SMIOL_SUCCESS || file == NULL) {
+		fprintf(test_log, "Failed to create SMIOL file...\n");
+		return -1;
+	}
+
+	/* Define several dimensions in the file to be used when defining variables */
+	ierr = SMIOL_define_dim(file, "Time", (SMIOL_Offset)-1);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create dimension Time...\n");
+		return -1;
+	}
+
+	ierr = SMIOL_define_dim(file, "nCells", (SMIOL_Offset)40962);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create dimension nCells...\n");
+		return -1;
+	}
+
+	dimnames = (char **)malloc(sizeof(char *) * (size_t)2);
+	for (i = 0; i < 2; i++) {
+		dimnames[i] = (char *)malloc(sizeof(char) * (size_t)32);
+	}
+
+	/* Define a 32-bit real variable with one non-record dimension and a record dimension */
+	snprintf(dimnames[0], 32, "Time");
+	snprintf(dimnames[1], 32, "nCells");
+	ierr = SMIOL_define_var(file, "surface_pressure", SMIOL_REAL32, 2, (const char **)dimnames);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create variable surface_pressure...\n");
+		return -1;
+	}
+
+	/* Everything OK - Define a global REAL32 attribute */
+	fprintf(test_log, "Everything OK - Define a global REAL32 attribute: ");
+	real32_att = 3.14159;
+	ierr = SMIOL_define_att(file, NULL, "pi", SMIOL_REAL32,
+	                        (const void *)&real32_att);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+
+	/* Everything OK - Define a global REAL64 attribute */
+	fprintf(test_log, "Everything OK - Define a global REAL64 attribute: ");
+	real64_att = 2.718281828;
+	ierr = SMIOL_define_att(file, NULL, "e", SMIOL_REAL64,
+	                        (const void *)&real64_att);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+
+	/* Everything OK - Define another global REAL64 attribute */
+	fprintf(test_log, "Everything OK - Define another global REAL64 attribute: ");
+	real64_att = 1.0;
+	ierr = SMIOL_define_att(file, NULL, "unity", SMIOL_REAL64,
+	                        (const void *)&real64_att);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+
+	/* Everything OK - Define a global INT32 attribute */
+	fprintf(test_log, "Everything OK - Define a global INT32 attribute: ");
+	int32_att = 42;
+	ierr = SMIOL_define_att(file, NULL, "grid_id", SMIOL_INT32,
+	                        (const void *)&int32_att);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+
+	/* Everything OK - Define a global CHAR attribute */
+	fprintf(test_log, "Everything OK - Define a global CHAR attribute: ");
+	snprintf(text_att, 32, "Don't panic!");
+	ierr = SMIOL_define_att(file, NULL, "Advice", SMIOL_CHAR,
+	                        (const void *)text_att);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+
+	/* Everything OK - Define _FillValue variable attribute */
+	fprintf(test_log, "Everything OK - Define _FillValue variable attribute: ");
+	real32_att = 0.0;
+	ierr = SMIOL_define_att(file, "surface_pressure", "_FillValue", SMIOL_REAL32,
+	                        (const void *)&real32_att);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+
+	/* Everything OK - Define a variable REAL32 attribute */
+	fprintf(test_log, "Everything OK - Define a variable REAL32 attribute: ");
+	real32_att = 3.14159;
+	ierr = SMIOL_define_att(file, "surface_pressure", "pi", SMIOL_REAL32,
+	                        (const void *)&real32_att);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+
+	/* Everything OK - Define a variable REAL64 attribute */
+	fprintf(test_log, "Everything OK - Define a variable REAL64 attribute: ");
+	real64_att = 2.718281828;
+	ierr = SMIOL_define_att(file, "surface_pressure", "e", SMIOL_REAL64,
+	                        (const void *)&real64_att);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+
+	/* Everything OK - Define another variable REAL64 attribute */
+	fprintf(test_log, "Everything OK - Define another variable REAL64 attribute: ");
+	real64_att = -1.0;
+	ierr = SMIOL_define_att(file, "surface_pressure", "missing_value", SMIOL_REAL64,
+	                        (const void *)&real64_att);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+
+	/* Everything OK - Define a variable INT32 attribute */
+	fprintf(test_log, "Everything OK - Define a variable INT32 attribute: ");
+	int32_att = 42;
+	ierr = SMIOL_define_att(file, "surface_pressure", "grid_id", SMIOL_INT32,
+	                        (const void *)&int32_att);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+
+	/* Everything OK - Define a variable CHAR attribute */
+	fprintf(test_log, "Everything OK - Define a variable CHAR attribute: ");
+	snprintf(text_att, 32, "Don't panic!");
+	ierr = SMIOL_define_att(file, "surface_pressure", "Advice", SMIOL_CHAR,
+	                        (const void *)text_att);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+
+#ifdef SMIOL_PNETCDF
+	/* Try to define an attribute for a non-existent variable */
+	fprintf(test_log, "Try to define an attribute for a non-existent variable: ");
+	real64_att = 0.01;
+	ierr = SMIOL_define_att(file, "foobar", "min_val", SMIOL_REAL64,
+	                        (const void *)&real64_att);
+	if (ierr == SMIOL_LIBRARY_ERROR) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_LIBRARY_ERROR was not returned\n");
+		errcount++;
+	}
+
+	/* Try to define an attribute with an invalid type */
+	fprintf(test_log, "Try to define an attribute with an invalid type: ");
+	real64_att = 0.01;
+	ierr = SMIOL_define_att(file, NULL, "min_val", SMIOL_UNKNOWN_VAR_TYPE,
+	                        (const void *)&real64_att);
+	if (ierr == SMIOL_INVALID_ARGUMENT) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_INVALID_ARGUMENT was not returned\n");
+		errcount++;
+	}
+#endif
+
+	/* Call SMIOL_define_att with NULL file pointer */
+	fprintf(test_log, "Call SMIOL_define_att with NULL file pointer: ");
+	real64_att = 0.01;
+	ierr = SMIOL_define_att(NULL, NULL, "blah", SMIOL_REAL64,
+	                        (const void *)&real64_att);
+	if (ierr == SMIOL_INVALID_ARGUMENT) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_INVALID_ARGUMENT was not returned\n");
+		errcount++;
+	}
+
+	/* Call SMIOL_define_att with NULL attribute name */
+	fprintf(test_log, "Call SMIOL_define_att with NULL attribute name: ");
+	real64_att = 0.01;
+	ierr = SMIOL_define_att(file, NULL, NULL, SMIOL_REAL64,
+	                        (const void *)&real64_att);
+	if (ierr == SMIOL_INVALID_ARGUMENT) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_INVALID_ARGUMENT was not returned\n");
+		errcount++;
+	}
+
+	/* Call SMIOL_define_att with NULL attribute pointer */
+	fprintf(test_log, "Call SMIOL_define_att with NULL attribute pointer: ");
+	real64_att = 0.01;
+	ierr = SMIOL_define_att(file, NULL, "blah", SMIOL_REAL64, NULL);
+	if (ierr == SMIOL_INVALID_ARGUMENT) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_INVALID_ARGUMENT was not returned\n");
+		errcount++;
+	}
+
+	/* Close the SMIOL file */
+	ierr = SMIOL_close_file(&file);
+	if (ierr != SMIOL_SUCCESS || file != NULL) {
+		fprintf(test_log, "Failed to close SMIOL file...\n");
+		return -1;
+	}
+
+	/* Re-open the SMIOL file */
+	file = NULL;
+	ierr = SMIOL_open_file(context, "test_atts.nc", SMIOL_FILE_READ, &file);
+	if (ierr != SMIOL_SUCCESS || file == NULL) {
+		fprintf(test_log, "Failed to re-open SMIOL file...\n");
+		return -1;
+	}
+
+#ifdef SMIOL_PNETCDF
+	/* Everything OK - Inquire about a global REAL32 attribute */
+	fprintf(test_log, "Everything OK - Inquire about a global REAL32 attribute: ");
+	real32_att = 0.0;
+	ierr = SMIOL_inquire_att(file, NULL, "pi", NULL, NULL,
+	                         (void *)&real32_att);
+	if (ierr == SMIOL_SUCCESS && real32_att == (float)3.14159) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned or attribute value was incorrect\n");
+		errcount++;
+	}
+
+	/* Everything OK - Inquire about a global REAL64 attribute */
+	fprintf(test_log, "Everything OK - Inquire about a global REAL64 attribute: ");
+	real64_att = 0.0;
+	ierr = SMIOL_inquire_att(file, NULL, "e", NULL, NULL,
+	                         (void *)&real64_att);
+	if (ierr == SMIOL_SUCCESS && real64_att == (double)2.718281828) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned or attribute value was incorrect\n");
+		errcount++;
+	}
+
+	/* Everything OK - Inquire about a global INT32 attribute */
+	fprintf(test_log, "Everything OK - Inquire about a global INT32 attribute: ");
+	int32_att = 0;
+	ierr = SMIOL_inquire_att(file, NULL, "grid_id", NULL, NULL,
+	                         (void *)&int32_att);
+	if (ierr == SMIOL_SUCCESS && int32_att == 42) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned or attribute value was incorrect\n");
+		errcount++;
+	}
+
+	/* Everything OK - Inquire about a global CHAR attribute */
+	fprintf(test_log, "Everything OK - Inquire about a global CHAR attribute: ");
+	memset((void *)text_att, 0, 32);
+	ierr = SMIOL_inquire_att(file, NULL, "Advice", NULL, NULL,
+	                         (void *)text_att);
+	if (ierr == SMIOL_SUCCESS && strncmp("Don't panic!", text_att, 32) == 0) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned or attribute value was incorrect\n");
+		fprintf(test_log, "%s\n", text_att);
+		errcount++;
+	}
+
+	/* Everything OK - Inquire about _FillValue variable attribute */
+	fprintf(test_log, "Everything OK - Inquire about _FillValue variable attribute: ");
+	real32_att = -999.0;
+	ierr = SMIOL_inquire_att(file, "surface_pressure", "_FillValue", NULL, NULL,
+	                         (void *)&real32_att);
+	if (ierr == SMIOL_SUCCESS && real32_att == 0.0) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned or attribute value was incorrect\n");
+		errcount++;
+	}
+
+	/* Everything OK - Inquire about a variable REAL32 attribute */
+	fprintf(test_log, "Everything OK - Inquire about a variable REAL32 attribute: ");
+	real32_att = 0.0;
+	ierr = SMIOL_inquire_att(file, "surface_pressure", "pi", NULL, NULL,
+	                         (void *)&real32_att);
+	if (ierr == SMIOL_SUCCESS && real32_att == (float)3.14159) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned or attribute value was incorrect\n");
+		errcount++;
+	}
+
+	/* Everything OK - Inquire about a variable REAL64 attribute */
+	fprintf(test_log, "Everything OK - Inquire about a variable REAL64 attribute: ");
+	real64_att = 0.0;
+	ierr = SMIOL_inquire_att(file, "surface_pressure", "e", NULL, NULL,
+	                         (void *)&real64_att);
+	if (ierr == SMIOL_SUCCESS && real64_att == (double)2.718281828) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned or attribute value was incorrect\n");
+		errcount++;
+	}
+
+	/* Everything OK - Inquire about a variable INT32 attribute */
+	fprintf(test_log, "Everything OK - Inquire about a variable INT32 attribute: ");
+	int32_att = 0;
+	ierr = SMIOL_inquire_att(file, "surface_pressure", "grid_id", NULL, NULL,
+	                         (void *)&int32_att);
+	if (ierr == SMIOL_SUCCESS && int32_att == 42) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned or attribute value was incorrect\n");
+		errcount++;
+	}
+
+	/* Everything OK - Inquire about a variable CHAR attribute */
+	fprintf(test_log, "Everything OK - Inquire about a variable CHAR attribute: ");
+	memset((void *)text_att, 0, 32);
+	ierr = SMIOL_inquire_att(file, "surface_pressure", "Advice", NULL, NULL,
+	                         (void *)text_att);
+	if (ierr == SMIOL_SUCCESS && strncmp("Don't panic!", text_att, 32) == 0) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned or attribute value was incorrect\n");
+		errcount++;
+	}
+
+	/* Try to inquire about an attribute for a non-existent variable */
+	fprintf(test_log, "Try to inquire about an attribute for a non-existent variable: ");
+	real64_att = 0.0;
+	ierr = SMIOL_inquire_att(file, "foobar", "e", NULL, NULL,
+	                         (void *)&real64_att);
+	if (ierr == SMIOL_LIBRARY_ERROR) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_LIBRARY_ERROR was not returned\n");
+		errcount++;
+	}
+
+	/* Try to inquire about a non-existent attribute */
+	fprintf(test_log, "Try to inquire about a non-existent attribute: ");
+	real64_att = 0.0;
+	ierr = SMIOL_inquire_att(file, "surface_pressure", "blah", NULL, NULL,
+	                         (void *)&real64_att);
+	if (ierr == SMIOL_LIBRARY_ERROR) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_LIBRARY_ERROR was not returned\n");
+		errcount++;
+	}
+#endif
+
+	/* Call SMIOL_inquire_att with NULL file pointer */
+	fprintf(test_log, "Call SMIOL_inquire_att with NULL file pointer: ");
+	real64_att = 0.0;
+	ierr = SMIOL_inquire_att(NULL, "surface_pressure", "e", NULL, NULL,
+	                         (void *)&real64_att);
+	if (ierr == SMIOL_INVALID_ARGUMENT) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_INVALID_ARGUMENT was not returned\n");
+		errcount++;
+	}
+
+	/* Call SMIOL_inquire_att with NULL attribute name */
+	fprintf(test_log, "Call SMIOL_inquire_att with NULL attribute name: ");
+	real64_att = 0.0;
+	ierr = SMIOL_inquire_att(file, "surface_pressure", NULL, NULL, NULL,
+	                         (void *)&real64_att);
+	if (ierr == SMIOL_INVALID_ARGUMENT) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_INVALID_ARGUMENT was not returned\n");
+		errcount++;
+	}
+
+	/* Close the SMIOL file */
+	ierr = SMIOL_close_file(&file);
+	if (ierr != SMIOL_SUCCESS || file != NULL) {
+		fprintf(test_log, "Failed to close SMIOL file...\n");
+		return -1;
+	}
+
+	for (i = 0; i < 2; i++) {
+		free(dimnames[i]);
+	}
+	free(dimnames);
 
 	/* Free the SMIOL context */
 	ierr = SMIOL_finalize(&context);

@@ -9,6 +9,8 @@ program smiol_runner
     implicit none
 
     integer :: ierr
+    integer :: i
+    real :: f
     integer :: my_proc_id
     integer :: test_log = 42
     integer(kind=c_size_t) :: n_compute_elements = 1
@@ -21,6 +23,7 @@ program smiol_runner
     character(len=32), dimension(2) :: dimnames
     integer(kind=SMIOL_offset_kind) :: dimsize
     integer :: ndims
+    character(len=32) :: tempstr
 
     call MPI_Init(ierr)
     if (ierr /= MPI_SUCCESS) then
@@ -79,6 +82,19 @@ program smiol_runner
     ! Unit tests for variables
     !
     ierr = test_variables(test_log)
+    if (ierr == 0) then
+        write(test_log,'(a)') 'All tests PASSED!'
+        write(test_log,'(a)') ''
+    else
+        write(test_log,'(i3,a)') ierr, ' tests FAILED!'
+        write(test_log,'(a)') ''
+    end if
+
+
+    !
+    ! Unit tests for attributes
+    !
+    ierr = test_attributes(test_log)
     if (ierr == 0) then
         write(test_log,'(a)') 'All tests PASSED!'
         write(test_log,'(a)') ''
@@ -202,6 +218,47 @@ program smiol_runner
         stop 1
     endif
 
+    i = 2
+    if (SMIOLf_define_att(file, 'theta', 'time_levels', i) /= SMIOL_SUCCESS) then
+        write(test_log,'(a)') "ERROR: 'SMIOLf_define_att' was not called successfully"
+        stop 1
+    endif
+
+    f = 3.14159265
+    if (SMIOLf_define_att(file, '', 'pi', f) /= SMIOL_SUCCESS) then
+        write(test_log,'(a)') "ERROR: 'SMIOLf_define_att' was not called successfully"
+        stop 1
+    endif
+
+    if (SMIOLf_define_att(file, '', 'title', 'MPAS-Atmosphere v7.0') /= SMIOL_SUCCESS) then
+        write(test_log,'(a)') "ERROR: 'SMIOLf_define_att' was not called successfully"
+        stop 1
+    endif
+
+#ifdef SMIOL_PNETCDF
+    if (SMIOLf_inquire_att(file, 'theta', 'time_levels', i) /= SMIOL_SUCCESS) then
+        write(test_log,'(a)') "ERROR: 'SMIOLf_inquire_att' was not called successfully"
+        stop 1
+    endif
+#else
+    if (SMIOLf_inquire_att(file, '', 'title', tempstr) /= SMIOL_WRONG_ARG_TYPE) then
+        write(test_log,'(a)') "ERROR: 'SMIOLf_inquire_att' was not called successfully"
+        stop 1
+    endif
+#endif
+
+#ifdef SMIOL_PNETCDF
+    if (SMIOLf_inquire_att(file, '', 'title', tempstr) /= SMIOL_SUCCESS) then
+        write(test_log,'(a)') "ERROR: 'SMIOLf_inquire_att' was not called successfully"
+        stop 1
+    endif
+#else
+    if (SMIOLf_inquire_att(file, '', 'title', tempstr) /= SMIOL_WRONG_ARG_TYPE) then
+        write(test_log,'(a)') "ERROR: 'SMIOLf_inquire_att' was not called successfully"
+        stop 1
+    endif
+#endif
+
     if (SMIOLf_close_file(file) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_close_file' was not called successfully"
         stop 1
@@ -214,16 +271,6 @@ program smiol_runner
 
     if (SMIOLf_get_var() /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_get_var' was not called successfully"
-        stop 1
-    endif
-
-    if (SMIOLf_define_att() /= SMIOL_SUCCESS) then
-        write(test_log,'(a)') "ERROR: 'SMIOLf_define_att' was not called successfully"
-        stop 1
-    endif
-
-    if (SMIOLf_inquire_att() /= SMIOL_SUCCESS) then
-        write(test_log,'(a)') "ERROR: 'SMIOLf_inquire_att' was not called successfully"
         stop 1
     endif
 
@@ -246,6 +293,10 @@ program smiol_runner
                trim(SMIOLf_error_string(SMIOL_LIBRARY_ERROR))
     write(test_log,'(a)') "Testing SMIOL_lib_error_string: Could not find matching library for the source of the error: ", &
                trim(SMIOLf_lib_error_string(context))
+    write(test_log,'(a)') "Testing SMIOL_error_string 'argument is of the wrong type': ", &
+               trim(SMIOLf_error_string(SMIOL_WRONG_ARG_TYPE))
+    write(test_log,'(a)') "Testing SMIOL_error_string 'argument is of insufficient size': ", &
+               trim(SMIOLf_error_string(SMIOL_INSUFFICIENT_ARG))
 
     if (SMIOLf_finalize(context) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_finalize' was not called successfully"
@@ -1603,6 +1654,417 @@ contains
         write(test_log,'(a)') ''
 
     end function test_variables
+
+
+    function test_attributes(test_log) result(ierrcount)
+
+        implicit none
+
+        integer, intent(in) :: test_log
+
+        integer, parameter :: R4KIND = selected_real_kind(6)
+        integer, parameter :: R8KIND = selected_real_kind(12)
+
+        integer :: ierrcount
+        type (SMIOLf_context), pointer :: context
+        type (SMIOLf_file), pointer :: file
+        character(len=32), dimension(2) :: dimnames
+        real(kind=R4KIND) :: real32_att
+        real(kind=R8KIND) :: real64_att
+        integer :: int32_att
+        character(len=32) :: text_att
+
+
+        write(test_log,'(a)') '********************************************************************************'
+        write(test_log,'(a)') '************ SMIOL_define_att / SMIOL_inquire_att unit tests *******************'
+        write(test_log,'(a)') ''
+
+        ierrcount = 0
+
+
+        ! Create a SMIOL context for testing attribute routines
+        nullify(context)
+        ierr = SMIOLf_init(MPI_COMM_WORLD, context)
+        if (ierr /= SMIOL_SUCCESS .or. .not. associated(context)) then
+            write(test_log,'(a)') 'Failed to create a context...'
+            ierrcount = -1
+            return
+        end if
+
+        ! Create a SMIOL file for testing attribute routines
+        nullify(file)
+        ierr = SMIOLf_open_file(context, 'test_atts_fortran.nc', SMIOL_FILE_CREATE, file)
+        if (ierr /= SMIOL_SUCCESS .or. .not. associated(file)) then
+            write(test_log,'(a)') 'Failed to create a file...'
+            ierrcount = -1
+            return
+        end if
+
+        ! Define several dimensions in the file to be used when defining variables
+        if (SMIOLf_define_dim(file, 'Time', -1_SMIOL_offset_kind) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to create dimension Time...'
+            ierrcount = -1
+            return
+        end if
+
+        if (SMIOLf_define_dim(file, 'nCells', 40962_SMIOL_offset_kind) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to create dimension nCells...'
+            ierrcount = -1
+            return
+        end if
+
+        ! Define a 32-bit real variable with one non-record dimension and a record dimension
+        dimnames(1) = 'Time'
+        dimnames(2) = 'nCells'
+        if (SMIOLf_define_var(file, 'surface_pressure', SMIOL_REAL32, 2, dimnames) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to create variable surface_pressure...'
+            ierrcount = -1
+            return
+        end if
+
+        ! Everything OK - Define a global REAL32 attribute
+        write(test_log,'(a)',advance='no') 'Everything OK - Define a global REAL32 attribute: '
+        real32_att = 3.14159_R4KIND
+        ierr = SMIOLf_define_att(file, '', 'pi', real32_att)
+        if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Everything OK - Define a global REAL64 attribute
+        write(test_log,'(a)',advance='no') 'Everything OK - Define a global REAL64 attribute: '
+        real64_att = 2.718281828_R8KIND
+        ierr = SMIOLf_define_att(file, '', 'e', real64_att)
+        if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Everything OK - Define another global REAL64 attribute
+        write(test_log,'(a)',advance='no') 'Everything OK - Define another global REAL64 attribute: '
+        real64_att = 1.0_R8KIND
+        ierr = SMIOLf_define_att(file, '', 'unity', real64_att)
+        if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Everything OK - Define a global INT32 attribute
+        write(test_log,'(a)',advance='no') 'Everything OK - Define a global INT32 attribute: '
+        int32_att = 42
+        ierr = SMIOLf_define_att(file, '', 'grid_id', int32_att)
+        if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Everything OK - Define a global CHAR attribute
+        write(test_log,'(a)',advance='no') 'Everything OK - Define a global CHAR attribute: '
+        text_att = "Don't panic!"
+        ierr = SMIOLf_define_att(file, '', 'Advice', text_att)
+        if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Everything OK - Define _FillValue variable attribute
+        write(test_log,'(a)',advance='no') 'Everything OK - Define _FillValue variable attribute: '
+        real32_att = 0.0_R4KIND
+        ierr = SMIOLf_define_att(file, 'surface_pressure', '_FillValue', real32_att)
+        if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Everything OK - Define a variable REAL32 attribute
+        write(test_log,'(a)',advance='no') 'Everything OK - Define a variable REAL32 attribute: '
+        real32_att = 3.14159_R4KIND
+        ierr = SMIOLf_define_att(file, 'surface_pressure', 'pi', real32_att)
+        if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Everything OK - Define a variable REAL64 attribute
+        write(test_log,'(a)',advance='no') 'Everything OK - Define a variable REAL64 attribute: '
+        real64_att = 2.718281828_R8KIND
+        ierr = SMIOLf_define_att(file, 'surface_pressure', 'e', real64_att)
+        if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Everything OK - Define another variable REAL64 attribute
+        write(test_log,'(a)',advance='no') 'Everything OK - Define another variable REAL64 attribute: '
+        real64_att = -1.0_R8KIND
+        ierr = SMIOLf_define_att(file, 'surface_pressure', 'missing_value', real64_att)
+        if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Everything OK - Define a variable INT32 attribute
+        write(test_log,'(a)',advance='no') 'Everything OK - Define a variable INT32 attribute: '
+        int32_att = 42
+        ierr = SMIOLf_define_att(file, 'surface_pressure', 'grid_id', int32_att)
+        if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Everything OK - Define a variable CHAR attribute
+        write(test_log,'(a)',advance='no') 'Everything OK - Define a variable CHAR attribute: '
+        text_att = "Don't panic!"
+        ierr = SMIOLf_define_att(file, 'surface_pressure', 'Advice', text_att)
+        if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+#ifdef SMIOL_PNETCDF
+        ! Try to define an attribute for a non-existent variable
+        write(test_log,'(a)',advance='no') 'Try to define an attribute for a non-existent variable: '
+        real64_att = 0.01_R8KIND;
+        ierr = SMIOLf_define_att(file, 'foobar', 'min_val', real64_att)
+        if (ierr == SMIOL_LIBRARY_ERROR) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_LIBRARY_ERROR was not returned'
+            ierrcount = ierrcount + 1
+        end if
+#endif
+
+        ! Close the SMIOL file
+        ierr = SMIOLf_close_file(file)
+        if (ierr /= SMIOL_SUCCESS .or. associated(file)) then
+            write(test_log,'(a)') 'Failed to close the file...'
+            ierrcount = -1
+            return
+        end if
+
+        ! Re-open the SMIOL file
+        nullify(file)
+        ierr = SMIOLf_open_file(context, 'test_atts_fortran.nc', SMIOL_FILE_READ, file)
+        if (ierr /= SMIOL_SUCCESS .or. .not. associated(file)) then
+            write(test_log,'(a)') 'Failed to re-open the file...'
+            ierrcount = -1
+            return
+        end if
+
+#ifdef SMIOL_PNETCDF
+        ! Everything OK - Inquire about a global REAL32 attribute
+        write(test_log,'(a)',advance='no') 'Everything OK - Inquire about a global REAL32 attribute: '
+        real32_att = 0.0_R4KIND
+        ierr = SMIOLf_inquire_att(file, '', 'pi', real32_att)
+        if (ierr == SMIOL_SUCCESS .and. real32_att == 3.14159_R4KIND) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned or attribute value was incorrect'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Everything OK - Inquire about a global REAL64 attribute
+        write(test_log,'(a)',advance='no') 'Everything OK - Inquire about a global REAL64 attribute: '
+        real64_att = 0.0_R8KIND
+        ierr = SMIOLf_inquire_att(file, '', 'e', real64_att)
+        if (ierr == SMIOL_SUCCESS .and. real64_att == 2.718281828_R8KIND) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned or attribute value was incorrect'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Everything OK - Inquire about a global INT32 attribute
+        write(test_log,'(a)',advance='no') 'Everything OK - Inquire about a global INT32 attribute: '
+        int32_att = 0
+        ierr = SMIOLf_inquire_att(file, '', 'grid_id', int32_att)
+        if (ierr == SMIOL_SUCCESS .and. int32_att == 42) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned or attribute value was incorrect'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Everything OK - Inquire about a global CHAR attribute
+        write(test_log,'(a)',advance='no') 'Everything OK - Inquire about a global CHAR attribute: '
+        text_att = " "
+        ierr = SMIOLf_inquire_att(file, '', 'Advice', text_att)
+        if (ierr == SMIOL_SUCCESS .and. trim(text_att) == "Don't panic!") then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned or attribute value was incorrect'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Everything OK - Inquire about _FillValue variable attribute
+        write(test_log,'(a)',advance='no') 'Everything OK - Inquire about _FillValue variable attribute: '
+        real32_att = -999.0_R4KIND
+        ierr = SMIOLf_inquire_att(file, 'surface_pressure', '_FillValue', real32_att)
+        if (ierr == SMIOL_SUCCESS .and. real32_att == 0.0_R4KIND) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned or attribute value was incorrect'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Everything OK - Inquire about a variable REAL32 attribute
+        write(test_log,'(a)',advance='no') 'Everything OK - Inquire about a variable REAL32 attribute: '
+        real32_att = 0.0_R4KIND
+        ierr = SMIOLf_inquire_att(file, 'surface_pressure', 'pi', real32_att)
+        if (ierr == SMIOL_SUCCESS .and. real32_att == 3.14159_R4KIND) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned or attribute value was incorrect'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Everything OK - Inquire about a variable REAL64 attribute
+        write(test_log,'(a)',advance='no') 'Everything OK - Inquire about a variable REAL64 attribute: '
+        real64_att = 0.0_R8KIND
+        ierr = SMIOLf_inquire_att(file, 'surface_pressure', 'e', real64_att)
+        if (ierr == SMIOL_SUCCESS .and. real64_att == 2.718281828_R8KIND) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned or attribute value was incorrect'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Everything OK - Inquire about a variable INT32 attribute
+        write(test_log,'(a)',advance='no') 'Everything OK - Inquire about a variable INT32 attribute: '
+        int32_att = 0
+        ierr = SMIOLf_inquire_att(file, 'surface_pressure', 'grid_id', int32_att)
+        if (ierr == SMIOL_SUCCESS .and. int32_att == 42) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned or attribute value was incorrect'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Everything OK - Inquire about a variable CHAR attribute
+        write(test_log,'(a)',advance='no') 'Everything OK - Inquire about a variable CHAR attribute: '
+        text_att = " "
+        ierr = SMIOLf_inquire_att(file, 'surface_pressure', 'Advice', text_att)
+        if (ierr == SMIOL_SUCCESS .and. trim(text_att) == "Don't panic!") then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned or attribute value was incorrect'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Try to inquire about an attribute for a non-existent variable
+        write(test_log,'(a)',advance='no') 'Try to inquire about an attribute for a non-existent variable: '
+        real64_att = 0.0_R8KIND
+        ierr = SMIOLf_inquire_att(file, 'foobar', 'e', real64_att)
+        if (ierr == SMIOL_LIBRARY_ERROR) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_LIBRARY_ERROR was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Try to inquire about a non-existent attribute
+        write(test_log,'(a)',advance='no') 'Try to inquire about a non-existent attribute: '
+        real64_att = 0.0_R8KIND
+        ierr = SMIOLf_inquire_att(file, 'surface_pressure', 'blah', real64_att)
+        if (ierr == SMIOL_LIBRARY_ERROR) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_LIBRARY_ERROR was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Try to inquire about a CHAR attribute with insufficient argument size
+        write(test_log,'(a)',advance='no') 'Try to inquire about a CHAR attribute with insufficient argument size: '
+        ierr = SMIOLf_inquire_att(file, 'surface_pressure', 'Advice', text_att(1:4))
+        if (ierr == SMIOL_INSUFFICIENT_ARG) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_INSUFFICIENT_ARG was not returned'
+            ierrcount = ierrcount + 1
+        end if
+#endif
+
+        ! Try to inquire about a REAL32 attribute with wrong variable type
+        write(test_log,'(a)',advance='no') 'Try to inquire about a REAL32 attribute with wrong variable type: '
+        ierr = SMIOLf_inquire_att(file, '', 'pi', int32_att)
+        if (ierr == SMIOL_WRONG_ARG_TYPE) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_WRONG_ARG_TYPE was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Try to inquire about a REAL64 attribute with wrong variable type
+        write(test_log,'(a)',advance='no') 'Try to inquire about a REAL64 attribute with wrong variable type: '
+        ierr = SMIOLf_inquire_att(file, '', 'e', real32_att)
+        if (ierr == SMIOL_WRONG_ARG_TYPE) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_WRONG_ARG_TYPE was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Try to inquire about an INT32 attribute with wrong variable type
+        write(test_log,'(a)',advance='no') 'Try to inquire about an INT32 attribute with wrong variable type: '
+        ierr = SMIOLf_inquire_att(file, '', 'grid_id', real64_att)
+        if (ierr == SMIOL_WRONG_ARG_TYPE) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_WRONG_ARG_TYPE was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Try to inquire about a CHAR attribute with wrong variable type
+        write(test_log,'(a)',advance='no') 'Try to inquire about a CHAR attribute with wrong variable type: '
+        ierr = SMIOLf_inquire_att(file, '', 'grid_id', real64_att)
+        if (ierr == SMIOL_WRONG_ARG_TYPE) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_WRONG_ARG_TYPE was not returned'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Close the SMIOL file
+        ierr = SMIOLf_close_file(file)
+        if (ierr /= SMIOL_SUCCESS .or. associated(file)) then
+            write(test_log,'(a)') 'Failed to close the file...'
+            ierrcount = -1
+            return
+        end if
+
+        ! Free the SMIOL context
+        ierr = SMIOLf_finalize(context)
+        if (ierr /= SMIOL_SUCCESS .or. associated(context)) then
+            write(test_log,'(a)') 'Failed to finalize the context...'
+            ierrcount = -1
+            return
+        end if
+
+        write(test_log,'(a)') ''
+
+    end function test_attributes
 
 
     function test_file_sync(test_log) result(ierrcount)
