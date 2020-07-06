@@ -140,6 +140,18 @@ program smiol_runner
         write(test_log,'(a)') ''
     endif
 
+    !
+    ! Unit tests for SMIOLf_f_to_c_string
+    !
+    ierr = test_f_to_c_string(test_log)
+    if (ierr == 0) then
+        write(test_log,'(a)') 'All tests PASSED!'
+        write(test_log,'(a)') ''
+    else
+        write(test_log,'(i3,a)') ierr, ' tests FAILED!'
+        write(test_log,'(a)') ''
+    endif
+
     if (SMIOLf_init(MPI_COMM_WORLD, context) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_init' was not called successfully"
         stop 1
@@ -2412,5 +2424,121 @@ contains
         end do
 
     end function compare_decomps
+
+    function test_f_to_c_string(test_log) result(ierrcount)
+        
+        use iso_c_binding, only : c_char, c_null_char
+
+        implicit none
+
+        integer, intent(in) :: test_log
+        integer :: ierrcount
+
+        character(len=20) :: str
+        character(len=:), allocatable :: str_temp
+        character (kind=c_char), allocatable, dimension(:) :: cstring
+        integer :: i, ierr
+
+        str = "Don't Panic!"
+
+        write(test_log,'(a)') '********************************************************************************'
+        write(test_log,'(a)') '*********************** SMIOLf_f_to_c_string tests *****************************'
+        write(test_log,'(a)') ''
+        
+        ierrcount = 0
+        
+        !
+        ! Testing len(cstring) > len(fstring)
+        !
+        write(test_log,'(a)',advance='no') 'Everything OK (SMIOLf_f_to_c_string): '
+        allocate(cstring(30))
+        cstring(:) = '-'
+        call SMIOLf_f_to_c_string(str, cstring)
+
+        do i = 1, size(cstring)
+            if (i <= len_trim(str)) then
+                if (cstring(i) /= str(i:i)) then
+                    write(test_log,'(a)') 'FAIL - Characters were not equal'
+                    ierrcount = ierrcount + 1
+                    exit
+                end if
+            else
+                if (cstring(i) /= c_null_char) then
+                    write(test_log,'(a)') 'FAIL - padding character was not a c_null_char'
+                    ierrcount = ierrcount + 1
+                    exit
+                end if
+            end if
+        end do
+        deallocate(cstring)
+
+        if (ierrcount == 0) then
+            write(test_log,'(a)') 'PASS'
+        endif
+
+        !
+        ! Test len(cstring) < len(fstring)
+        !
+        write(test_log,'(a)',advance='no') 'Everything OK - (SMIOLf_f_to_c_string) len(cstring) < len(str): '
+        allocate(cstring(5))
+        cstring(:) = '-'
+        ierr = 0
+        call SMIOLf_f_to_c_string(str, cstring)
+
+        do i = 1, size(cstring)-1
+            if (str(i:i) /= cstring(i)) then
+                write(test_log,'(a)') 'FAIL - Characters are not equal'
+                ierr = 1
+                ierrcount = ierrcount + 1
+            end if
+        end do
+        if (ierr == 0) then
+            if (cstring(i) /= c_null_char) then
+                write(test_log,'(a)') 'FAIL - no terminating c_null_char found'
+                ierr = 1
+                ierrcount = ierrcount + 1
+            end if
+        end if
+        if (ierr == 0) then
+            write(test_log,'(a)') 'PASS'
+        end if
+        deallocate(cstring)
+
+        !
+        ! Test size(cstring) == 0
+        !
+        write(test_log,'(a)',advance='no') 'No crash when size(cstring) == 0: '
+        allocate(cstring(0))
+        call SMIOLf_f_to_c_string(str, cstring)
+
+        if (size(cstring) == 0) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOLf_f_to_c_string returned, but cstring is different in size'
+            ierrcount = ierrcount + 1
+        end if
+        deallocate(cstring)
+
+        !
+        ! Test len(fstring) == 0
+        !
+        write(test_log,'(a)',advance='no') 'Testing len(fstring) == 0: '
+        allocate(cstring(2))
+        allocate(character(len=0) :: str_temp)
+        cstring(:) = '-'
+        call SMIOLf_f_to_c_string(str_temp, cstring)
+
+        if (all(cstring == c_null_char)) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - cstring not filled with c_null_char'
+            ierrcount = ierrcount + 1
+        end if
+        deallocate(cstring)
+        deallocate(str_temp)
+
+        write(test_log,'(a)') ''
+
+    end function test_f_to_c_string
 
 end program smiol_runner
