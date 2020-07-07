@@ -957,6 +957,81 @@ int SMIOL_put_var(struct SMIOL_file *file, const char *varname,
 	/*
 	 * Write out_buf
 	 */
+#ifdef SMIOL_PNETCDF
+	{
+		int j;
+		int varidp;
+		const void *buf_p;
+		MPI_Offset *mpi_start;
+		MPI_Offset *mpi_count;
+
+		if (file->state == PNETCDF_DEFINE_MODE) {
+			if ((ierr = ncmpi_enddef(file->ncidp)) != NC_NOERR) {
+				file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+				file->context->lib_ierr = ierr;
+
+				if (decomp) {
+					free(out_buf);
+				}
+				free(start);
+				free(count);
+
+				return SMIOL_LIBRARY_ERROR;
+			}
+			file->state = PNETCDF_DATA_MODE;
+		}
+
+		ierr = ncmpi_inq_varid(file->ncidp, varname, &varidp);
+		if (ierr != NC_NOERR) {
+			file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+			file->context->lib_ierr = ierr;
+
+			if (decomp) {
+				free(out_buf);
+			}
+			free(start);
+			free(count);
+
+			return SMIOL_LIBRARY_ERROR;
+		}
+
+		if (decomp) {
+			buf_p = out_buf;
+		} else {
+			buf_p = buf;
+		}
+
+		mpi_start = malloc(sizeof(MPI_Offset) * (size_t)ndims);
+		mpi_count = malloc(sizeof(MPI_Offset) * (size_t)ndims);
+
+		for (j = 0; j < ndims; j++) {
+			mpi_start[j] = (MPI_Offset)start[j];
+			mpi_count[j] = (MPI_Offset)count[j];
+		}
+
+		ierr = ncmpi_put_vara_all(file->ncidp,
+                                          varidp,
+                                          mpi_start, mpi_count,
+                                          buf_p,
+                                          0, MPI_DATATYPE_NULL);
+
+		free(mpi_start);
+		free(mpi_count);
+
+		if (ierr != NC_NOERR) {
+			file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+			file->context->lib_ierr = ierr;
+
+			if (decomp) {
+				free(out_buf);
+			}
+			free(start);
+			free(count);
+
+			return SMIOL_LIBRARY_ERROR;
+		}
+	}
+#endif
 
 	/*
 	 * Free up memory before returning
