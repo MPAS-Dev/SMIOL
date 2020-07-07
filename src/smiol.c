@@ -660,6 +660,17 @@ int SMIOL_inquire_var(struct SMIOL_file *file, const char *varname, int *vartype
 		return SMIOL_SUCCESS;
 	}
 
+	/*
+	 * Provide default values for output arguments in case
+	 * no library-specific below is active
+	 */
+	if (vartype != NULL) {
+		*vartype = SMIOL_UNKNOWN_VAR_TYPE;
+	}
+	if (ndims != NULL) {
+		*ndims = 0;
+	}
+
 #ifdef SMIOL_PNETCDF
 	/*
 	 * Get variable ID
