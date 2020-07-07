@@ -759,11 +759,38 @@ int SMIOL_inquire_var(struct SMIOL_file *file, const char *varname, int *vartype
  *
  * Writes a variable to a file.
  *
- * Detailed description.
+ * Given a pointer to a SMIOL file that was previously opened with write access
+ * and the name of a variable previously defined in the file with a call to
+ * SMIOL_define_var, this routine will write the contents of buf to the variable
+ * according to the decomposition described by decomp.
+ *
+ * If decomp is not NULL, the variable is assumed to be decomposed across MPI
+ * ranks, and all ranks with non-zero-sized partitions of the variable must
+ * provide a valid buffer. For decomposed variables, all MPI ranks must provide
+ * a non-NULL decomp, regardless of whether a rank has a non-zero-sized
+ * partition of the variable.
+ *
+ * If the variable is not decomposed -- that is, all ranks store identical
+ * values for the entire variable -- all MPI ranks must provide a NULL pointer
+ * for the decomp argument. As currently implemented, this routine will write
+ * the buffer for MPI rank 0 to the variable; however, this behavior should not
+ * be relied on.
+ *
+ * If the variable has been successfully written to the file, SMIOL_SUCCESS will
+ * be returned. Otherwise, an error code indicating the nature of the failure
+ * will be returned.
  *
  ********************************************************************************/
-int SMIOL_put_var(void)
+int SMIOL_put_var(struct SMIOL_file *file, const char *varname,
+                  const struct SMIOL_decomp *decomp, const void *buf)
 {
+	/*
+	 * Basic checks on arguments
+	 */
+	if (file == NULL || varname == NULL) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
 	return SMIOL_SUCCESS;
 }
 

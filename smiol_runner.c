@@ -115,6 +115,7 @@ int main(int argc, char **argv)
 	char log_fname[17];
 	FILE *test_log = NULL;
 	char **dimnames;
+	float *buf;
 
 	if (MPI_Init(&argc, &argv) != MPI_SUCCESS) {
 		fprintf(stderr, "Error: MPI_Init failed.\n");
@@ -394,14 +395,17 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if ((ierr = SMIOL_close_file(&file)) != SMIOL_SUCCESS) {
-		fprintf(test_log, "ERROR: SMIOL_close_file: %s ", SMIOL_error_string(ierr));
-		return 1;
-	}
-
-	if ((ierr = SMIOL_put_var()) != SMIOL_SUCCESS) {
+	buf = malloc(sizeof(float) * (size_t)40962);
+	memset((void *)buf, 0, sizeof(float) * (size_t)40962);
+	if ((ierr = SMIOL_put_var(file, "theta", NULL, buf)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_put_var: %s ",
 			SMIOL_error_string(ierr));
+		return 1;
+	}
+	free(buf);
+
+	if ((ierr = SMIOL_close_file(&file)) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_close_file: %s ", SMIOL_error_string(ierr));
 		return 1;
 	}
 
