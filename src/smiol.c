@@ -795,12 +795,178 @@ int SMIOL_inquire_var(struct SMIOL_file *file, const char *varname, int *vartype
 int SMIOL_put_var(struct SMIOL_file *file, const char *varname,
                   const struct SMIOL_decomp *decomp, const void *buf)
 {
+	int i;
+	int ierr;
+	int ndims;
+	int vartype;
+	int has_unlimited_dim;
+	char **dimnames;
+	SMIOL_Offset *dimsizes;
+	size_t element_size;
+	void *out_buf;
+	size_t *start;
+	size_t *count;
+
 	/*
 	 * Basic checks on arguments
 	 */
 	if (file == NULL || varname == NULL) {
 		return SMIOL_INVALID_ARGUMENT;
 	}
+
+	/*
+	 * Figure out type of the variable, as well as its dimensions
+	 */
+	ierr = SMIOL_inquire_var(file, varname, &vartype, &ndims, NULL);
+	if (ierr != SMIOL_SUCCESS) {
+		return ierr;
+	}
+
+	dimnames = malloc(sizeof(char *) * (size_t)ndims);
+	for (i = 0; i < ndims; i++) {
+/* TO DO - define maximum string size */
+		dimnames[i] = malloc(sizeof(char) * (size_t)64);
+	}
+/* TO DO - check for malloc errors */
+
+	ierr = SMIOL_inquire_var(file, varname, NULL, NULL, dimnames);
+	if (ierr != SMIOL_SUCCESS) {
+		for (i = 0; i < ndims; i++) {
+			free(dimnames[i]);
+		}
+		free(dimnames);
+		return ierr;
+	}
+
+	dimsizes = malloc(sizeof(SMIOL_Offset) * (size_t)ndims);
+/* TO DO - check for malloc errors */
+
+	/*
+	 * It is assumed that only the first dimension can be an unlimited
+	 * dimension, so by inquiring about dimensions from last to first, we can
+	 * be guaranteed that has_unlimited_dim will be set correctly at the end
+	 * of the loop over dimensions
+	 */
+	for (i = (ndims-1); i >= 0; i--) {
+		ierr = SMIOL_inquire_dim(file, dimnames[i], &dimsizes[i],
+		                         &has_unlimited_dim);
+		if (ierr != SMIOL_SUCCESS) {
+			for (i = 0; i < ndims; i++) {
+				free(dimnames[i]);
+			}
+			free(dimnames);
+			free(dimsizes);
+
+			return ierr;
+		}
+	}
+
+	for (i = 0; i < ndims; i++) {
+		free(dimnames[i]);
+	}
+	free(dimnames);
+
+	/*
+	 * Set basic size of each element in the field; only necessary if the field
+	 * is decomposed and therefore must be transferred prior to writing
+	 */
+	element_size = 1;
+	if (decomp) {
+		switch (vartype) {
+			case SMIOL_REAL32:
+				element_size = sizeof(float);
+				break;
+			case SMIOL_REAL64:
+				element_size = sizeof(double);
+				break;
+			case SMIOL_INT32:
+				element_size = sizeof(int);
+				break;
+			case SMIOL_CHAR:
+				element_size = sizeof(char);
+				break;
+		}
+	}
+
+	start = malloc(sizeof(size_t) * (size_t)ndims);
+	count = malloc(sizeof(size_t) * (size_t)ndims);
+/* TO DO - check for malloc errors */
+
+	/*
+	 * Build start/count description of the part of the variable to be written
+	 * Simultaneously, compute the product of all non-unlimited, non-decomposed
+	 * dimension sizes, scaled by the basic element size to get the effective
+	 * size of each element to be written
+	 */
+	for (i = 0; i < ndims; i++) {
+		start[i] = 0;
+		count[i] = dimsizes[i];
+
+		/*
+		 * If variable has an unlimited dimension, set start to current frame
+		 * and count to one
+		 */
+		if (has_unlimited_dim && i == 0) {
+			start[i] = file->frame;
+			count[i] = 1;
+		}
+
+		/*
+		 * If variable is decomposed, set the slowest-varying, non-record dimension
+		 * start and count based on values from the decomp structure
+		 */
+		if (decomp) {
+			if ((!has_unlimited_dim && i == 0) ||
+			    (has_unlimited_dim && i == 1)) {
+				start[i] = decomp->io_start;
+				count[i] = decomp->io_count;
+			} else {
+				element_size *= count[i];
+			}
+		} else {
+			element_size *= count[i];
+		}
+
+		/*
+		 * If the variable is not decomposed, only MPI rank 0 will have non-zero
+		 * count values
+		 */
+		if (!decomp && file->context->comm_rank != 0) {
+			count[i] = 0;
+		}
+	}
+
+	free(dimsizes);
+
+	/*
+	 *
+	 */
+	if (decomp) {
+		out_buf = malloc(element_size * decomp->io_count);
+/* TO DO - check for malloc errors */
+		ierr = transfer_field(decomp, SMIOL_COMP_TO_IO,
+		                      element_size, buf, out_buf);
+		if (ierr != SMIOL_SUCCESS) {
+			free(start);
+			free(count);
+			free(out_buf);
+			return ierr;
+		}
+	}
+
+	/*
+	 * Write out_buf
+	 */
+
+	/*
+	 * Free up memory before returning
+	 */
+	if (decomp) {
+		free(out_buf);
+	}
+
+	free(start);
+	free(count);
 
 	return SMIOL_SUCCESS;
 }
