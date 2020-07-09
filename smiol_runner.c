@@ -415,16 +415,16 @@ int main(int argc, char **argv)
 			SMIOL_error_string(ierr));
 		return 1;
 	}
+
+	if ((ierr = SMIOL_get_var(file, "theta", NULL, buf)) != SMIOL_SUCCESS) {
+		fprintf(test_log, "ERROR: SMIOL_get_var: %s ",
+			SMIOL_error_string(ierr));
+		return 1;
+	}
 	free(buf);
 
 	if ((ierr = SMIOL_close_file(&file)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_close_file: %s ", SMIOL_error_string(ierr));
-		return 1;
-	}
-
-	if ((ierr = SMIOL_get_var()) != SMIOL_SUCCESS) {
-		fprintf(test_log, "ERROR: SMIOL_get_var: %s ",
-			SMIOL_error_string(ierr));
 		return 1;
 	}
 	
