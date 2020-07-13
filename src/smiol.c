@@ -1226,11 +1226,97 @@ int SMIOL_get_var(struct SMIOL_file *file, const char *varname,
 	if (decomp) {
 		in_buf = malloc(element_size * decomp->io_count);
 /* TO DO - check for malloc errors */
+
+#ifndef SMIOL_PNETCDF
+		/*
+		 * If no file library provides values for the memory pointed to
+		 * by in_buf, the transfer_field call later will transfer garbage
+		 * to the output buffer; to avoid returning non-deterministic values
+		 * to the caller in this case, initialize in_buf.
+		 */
+		memset(in_buf, 0, element_size * decomp->io_count);
+		
+#endif
 	}
 
 	/*
 	 * Read in_buf
 	 */
+#ifdef SMIOL_PNETCDF
+	{
+		int j;
+		int varidp;
+		void *buf_p;
+		MPI_Offset *mpi_start;
+		MPI_Offset *mpi_count;
+
+		if (file->state == PNETCDF_DEFINE_MODE) {
+			if ((ierr = ncmpi_enddef(file->ncidp)) != NC_NOERR) {
+				file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+				file->context->lib_ierr = ierr;
+
+				if (decomp) {
+					free(in_buf);
+				}
+				free(start);
+				free(count);
+
+				return SMIOL_LIBRARY_ERROR;
+			}
+			file->state = PNETCDF_DATA_MODE;
+		}
+
+		ierr = ncmpi_inq_varid(file->ncidp, varname, &varidp);
+		if (ierr != NC_NOERR) {
+			file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+			file->context->lib_ierr = ierr;
+
+			if (decomp) {
+				free(in_buf);
+			}
+			free(start);
+			free(count);
+
+			return SMIOL_LIBRARY_ERROR;
+		}
+
+		if (decomp) {
+			buf_p = in_buf;
+		} else {
+			buf_p = buf;
+		}
+
+		mpi_start = malloc(sizeof(MPI_Offset) * (size_t)ndims);
+		mpi_count = malloc(sizeof(MPI_Offset) * (size_t)ndims);
+
+		for (j = 0; j < ndims; j++) {
+			mpi_start[j] = (MPI_Offset)start[j];
+			mpi_count[j] = (MPI_Offset)count[j];
+		}
+
+		ierr = ncmpi_get_vara_all(file->ncidp,
+                                          varidp,
+                                          mpi_start, mpi_count,
+                                          buf_p,
+                                          0, MPI_DATATYPE_NULL);
+
+		free(mpi_start);
+		free(mpi_count);
+
+		if (ierr != NC_NOERR) {
+			file->context->lib_type = SMIOL_LIBRARY_PNETCDF;
+			file->context->lib_ierr = ierr;
+
+			if (decomp) {
+				free(in_buf);
+			}
+			free(start);
+			free(count);
+
+			return SMIOL_LIBRARY_ERROR;
+		}
+	}
+#endif
 
 	/*
 	 * Free start/count arrays
