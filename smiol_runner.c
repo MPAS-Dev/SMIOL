@@ -3859,11 +3859,17 @@ int test_put_get_vars(FILE *test_log)
 	struct SMIOL_file *file;
 	char **dimnames;
 	float vers;
+	float vers_valid;
 	float *foo;
+	float *foo_valid;
 	double *coeffs;
+	double *coeffs_valid;
 	int *pbl_mask;
+	int *pbl_mask_valid;
 	char *id_string;
+	char *id_string_valid;
 	double timestamp;
+	double timestamp_valid;
 
 	fprintf(test_log, "********************************************************************************\n");
 	fprintf(test_log, "************************ SMIOL_put_var / SMIOL_get_var *************************\n");
@@ -4251,6 +4257,423 @@ int test_put_get_vars(FILE *test_log)
 	free(foo);
 	free(coeffs);
 	free(pbl_mask);
+
+	/* Close the SMIOL file */
+	ierr = SMIOL_close_file(&file);
+	if (ierr != SMIOL_SUCCESS || file != NULL) {
+		fprintf(test_log, "Failed to close SMIOL file...\n");
+		return -1;
+	}
+
+	ierr = SMIOL_free_decomp(&decomp);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to free decomp...\n");
+		return -1;
+	}
+
+
+	/*****     Begin tests for SMIOL_get_var     *****/
+
+
+	/* Create a decomp for testing parallel I/O */
+	num_io_tasks = comm_size / 2;
+	num_io_tasks = (num_io_tasks <= 0) ? 1 : num_io_tasks;  /* Always use at least one I/O task */
+	io_stride = 2;
+	n_compute_elements = (size_t)(nCells / comm_size);
+	compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
+	for (i = 0; i < n_compute_elements; i++) {
+		compute_elements[i] = comm_rank + comm_size * (SMIOL_Offset)i;
+	}
+	ierr = SMIOL_create_decomp(context,
+	                           n_compute_elements, compute_elements,
+	                           num_io_tasks, io_stride, &decomp);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create decomp...\n");
+		return -1;
+	}
+
+	free(compute_elements);
+
+	/* Allocate a variable decomposed by decomp */
+	foo = malloc(sizeof(float) * n_compute_elements * (size_t)nVertLevels);
+	foo_valid = malloc(sizeof(float) * n_compute_elements * (size_t)nVertLevels);
+
+	/* Allocate a variable decomposed by decomp2 */
+	id_string = malloc(sizeof(char) * (size_t)strLen);
+	id_string_valid = malloc(sizeof(char) * (size_t)strLen);
+
+	/* Re-open the SMIOL file */
+	file = NULL;
+	ierr = SMIOL_open_file(context, "test_put_get_vars.nc", SMIOL_FILE_READ, &file);
+	if (ierr != SMIOL_SUCCESS || file == NULL) {
+		fprintf(test_log, "Failed to create SMIOL file...\n");
+		return -1;
+	}
+
+	/* Supply a NULL file argument */
+	fprintf(test_log, "Supply a NULL file argument to SMIOL_get_var: ");
+	ierr = SMIOL_get_var(NULL, "foo", decomp, foo);
+	if (ierr == SMIOL_INVALID_ARGUMENT) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_INVALID_ARGUMENT was not returned\n");
+		errcount++;
+	}
+
+	/* Supply a NULL varname argument */
+	fprintf(test_log, "Supply a NULL varname argument to SMIOL_get_var: ");
+	ierr = SMIOL_get_var(file, NULL, decomp, foo);
+	if (ierr == SMIOL_INVALID_ARGUMENT) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_INVALID_ARGUMENT was not returned\n");
+		errcount++;
+	}
+
+	/* Try to read from a non-existent variable */
+	fprintf(test_log, "Try to read from a non-existent variable: ");
+	ierr = SMIOL_get_var(file, "blaz", decomp, foo);
+#ifdef SMIOL_PNETCDF
+	if (ierr == SMIOL_LIBRARY_ERROR) {
+		fprintf(test_log, "PASS (%s)\n", SMIOL_lib_error_string(context));
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_LIBRARY_ERROR was not returned\n");
+		errcount++;
+	}
+#else
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned\n");
+		errcount++;
+	}
+#endif
+
+	/* Allocate a non-decomposed variable */
+	coeffs = malloc(sizeof(double) * (size_t)nVertLevels);
+	coeffs_valid = malloc(sizeof(double) * (size_t)nVertLevels);
+
+	/* Allocate another non-decomposed variable */
+	pbl_mask = malloc(sizeof(int) * (size_t)nVertLevels);
+	pbl_mask_valid = malloc(sizeof(int) * (size_t)nVertLevels);
+
+	/* Read a variable with no dimensions */
+	fprintf(test_log, "Read a variable with no dimensions: ");
+	vers = (float)0.0;
+	ierr = SMIOL_get_var(file, "version", NULL, &vers);
+	if (ierr == SMIOL_SUCCESS) {
+		/* Set validation array */
+#ifdef SMIOL_PNETCDF
+		vers_valid = (float)1.0;
+#else
+		vers_valid = (float)0.0;
+#endif
+
+		/* Check correctness of read data */
+		if (vers == vers_valid) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - values read from the file are not correct\n");
+			errcount++;
+		}
+	} else {
+		fprintf(test_log, "FAIL - (%s)\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+
+	/* Read a non-decomposed variable with no record dimension */
+	fprintf(test_log, "Read a non-decomposed variable with no record dimension: ");
+	memset((void *)coeffs, 0, sizeof(double) * (size_t)nVertLevels);
+	ierr = SMIOL_get_var(file, "coeffs", NULL, coeffs);
+	if (ierr == SMIOL_SUCCESS) {
+		/* Set validation array */
+#ifdef SMIOL_PNETCDF
+		coeffs_valid[0] = 0.1;
+		for (i = 1; i < (size_t)nVertLevels; i++) {
+			coeffs_valid[i] = coeffs_valid[i-1] * 0.001;
+		}
+#else
+		memset((void *)coeffs_valid, 0, sizeof(double) * (size_t)nVertLevels);
+#endif
+
+		/* Check correctness of read data */
+		if (memcmp(coeffs, coeffs_valid, sizeof(double) * (size_t)nVertLevels) == 0) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - values read from the file are not correct\n");
+			errcount++;
+		}
+	} else {
+		fprintf(test_log, "FAIL - (%s)\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+
+	/* Read a decomposed variable with no record dimension */
+	fprintf(test_log, "Read a decomposed variable with no record dimension: ");
+	memset((void *)id_string, 0, sizeof(char) * (size_t)strLen);
+	ierr = SMIOL_get_var(file, "id_string", decomp2, id_string);
+	if (ierr == SMIOL_SUCCESS) {
+		/* Set validation array */
+		memset((void *)id_string_valid, 0, sizeof(char) * (size_t)strLen);
+#ifdef SMIOL_PNETCDF
+		snprintf(id_string_valid, (size_t)strLen, "MPI task %3.3i", comm_rank);
+#endif
+
+		/* Check correctness of read data */
+		if (memcmp(id_string, id_string_valid, sizeof(char) * (size_t)strLen) == 0) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - values read from the file are not correct\n");
+			errcount++;
+		}
+	} else {
+		fprintf(test_log, "FAIL - (%s)\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+
+	/* Read frame 0 of a decomposed variable with a record dimension */
+	fprintf(test_log, "Read frame 0 of a decomposed variable with a record dimension: ");
+	memset((void *)foo, 0, sizeof(float) * n_compute_elements * (size_t)nVertLevels);
+	ierr = SMIOL_get_var(file, "foo", decomp, foo);
+	if (ierr == SMIOL_SUCCESS) {
+		/* Set validation array */
+#ifdef SMIOL_PNETCDF
+		for (i = 0; i < n_compute_elements; i++) {
+			for (j = 0; j < (size_t)nVertLevels; j++) {
+				foo_valid[i*(size_t)nVertLevels + j] = (float)((size_t)(comm_rank) + (size_t)comm_size * i + j);
+			}
+		}
+#else
+		memset((void *)foo_valid, 0, sizeof(float) * n_compute_elements * (size_t)nVertLevels);
+#endif
+
+		/* Check correctness of read data */
+		if (memcmp(foo, foo_valid, sizeof(float) * n_compute_elements * (size_t)nVertLevels) == 0) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - values read from the file are not correct\n");
+			errcount++;
+		}
+	} else {
+		fprintf(test_log, "FAIL - (%s)\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+
+	/* Read frame 0 of a non-decomposed variable with a record dimension */
+	fprintf(test_log, "Read frame 0 of a non-decomposed variable with a record dimension: ");
+	memset((void *)pbl_mask, 0, sizeof(int) * (size_t)nVertLevels);
+	ierr = SMIOL_get_var(file, "pbl_mask", NULL, pbl_mask);
+	if (ierr == SMIOL_SUCCESS) {
+		/* Set validation array */
+#ifdef SMIOL_PNETCDF
+		pbl_mask_valid[0] = 1;
+		for (i = 1; i < (size_t)nVertLevels; i++) {
+			pbl_mask_valid[i] = 0;
+		}
+#else
+		memset((void *)pbl_mask_valid, 0, sizeof(int) * (size_t)nVertLevels);
+#endif
+
+		/* Check correctness of read data */
+		if (memcmp(pbl_mask, pbl_mask_valid, sizeof(int) * (size_t)nVertLevels) == 0) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - values read from the file are not correct\n");
+			errcount++;
+		}
+	} else {
+		fprintf(test_log, "FAIL - (%s)\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+
+	/* Read frame 0 of a 0-d variable with a record dimension */
+	fprintf(test_log, "Read frame 0 of a 0-d variable with a record dimension: ");
+	timestamp = 0.0;
+	ierr = SMIOL_get_var(file, "seconds_since_epoch", NULL, &timestamp);
+	if (ierr == SMIOL_SUCCESS) {
+		/* Set validation array */
+#ifdef SMIOL_PNETCDF
+		timestamp_valid = 1594253412.75;
+#else
+		timestamp_valid = 0.0;
+#endif
+
+		/* Check correctness of read data */
+		if (timestamp == timestamp_valid) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - values read from the file are not correct\n");
+			errcount++;
+		}
+	} else {
+		fprintf(test_log, "FAIL - (%s)\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+
+	ierr = SMIOL_set_frame(file, (SMIOL_Offset)1);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to advance frame in file...\n");
+		return -1;
+	}
+
+	/* Read frame 1 of a decomposed variable with a record dimension */
+	fprintf(test_log, "Read frame 1 of a decomposed variable with a record dimension: ");
+	memset((void *)foo, 0, sizeof(float) * n_compute_elements * (size_t)nVertLevels);
+	ierr = SMIOL_get_var(file, "foo", decomp, foo);
+	if (ierr == SMIOL_SUCCESS) {
+		/* Update validation array from previous frame */
+#ifdef SMIOL_PNETCDF
+		for (i = 0; i < n_compute_elements; i++) {
+			for (j = 0; j < (size_t)nVertLevels; j++) {
+				foo_valid[i*(size_t)nVertLevels + j] *= (float)10.0;
+			}
+		}
+#endif
+
+		/* Check correctness of read data */
+		if (memcmp(foo, foo_valid, sizeof(float) * n_compute_elements * (size_t)nVertLevels) == 0) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - values read from the file are not correct\n");
+			errcount++;
+		}
+	} else {
+		fprintf(test_log, "FAIL - (%s)\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+
+	/* Read frame 1 of a non-decomposed variable with a record dimension */
+	fprintf(test_log, "Read frame 1 of a non-decomposed variable with a record dimension: ");
+	memset((void *)pbl_mask, 0, sizeof(int) * (size_t)nVertLevels);
+	ierr = SMIOL_get_var(file, "pbl_mask", NULL, pbl_mask);
+	if (ierr == SMIOL_SUCCESS) {
+		/* Update validation array from previous frame */
+#ifdef SMIOL_PNETCDF
+		pbl_mask_valid[1] = 1;
+		pbl_mask_valid[2] = 1;
+		pbl_mask_valid[3] = 1;
+#endif
+
+		/* Check correctness of read data */
+		if (memcmp(pbl_mask, pbl_mask_valid, sizeof(int) * (size_t)nVertLevels) == 0) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - values read from the file are not correct\n");
+			errcount++;
+		}
+	} else {
+		fprintf(test_log, "FAIL - (%s)\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+
+	/* Read frame 1 of a 0-d variable with a record dimension */
+	fprintf(test_log, "Read frame 1 of a 0-d variable with a record dimension: ");
+	timestamp = 0.0;
+	ierr = SMIOL_get_var(file, "seconds_since_epoch", NULL, &timestamp);
+	if (ierr == SMIOL_SUCCESS) {
+		/* Update validation array from previous frame */
+#ifdef SMIOL_PNETCDF
+		timestamp_valid = 1594253412.875;
+#endif
+
+		/* Check correctness of read data */
+		if (timestamp == timestamp_valid) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - values read from the file are not correct\n");
+			errcount++;
+		}
+	} else {
+		fprintf(test_log, "FAIL - (%s)\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+
+	ierr = SMIOL_set_frame(file, (SMIOL_Offset)2);
+	if (ierr != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to advance frame in file...\n");
+		return -1;
+	}
+
+	/* Read frame 2 of a decomposed variable with a record dimension */
+	fprintf(test_log, "Read frame 2 of a decomposed variable with a record dimension: ");
+	memset((void *)foo, 0, sizeof(float) * n_compute_elements * (size_t)nVertLevels);
+	ierr = SMIOL_get_var(file, "foo", decomp, foo);
+	if (ierr == SMIOL_SUCCESS) {
+		/* Update validation array from previous frame */
+#ifdef SMIOL_PNETCDF
+		for (i = 0; i < n_compute_elements; i++) {
+			for (j = 0; j < (size_t)nVertLevels; j++) {
+				foo_valid[i*(size_t)nVertLevels + j] *= (float)-1.0;
+			}
+		}
+#endif
+
+		/* Check correctness of read data */
+		if (memcmp(foo, foo_valid, sizeof(float) * n_compute_elements * (size_t)nVertLevels) == 0) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - values read from the file are not correct\n");
+			errcount++;
+		}
+	} else {
+		fprintf(test_log, "FAIL - (%s)\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+
+	/* Read frame 2 of a non-decomposed variable with a record dimension */
+	fprintf(test_log, "Read frame 2 of a non-decomposed variable with a record dimension: ");
+	memset((void *)pbl_mask, 0, sizeof(int) * (size_t)nVertLevels);
+	ierr = SMIOL_get_var(file, "pbl_mask", NULL, pbl_mask);
+	if (ierr == SMIOL_SUCCESS) {
+		/* Update validation array from previous frame */
+#ifdef SMIOL_PNETCDF
+		pbl_mask_valid[4] = 1;
+		pbl_mask_valid[5] = 1;
+		pbl_mask_valid[6] = 1;
+#endif
+
+		/* Check correctness of read data */
+		if (memcmp(pbl_mask, pbl_mask_valid, sizeof(int) * (size_t)nVertLevels) == 0) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - values read from the file are not correct\n");
+			errcount++;
+		}
+	} else {
+		fprintf(test_log, "FAIL - (%s)\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+
+	/* Read frame 2 of a 0-d variable with a record dimension */
+	fprintf(test_log, "Read frame 2 of a 0-d variable with a record dimension: ");
+	timestamp = 0.0;
+	ierr = SMIOL_get_var(file, "seconds_since_epoch", NULL, &timestamp);
+	if (ierr == SMIOL_SUCCESS) {
+		/* Update validation array from previous frame */
+#ifdef SMIOL_PNETCDF
+		timestamp_valid = 1594253413.0;
+#endif
+
+		/* Check correctness of read data */
+		if (timestamp == timestamp_valid) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - values read from the file are not correct\n");
+			errcount++;
+		}
+	} else {
+		fprintf(test_log, "FAIL - (%s)\n", SMIOL_error_string(ierr));
+		errcount++;
+	}
+
+	free(id_string);
+	free(id_string_valid);
+	free(foo);
+	free(foo_valid);
+	free(coeffs);
+	free(coeffs_valid);
+	free(pbl_mask);
+	free(pbl_mask_valid);
 
 	/* Close the SMIOL file */
 	ierr = SMIOL_close_file(&file);
