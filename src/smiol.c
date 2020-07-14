@@ -11,6 +11,17 @@
 #define PNETCDF_DATA_MODE 1
 #endif
 
+#define START_COUNT_READ 0
+#define START_COUNT_WRITE 1
+
+/*
+ * Local functions
+ */
+int build_start_count(struct SMIOL_file *file, const char *varname,
+                      const struct SMIOL_decomp *decomp,
+                      int write_or_read, size_t *element_size, int *ndims,
+                      size_t **start, size_t **count);
+
 
 /********************************************************************************
  *
@@ -795,15 +806,10 @@ int SMIOL_inquire_var(struct SMIOL_file *file, const char *varname, int *vartype
 int SMIOL_put_var(struct SMIOL_file *file, const char *varname,
                   const struct SMIOL_decomp *decomp, const void *buf)
 {
-	int i;
 	int ierr;
 	int ndims;
-	int vartype;
-	int has_unlimited_dim;
-	char **dimnames;
-	SMIOL_Offset *dimsizes;
 	size_t element_size;
-	void *out_buf;
+	void *out_buf = NULL;
 	size_t *start;
 	size_t *count;
 
@@ -815,135 +821,30 @@ int SMIOL_put_var(struct SMIOL_file *file, const char *varname,
 	}
 
 	/*
-	 * Figure out type of the variable, as well as its dimensions
+	 * Work out the start[] and count[] arrays for writing this variable
+	 * in parallel
 	 */
-	ierr = SMIOL_inquire_var(file, varname, &vartype, &ndims, NULL);
+	ierr = build_start_count(file, varname, decomp,
+	                         START_COUNT_WRITE, &element_size, &ndims,
+	                         &start, &count);
 	if (ierr != SMIOL_SUCCESS) {
 		return ierr;
 	}
 
-	dimnames = malloc(sizeof(char *) * (size_t)ndims);
-	for (i = 0; i < ndims; i++) {
-/* TO DO - define maximum string size */
-		dimnames[i] = malloc(sizeof(char) * (size_t)64);
-	}
-/* TO DO - check for malloc errors */
-
-	ierr = SMIOL_inquire_var(file, varname, NULL, NULL, dimnames);
-	if (ierr != SMIOL_SUCCESS) {
-		for (i = 0; i < ndims; i++) {
-			free(dimnames[i]);
-		}
-		free(dimnames);
-		return ierr;
-	}
-
-	dimsizes = malloc(sizeof(SMIOL_Offset) * (size_t)ndims);
-/* TO DO - check for malloc errors */
-
 	/*
-	 * It is assumed that only the first dimension can be an unlimited
-	 * dimension, so by inquiring about dimensions from last to first, we can
-	 * be guaranteed that has_unlimited_dim will be set correctly at the end
-	 * of the loop over dimensions
-	 */
-	for (i = (ndims-1); i >= 0; i--) {
-		ierr = SMIOL_inquire_dim(file, dimnames[i], &dimsizes[i],
-		                         &has_unlimited_dim);
-		if (ierr != SMIOL_SUCCESS) {
-			for (i = 0; i < ndims; i++) {
-				free(dimnames[i]);
-			}
-			free(dimnames);
-			free(dimsizes);
-
-			return ierr;
-		}
-	}
-
-	for (i = 0; i < ndims; i++) {
-		free(dimnames[i]);
-	}
-	free(dimnames);
-
-	/*
-	 * Set basic size of each element in the field; only necessary if the field
-	 * is decomposed and therefore must be transferred prior to writing
-	 */
-	element_size = 1;
-	if (decomp) {
-		switch (vartype) {
-			case SMIOL_REAL32:
-				element_size = sizeof(float);
-				break;
-			case SMIOL_REAL64:
-				element_size = sizeof(double);
-				break;
-			case SMIOL_INT32:
-				element_size = sizeof(int);
-				break;
-			case SMIOL_CHAR:
-				element_size = sizeof(char);
-				break;
-		}
-	}
-
-	start = malloc(sizeof(size_t) * (size_t)ndims);
-	count = malloc(sizeof(size_t) * (size_t)ndims);
-/* TO DO - check for malloc errors */
-
-	/*
-	 * Build start/count description of the part of the variable to be written
-	 * Simultaneously, compute the product of all non-unlimited, non-decomposed
-	 * dimension sizes, scaled by the basic element size to get the effective
-	 * size of each element to be written
-	 */
-	for (i = 0; i < ndims; i++) {
-		start[i] = 0;
-		count[i] = dimsizes[i];
-
-		/*
-		 * If variable has an unlimited dimension, set start to current frame
-		 * and count to one
-		 */
-		if (has_unlimited_dim && i == 0) {
-			start[i] = file->frame;
-			count[i] = 1;
-		}
-
-		/*
-		 * If variable is decomposed, set the slowest-varying, non-record dimension
-		 * start and count based on values from the decomp structure
-		 */
-		if (decomp) {
-			if ((!has_unlimited_dim && i == 0) ||
-			    (has_unlimited_dim && i == 1)) {
-				start[i] = decomp->io_start;
-				count[i] = decomp->io_count;
-			} else {
-				element_size *= count[i];
-			}
-		} else {
-			element_size *= count[i];
-		}
-
-		/*
-		 * If the variable is not decomposed, only MPI rank 0 will have non-zero
-		 * count values
-		 */
-		if (!decomp && file->context->comm_rank != 0) {
-			count[i] = 0;
-		}
-	}
-
-	free(dimsizes);
-
-	/*
-	 *
+	 * Communicate elements of this field from MPI ranks that compute those
+	 * elements to MPI ranks that write those elements. This only needs to
+	 * be done for decomposed variables.
 	 */
 	if (decomp) {
 		out_buf = malloc(element_size * decomp->io_count);
-/* TO DO - check for malloc errors */
+		if (out_buf == NULL) {
+			free(start);
+			free(count);
+
+			return SMIOL_MALLOC_FAILURE;
+		}
+
 		ierr = transfer_field(decomp, SMIOL_COMP_TO_IO,
 		                      element_size, buf, out_buf);
 		if (ierr != SMIOL_SUCCESS) {
@@ -1002,7 +903,21 @@ int SMIOL_put_var(struct SMIOL_file *file, const char *varname,
 		}
 
 		mpi_start = malloc(sizeof(MPI_Offset) * (size_t)ndims);
+		if (mpi_start == NULL) {
+			free(start);
+			free(count);
+
+			return SMIOL_MALLOC_FAILURE;
+		}
+
 		mpi_count = malloc(sizeof(MPI_Offset) * (size_t)ndims);
+		if (mpi_count == NULL) {
+			free(start);
+			free(count);
+			free(mpi_start);
+
+			return SMIOL_MALLOC_FAILURE;
+		}
 
 		for (j = 0; j < ndims; j++) {
 			mpi_start[j] = (MPI_Offset)start[j];
@@ -1075,15 +990,10 @@ int SMIOL_put_var(struct SMIOL_file *file, const char *varname,
 int SMIOL_get_var(struct SMIOL_file *file, const char *varname,
                   const struct SMIOL_decomp *decomp, void *buf)
 {
-	int i;
 	int ierr;
 	int ndims;
-	int vartype;
-	int has_unlimited_dim;
-	char **dimnames;
-	SMIOL_Offset *dimsizes;
 	size_t element_size;
-	void *in_buf;
+	void *in_buf = NULL;
 	size_t *start;
 	size_t *count;
 
@@ -1095,144 +1005,38 @@ int SMIOL_get_var(struct SMIOL_file *file, const char *varname,
 	}
 
 	/*
-	 * Figure out type of the variable, as well as its dimensions
+	 * Work out the start[] and count[] arrays for reading this variable
+	 * in parallel
 	 */
-	ierr = SMIOL_inquire_var(file, varname, &vartype, &ndims, NULL);
+	ierr = build_start_count(file, varname, decomp,
+	                         START_COUNT_READ, &element_size, &ndims,
+	                         &start, &count);
 	if (ierr != SMIOL_SUCCESS) {
 		return ierr;
 	}
 
-	dimnames = malloc(sizeof(char *) * (size_t)ndims);
-	for (i = 0; i < ndims; i++) {
-/* TO DO - define maximum string size */
-		dimnames[i] = malloc(sizeof(char) * (size_t)64);
-	}
-/* TO DO - check for malloc errors */
-
-	ierr = SMIOL_inquire_var(file, varname, NULL, NULL, dimnames);
-	if (ierr != SMIOL_SUCCESS) {
-		for (i = 0; i < ndims; i++) {
-			free(dimnames[i]);
-		}
-		free(dimnames);
-		return ierr;
-	}
-
-	dimsizes = malloc(sizeof(SMIOL_Offset) * (size_t)ndims);
-/* TO DO - check for malloc errors */
-
 	/*
-	 * It is assumed that only the first dimension can be an unlimited
-	 * dimension, so by inquiring about dimensions from last to first, we can
-	 * be guaranteed that has_unlimited_dim will be set correctly at the end
-	 * of the loop over dimensions
-	 */
-	for (i = (ndims-1); i >= 0; i--) {
-		ierr = SMIOL_inquire_dim(file, dimnames[i], &dimsizes[i],
-		                         &has_unlimited_dim);
-		if (ierr != SMIOL_SUCCESS) {
-			for (i = 0; i < ndims; i++) {
-				free(dimnames[i]);
-			}
-			free(dimnames);
-			free(dimsizes);
-
-			return ierr;
-		}
-	}
-
-	for (i = 0; i < ndims; i++) {
-		free(dimnames[i]);
-	}
-	free(dimnames);
-
-	/*
-	 * Set basic size of each element in the field; only necessary if the field
-	 * is decomposed and therefore must be transferred prior to writing
-	 */
-	element_size = 1;
-	if (decomp) {
-		switch (vartype) {
-			case SMIOL_REAL32:
-				element_size = sizeof(float);
-				break;
-			case SMIOL_REAL64:
-				element_size = sizeof(double);
-				break;
-			case SMIOL_INT32:
-				element_size = sizeof(int);
-				break;
-			case SMIOL_CHAR:
-				element_size = sizeof(char);
-				break;
-		}
-	}
-
-	start = malloc(sizeof(size_t) * (size_t)ndims);
-	count = malloc(sizeof(size_t) * (size_t)ndims);
-/* TO DO - check for malloc errors */
-
-	/*
-	 * Build start/count description of the part of the variable to be written
-	 * Simultaneously, compute the product of all non-unlimited, non-decomposed
-	 * dimension sizes, scaled by the basic element size to get the effective
-	 * size of each element to be written
-	 */
-	for (i = 0; i < ndims; i++) {
-		start[i] = 0;
-		count[i] = dimsizes[i];
-
-		/*
-		 * If variable has an unlimited dimension, set start to current frame
-		 * and count to one
-		 */
-		if (has_unlimited_dim && i == 0) {
-			start[i] = file->frame;
-			count[i] = 1;
-		}
-
-		/*
-		 * If variable is decomposed, set the slowest-varying, non-record dimension
-		 * start and count based on values from the decomp structure
-		 */
-		if (decomp) {
-			if ((!has_unlimited_dim && i == 0) ||
-			    (has_unlimited_dim && i == 1)) {
-				start[i] = decomp->io_start;
-				count[i] = decomp->io_count;
-			} else {
-				element_size *= count[i];
-			}
-		} else {
-			element_size *= count[i];
-		}
-
-#if 0
-		/*
-		 * If the variable is not decomposed, only MPI rank 0 will have non-zero
-		 * count values
-		 */
-		if (!decomp && file->context->comm_rank != 0) {
-			count[i] = 0;
-		}
-#endif
-	}
-
-	free(dimsizes);
-
-	/*
-	 *
+	 * If this variable is decomposed, allocate a buffer into which
+	 * the variable will be read using the I/O decomposition; later,
+	 * elements this buffer will be transferred to MPI ranks that compute
+	 * on those elements
 	 */
 	if (decomp) {
 		in_buf = malloc(element_size * decomp->io_count);
-/* TO DO - check for malloc errors */
+		if (in_buf == NULL) {
+			free(start);
+			free(count);
+
+			return SMIOL_MALLOC_FAILURE;
+		}
 
 #ifndef SMIOL_PNETCDF
 		/*
 		 * If no file library provides values for the memory pointed to
-		 * by in_buf, the transfer_field call later will transfer garbage
-		 * to the output buffer; to avoid returning non-deterministic values
-		 * to the caller in this case, initialize in_buf.
+		 * by in_buf, the transfer_field call later will transfer
+		 * garbage to the output buffer; to avoid returning
+		 * non-deterministic values to the caller in this case,
+		 * initialize in_buf.
 		 */
 		memset(in_buf, 0, element_size * decomp->io_count);
 		
@@ -1287,7 +1091,21 @@ int SMIOL_get_var(struct SMIOL_file *file, const char *varname,
 		}
 
 		mpi_start = malloc(sizeof(MPI_Offset) * (size_t)ndims);
+		if (mpi_start == NULL) {
+			free(start);
+			free(count);
+
+			return SMIOL_MALLOC_FAILURE;
+		}
+
 		mpi_count = malloc(sizeof(MPI_Offset) * (size_t)ndims);
+		if (mpi_count == NULL) {
+			free(start);
+			free(count);
+			free(mpi_start);
+
+			return SMIOL_MALLOC_FAILURE;
+		}
 
 		for (j = 0; j < ndims; j++) {
 			mpi_start[j] = (MPI_Offset)start[j];
@@ -1325,7 +1143,9 @@ int SMIOL_get_var(struct SMIOL_file *file, const char *varname,
 	free(count);
 
 	/*
-	 *
+	 * Communicate elements of this field from MPI ranks that read those
+	 * elements to MPI ranks that compute those elements. This only needs to
+	 * be done for decomposed variables.
 	 */
 	if (decomp) {
 		ierr = transfer_field(decomp, SMIOL_IO_TO_COMP,
@@ -1881,6 +1701,214 @@ int SMIOL_free_decomp(struct SMIOL_decomp **decomp)
 	free((*decomp)->io_list);
 	free((*decomp));
 	*decomp = NULL;
+
+	return SMIOL_SUCCESS;
+}
+
+
+/********************************************************************************
+ *
+ * build_start_count
+ *
+ * Constructs start[] and count[] arrays for parallel I/O operations
+ *
+ * Given a pointer to a SMIOL file that was previously opened, the name of
+ * a variable in that file, and a SMIOL decomp, this function returns three
+ * items that may be used when reading or writing the variable in parallel:
+ *
+ * 1) The size of each "element" of the variable, where an element is defined as
+ *    a contiguous memory range associated with the slowest-varying, non-record
+ *    dimension of the variable; for example, a variable
+ *    float foo[nCells][nVertLevels] would have an element size of
+ *    sizeof(float) * nVertLevels if nCells were a decomposed dimension.
+ *
+ * 2) The number of dimensions for the variable, including any unlimited/record
+ *    dimension.
+ *
+ * 3) The start[] and count[] arrays (each with size ndims) to be read or written
+ *    by an MPI rank using the I/O decomposition described in decomp.
+ *
+ * If the decomp argument is NULL, the variable is to be read or written as
+ * a non-decomposed variable; typically, only MPI rank 0 will write
+ * the non-decomposed variable, and all MPI ranks will read the non-decomposed
+ * variable.
+ *
+ * Depending on the value of the write_or_read argument -- either START_COUNT_READ
+ * or START_COUNT_WRITE -- the count[] values will be set so that all ranks will
+ * read the variable, or only rank 0 will write the variable.
+ *
+ ********************************************************************************/
+int build_start_count(struct SMIOL_file *file, const char *varname,
+                      const struct SMIOL_decomp *decomp,
+                      int write_or_read, size_t *element_size, int *ndims,
+                      size_t **start, size_t **count)
+{
+	int i;
+	int ierr;
+	int vartype;
+	char **dimnames;
+	SMIOL_Offset *dimsizes;
+	int has_unlimited_dim = 0;
+
+/* TO DO - define maximum string size, currently assumed to be 64 chars */
+
+	/*
+	 * Figure out type of the variable, as well as its dimensions
+	 */
+	ierr = SMIOL_inquire_var(file, varname, &vartype, ndims, NULL);
+	if (ierr != SMIOL_SUCCESS) {
+		return ierr;
+	}
+
+	dimnames = malloc(sizeof(char *) * (size_t)(*ndims));
+        if (dimnames == NULL) {
+		ierr = SMIOL_MALLOC_FAILURE;
+		return ierr;
+	}
+
+	for (i = 0; i < *ndims; i++) {
+		dimnames[i] = malloc(sizeof(char) * (size_t)64);
+	        if (dimnames[i] == NULL) {
+			int j;
+
+			for (j = 0; j < i; j++) {
+				free(dimnames[j]);
+			}
+			free(dimnames);
+
+			ierr = SMIOL_MALLOC_FAILURE;
+			return ierr;
+		}
+	}
+
+	ierr = SMIOL_inquire_var(file, varname, NULL, NULL, dimnames);
+	if (ierr != SMIOL_SUCCESS) {
+		for (i = 0; i < *ndims; i++) {
+			free(dimnames[i]);
+		}
+		free(dimnames);
+		return ierr;
+	}
+	
+	dimsizes = malloc(sizeof(SMIOL_Offset) * (size_t)(*ndims));
+        if (dimsizes == NULL) {
+		ierr = SMIOL_MALLOC_FAILURE;
+		return ierr;
+	}
+
+	/*
+	 * It is assumed that only the first dimension can be an unlimited
+	 * dimension, so by inquiring about dimensions from last to first, we
+	 * can be guaranteed that has_unlimited_dim will be set correctly at
+	 * the end of the loop over dimensions
+	 */
+	for (i = (*ndims-1); i >= 0; i--) {
+		ierr = SMIOL_inquire_dim(file, dimnames[i], &dimsizes[i],
+		                         &has_unlimited_dim);
+		if (ierr != SMIOL_SUCCESS) {
+			for (i = 0; i < *ndims; i++) {
+				free(dimnames[i]);
+			}
+			free(dimnames);
+			free(dimsizes);
+
+			return ierr;
+		}
+	}
+
+	for (i = 0; i < *ndims; i++) {
+		free(dimnames[i]);
+	}
+	free(dimnames);
+
+	/*
+	 * Set basic size of each element in the field; only necessary if
+	 * the field is decomposed and therefore must be transferred prior to
+	 * writing
+	 */
+	*element_size = 1;
+	if (decomp) {
+		switch (vartype) {
+			case SMIOL_REAL32:
+				*element_size = sizeof(float);
+				break;
+			case SMIOL_REAL64:
+				*element_size = sizeof(double);
+				break;
+			case SMIOL_INT32:
+				*element_size = sizeof(int);
+				break;
+			case SMIOL_CHAR:
+				*element_size = sizeof(char);
+				break;
+		}
+	}
+
+	*start = malloc(sizeof(size_t) * (size_t)(*ndims));
+        if (*start == NULL) {
+		free(dimsizes);
+		ierr = SMIOL_MALLOC_FAILURE;
+		return ierr;
+	}
+
+	*count = malloc(sizeof(size_t) * (size_t)(*ndims));
+        if (*count == NULL) {
+		free(dimsizes);
+		free(start);
+		ierr = SMIOL_MALLOC_FAILURE;
+		return ierr;
+	}
+
+	/*
+	 * Build start/count description of the part of the variable to be
+	 * read or written. Simultaneously, compute the product of all
+	 * non-unlimited, non-decomposed dimension sizes, scaled by the basic
+	 * element size to get the effective size of each element to be read or
+	 * written
+	 */
+	for (i = 0; i < *ndims; i++) {
+		(*start)[i] = (size_t)0;
+		(*count)[i] = (size_t)dimsizes[i];
+
+		/*
+		 * If variable has an unlimited dimension, set start to current
+		 * frame and count to one
+		 */
+		if (has_unlimited_dim && i == 0) {
+			(*start)[i] = (size_t)file->frame;
+			(*count)[i] = (size_t)1;
+		}
+
+		/*
+		 * If variable is decomposed, set the slowest-varying,
+		 * non-record dimension start and count based on values from
+		 * the decomp structure
+		 */
+		if (decomp) {
+			if ((!has_unlimited_dim && i == 0) ||
+			    (has_unlimited_dim && i == 1)) {
+				(*start)[i] = decomp->io_start;
+				(*count)[i] = decomp->io_count;
+			} else {
+				*element_size *= (*count)[i];
+			}
+		} else {
+			*element_size *= (*count)[i];
+		}
+
+		if (write_or_read == START_COUNT_WRITE) {
+			/*
+			 * If the variable is not decomposed, only MPI rank 0
+			 * will have non-zero count values so that all MPI ranks
+			 * do no try to write the same offsets
+			 */
+			if (!decomp && file->context->comm_rank != 0) {
+				(*count)[i] = 0;
+			}
+		}
+	}
+
+	free(dimsizes);
 
 	return SMIOL_SUCCESS;
 }
