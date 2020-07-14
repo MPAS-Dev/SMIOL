@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 #include "smiol.h"
 #include "smiol_utils.h"
 
@@ -3847,6 +3848,7 @@ int test_put_get_vars(FILE *test_log)
 	int errcount;
 	int ierr;
 	size_t i, j;
+	int valid_comm_size;
 	int comm_rank, comm_size;
 	int num_io_tasks, io_stride;
 	size_t n_compute_elements;
@@ -3889,6 +3891,16 @@ int test_put_get_vars(FILE *test_log)
 		return -1;
 	}
 
+	/*
+	 * Some of the tests, below, will only work for specific numbers of MPI
+	 * tasks; determine here whether the number of tasks is appropriate
+	 */
+	if (floor((double)120 / (double)comm_size) == ceil((double)120 / (double)comm_size)) {
+		valid_comm_size = 1;
+	} else {
+		valid_comm_size = 0;
+	}
+
 	strLen = 64;
 	nCells = 120;
 	nTasks = comm_size;
@@ -3902,24 +3914,29 @@ int test_put_get_vars(FILE *test_log)
 		return -1;
 	}
 
-	/* Create a decomp for testing parallel I/O */
-	num_io_tasks = comm_size / 2;
-	num_io_tasks = (num_io_tasks <= 0) ? 1 : num_io_tasks;  /* Always use at least one I/O task */
-	io_stride = 2;
-	n_compute_elements = (size_t)(nCells / comm_size);
-	compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
-	for (i = 0; i < n_compute_elements; i++) {
-		compute_elements[i] = comm_rank * (nCells / comm_size) + (SMIOL_Offset)i;
-	}
-	ierr = SMIOL_create_decomp(context,
-	                           n_compute_elements, compute_elements,
-	                           num_io_tasks, io_stride, &decomp);
-	if (ierr != SMIOL_SUCCESS) {
-		fprintf(test_log, "Failed to create decomp...\n");
-		return -1;
-	}
+	if (valid_comm_size) {
+		/* Create a decomp for testing parallel I/O */
+		num_io_tasks = comm_size / 2;
+		num_io_tasks = (num_io_tasks <= 0) ? 1 : num_io_tasks;  /* Always use at least one I/O task */
+		io_stride = 2;
+		n_compute_elements = (size_t)(nCells / comm_size);
+		compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
+		for (i = 0; i < n_compute_elements; i++) {
+			compute_elements[i] = comm_rank * (nCells / comm_size) + (SMIOL_Offset)i;
+		}
+		ierr = SMIOL_create_decomp(context,
+		                           n_compute_elements, compute_elements,
+		                           num_io_tasks, io_stride, &decomp);
+		if (ierr != SMIOL_SUCCESS) {
+			fprintf(test_log, "Failed to create decomp...\n");
+			return -1;
+		}
 
-	free(compute_elements);
+		free(compute_elements);
+	} else {
+		n_compute_elements = 0;
+		decomp = NULL;
+	}
 
 	/* Create a second decomp in which each task owns just one element */
 	compute_element = comm_rank;
@@ -4128,14 +4145,16 @@ int test_put_get_vars(FILE *test_log)
 		errcount++;
 	}
 
-	/* Write frame 0 of a decomposed variable with a record dimension */
-	fprintf(test_log, "Write frame 0 of a decomposed variable with a record dimension: ");
-	ierr = SMIOL_put_var(file, "foo", decomp, foo);
-	if (ierr == SMIOL_SUCCESS) {
-		fprintf(test_log, "PASS\n");
-	} else {
-		fprintf(test_log, "FAIL - (%s)\n", SMIOL_error_string(ierr));
-		errcount++;
+	if (valid_comm_size) {
+		/* Write frame 0 of a decomposed variable with a record dimension */
+		fprintf(test_log, "Write frame 0 of a decomposed variable with a record dimension: ");
+		ierr = SMIOL_put_var(file, "foo", decomp, foo);
+		if (ierr == SMIOL_SUCCESS) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - (%s)\n", SMIOL_error_string(ierr));
+			errcount++;
+		}
 	}
 
 	/* Write frame 0 of a non-decomposed variable with a record dimension */
@@ -4175,14 +4194,16 @@ int test_put_get_vars(FILE *test_log)
 	pbl_mask[2] = 1;
 	pbl_mask[3] = 1;
 
-	/* Write frame 1 of a decomposed variable with a record dimension */
-	fprintf(test_log, "Write frame 1 of a decomposed variable with a record dimension: ");
-	ierr = SMIOL_put_var(file, "foo", decomp, foo);
-	if (ierr == SMIOL_SUCCESS) {
-		fprintf(test_log, "PASS\n");
-	} else {
-		fprintf(test_log, "FAIL - (%s)\n", SMIOL_error_string(ierr));
-		errcount++;
+	if (valid_comm_size) {
+		/* Write frame 1 of a decomposed variable with a record dimension */
+		fprintf(test_log, "Write frame 1 of a decomposed variable with a record dimension: ");
+		ierr = SMIOL_put_var(file, "foo", decomp, foo);
+		if (ierr == SMIOL_SUCCESS) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - (%s)\n", SMIOL_error_string(ierr));
+			errcount++;
+		}
 	}
 
 	/* Write frame 1 of a non-decomposed variable with a record dimension */
@@ -4222,14 +4243,16 @@ int test_put_get_vars(FILE *test_log)
 	pbl_mask[5] = 1;
 	pbl_mask[6] = 1;
 
-	/* Write frame 2 of a decomposed variable with a record dimension */
-	fprintf(test_log, "Write frame 2 of a decomposed variable with a record dimension: ");
-	ierr = SMIOL_put_var(file, "foo", decomp, foo);
-	if (ierr == SMIOL_SUCCESS) {
-		fprintf(test_log, "PASS\n");
-	} else {
-		fprintf(test_log, "FAIL - (%s)\n", SMIOL_error_string(ierr));
-		errcount++;
+	if (valid_comm_size) {
+		/* Write frame 2 of a decomposed variable with a record dimension */
+		fprintf(test_log, "Write frame 2 of a decomposed variable with a record dimension: ");
+		ierr = SMIOL_put_var(file, "foo", decomp, foo);
+		if (ierr == SMIOL_SUCCESS) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - (%s)\n", SMIOL_error_string(ierr));
+			errcount++;
+		}
 	}
 
 	/* Write frame 2 of a non-decomposed variable with a record dimension */
@@ -4271,28 +4294,37 @@ int test_put_get_vars(FILE *test_log)
 		return -1;
 	}
 
+	if (!valid_comm_size) {
+		fprintf(test_log, "<<< Some tests that require the number of MPI tasks to divide 120 were not run >>>\n");
+	}
+
 
 	/*****     Begin tests for SMIOL_get_var     *****/
 
 
-	/* Create a decomp for testing parallel I/O */
-	num_io_tasks = comm_size / 2;
-	num_io_tasks = (num_io_tasks <= 0) ? 1 : num_io_tasks;  /* Always use at least one I/O task */
-	io_stride = 2;
-	n_compute_elements = (size_t)(nCells / comm_size);
-	compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
-	for (i = 0; i < n_compute_elements; i++) {
-		compute_elements[i] = comm_rank + comm_size * (SMIOL_Offset)i;
-	}
-	ierr = SMIOL_create_decomp(context,
-	                           n_compute_elements, compute_elements,
-	                           num_io_tasks, io_stride, &decomp);
-	if (ierr != SMIOL_SUCCESS) {
-		fprintf(test_log, "Failed to create decomp...\n");
-		return -1;
-	}
+	if (valid_comm_size) {
+		/* Create a decomp for testing parallel I/O */
+		num_io_tasks = comm_size / 2;
+		num_io_tasks = (num_io_tasks <= 0) ? 1 : num_io_tasks;  /* Always use at least one I/O task */
+		io_stride = 2;
+		n_compute_elements = (size_t)(nCells / comm_size);
+		compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
+		for (i = 0; i < n_compute_elements; i++) {
+			compute_elements[i] = comm_rank + comm_size * (SMIOL_Offset)i;
+		}
+		ierr = SMIOL_create_decomp(context,
+		                           n_compute_elements, compute_elements,
+		                           num_io_tasks, io_stride, &decomp);
+		if (ierr != SMIOL_SUCCESS) {
+			fprintf(test_log, "Failed to create decomp...\n");
+			return -1;
+		}
 
-	free(compute_elements);
+		free(compute_elements);
+	} else {
+		n_compute_elements = 0;
+		decomp = NULL;
+	}
 
 	/* Allocate a variable decomposed by decomp */
 	foo = malloc(sizeof(float) * n_compute_elements * (size_t)nVertLevels);
@@ -4431,32 +4463,34 @@ int test_put_get_vars(FILE *test_log)
 		errcount++;
 	}
 
-	/* Read frame 0 of a decomposed variable with a record dimension */
-	fprintf(test_log, "Read frame 0 of a decomposed variable with a record dimension: ");
-	memset((void *)foo, 0, sizeof(float) * n_compute_elements * (size_t)nVertLevels);
-	ierr = SMIOL_get_var(file, "foo", decomp, foo);
-	if (ierr == SMIOL_SUCCESS) {
-		/* Set validation array */
+	if (valid_comm_size) {
+		/* Read frame 0 of a decomposed variable with a record dimension */
+		fprintf(test_log, "Read frame 0 of a decomposed variable with a record dimension: ");
+		memset((void *)foo, 0, sizeof(float) * n_compute_elements * (size_t)nVertLevels);
+		ierr = SMIOL_get_var(file, "foo", decomp, foo);
+		if (ierr == SMIOL_SUCCESS) {
+			/* Set validation array */
 #ifdef SMIOL_PNETCDF
-		for (i = 0; i < n_compute_elements; i++) {
-			for (j = 0; j < (size_t)nVertLevels; j++) {
-				foo_valid[i*(size_t)nVertLevels + j] = (float)((size_t)(comm_rank) + (size_t)comm_size * i + j);
+			for (i = 0; i < n_compute_elements; i++) {
+				for (j = 0; j < (size_t)nVertLevels; j++) {
+					foo_valid[i*(size_t)nVertLevels + j] = (float)((size_t)(comm_rank) + (size_t)comm_size * i + j);
+				}
 			}
-		}
 #else
-		memset((void *)foo_valid, 0, sizeof(float) * n_compute_elements * (size_t)nVertLevels);
+			memset((void *)foo_valid, 0, sizeof(float) * n_compute_elements * (size_t)nVertLevels);
 #endif
 
-		/* Check correctness of read data */
-		if (memcmp(foo, foo_valid, sizeof(float) * n_compute_elements * (size_t)nVertLevels) == 0) {
-			fprintf(test_log, "PASS\n");
+			/* Check correctness of read data */
+			if (memcmp(foo, foo_valid, sizeof(float) * n_compute_elements * (size_t)nVertLevels) == 0) {
+				fprintf(test_log, "PASS\n");
+			} else {
+				fprintf(test_log, "FAIL - values read from the file are not correct\n");
+				errcount++;
+			}
 		} else {
-			fprintf(test_log, "FAIL - values read from the file are not correct\n");
+			fprintf(test_log, "FAIL - (%s)\n", SMIOL_error_string(ierr));
 			errcount++;
 		}
-	} else {
-		fprintf(test_log, "FAIL - (%s)\n", SMIOL_error_string(ierr));
-		errcount++;
 	}
 
 	/* Read frame 0 of a non-decomposed variable with a record dimension */
@@ -4516,30 +4550,32 @@ int test_put_get_vars(FILE *test_log)
 		return -1;
 	}
 
-	/* Read frame 1 of a decomposed variable with a record dimension */
-	fprintf(test_log, "Read frame 1 of a decomposed variable with a record dimension: ");
-	memset((void *)foo, 0, sizeof(float) * n_compute_elements * (size_t)nVertLevels);
-	ierr = SMIOL_get_var(file, "foo", decomp, foo);
-	if (ierr == SMIOL_SUCCESS) {
-		/* Update validation array from previous frame */
+	if (valid_comm_size) {
+		/* Read frame 1 of a decomposed variable with a record dimension */
+		fprintf(test_log, "Read frame 1 of a decomposed variable with a record dimension: ");
+		memset((void *)foo, 0, sizeof(float) * n_compute_elements * (size_t)nVertLevels);
+		ierr = SMIOL_get_var(file, "foo", decomp, foo);
+		if (ierr == SMIOL_SUCCESS) {
+			/* Update validation array from previous frame */
 #ifdef SMIOL_PNETCDF
-		for (i = 0; i < n_compute_elements; i++) {
-			for (j = 0; j < (size_t)nVertLevels; j++) {
-				foo_valid[i*(size_t)nVertLevels + j] *= (float)10.0;
+			for (i = 0; i < n_compute_elements; i++) {
+				for (j = 0; j < (size_t)nVertLevels; j++) {
+					foo_valid[i*(size_t)nVertLevels + j] *= (float)10.0;
+				}
 			}
-		}
 #endif
 
-		/* Check correctness of read data */
-		if (memcmp(foo, foo_valid, sizeof(float) * n_compute_elements * (size_t)nVertLevels) == 0) {
-			fprintf(test_log, "PASS\n");
+			/* Check correctness of read data */
+			if (memcmp(foo, foo_valid, sizeof(float) * n_compute_elements * (size_t)nVertLevels) == 0) {
+				fprintf(test_log, "PASS\n");
+			} else {
+				fprintf(test_log, "FAIL - values read from the file are not correct\n");
+				errcount++;
+			}
 		} else {
-			fprintf(test_log, "FAIL - values read from the file are not correct\n");
+			fprintf(test_log, "FAIL - (%s)\n", SMIOL_error_string(ierr));
 			errcount++;
 		}
-	} else {
-		fprintf(test_log, "FAIL - (%s)\n", SMIOL_error_string(ierr));
-		errcount++;
 	}
 
 	/* Read frame 1 of a non-decomposed variable with a record dimension */
@@ -4594,30 +4630,32 @@ int test_put_get_vars(FILE *test_log)
 		return -1;
 	}
 
-	/* Read frame 2 of a decomposed variable with a record dimension */
-	fprintf(test_log, "Read frame 2 of a decomposed variable with a record dimension: ");
-	memset((void *)foo, 0, sizeof(float) * n_compute_elements * (size_t)nVertLevels);
-	ierr = SMIOL_get_var(file, "foo", decomp, foo);
-	if (ierr == SMIOL_SUCCESS) {
-		/* Update validation array from previous frame */
+	if (valid_comm_size) {
+		/* Read frame 2 of a decomposed variable with a record dimension */
+		fprintf(test_log, "Read frame 2 of a decomposed variable with a record dimension: ");
+		memset((void *)foo, 0, sizeof(float) * n_compute_elements * (size_t)nVertLevels);
+		ierr = SMIOL_get_var(file, "foo", decomp, foo);
+		if (ierr == SMIOL_SUCCESS) {
+			/* Update validation array from previous frame */
 #ifdef SMIOL_PNETCDF
-		for (i = 0; i < n_compute_elements; i++) {
-			for (j = 0; j < (size_t)nVertLevels; j++) {
-				foo_valid[i*(size_t)nVertLevels + j] *= (float)-1.0;
+			for (i = 0; i < n_compute_elements; i++) {
+				for (j = 0; j < (size_t)nVertLevels; j++) {
+					foo_valid[i*(size_t)nVertLevels + j] *= (float)-1.0;
+				}
 			}
-		}
 #endif
 
-		/* Check correctness of read data */
-		if (memcmp(foo, foo_valid, sizeof(float) * n_compute_elements * (size_t)nVertLevels) == 0) {
-			fprintf(test_log, "PASS\n");
+			/* Check correctness of read data */
+			if (memcmp(foo, foo_valid, sizeof(float) * n_compute_elements * (size_t)nVertLevels) == 0) {
+				fprintf(test_log, "PASS\n");
+			} else {
+				fprintf(test_log, "FAIL - values read from the file are not correct\n");
+				errcount++;
+			}
 		} else {
-			fprintf(test_log, "FAIL - values read from the file are not correct\n");
+			fprintf(test_log, "FAIL - (%s)\n", SMIOL_error_string(ierr));
 			errcount++;
 		}
-	} else {
-		fprintf(test_log, "FAIL - (%s)\n", SMIOL_error_string(ierr));
-		errcount++;
 	}
 
 	/* Read frame 2 of a non-decomposed variable with a record dimension */
@@ -4680,6 +4718,10 @@ int test_put_get_vars(FILE *test_log)
 	if (ierr != SMIOL_SUCCESS || file != NULL) {
 		fprintf(test_log, "Failed to close SMIOL file...\n");
 		return -1;
+	}
+
+	if (!valid_comm_size) {
+		fprintf(test_log, "<<< Some tests that require the number of MPI tasks to divide 120 were not run >>>\n");
 	}
 
 	ierr = SMIOL_free_decomp(&decomp);
