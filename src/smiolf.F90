@@ -558,7 +558,7 @@ contains
     !-----------------------------------------------------------------------
     integer function SMIOLf_define_var(file, varname, vartype, ndims, dimnames) result(ierr)
 
-        use iso_c_binding, only : c_int, c_char, c_null_char, c_ptr, c_loc
+        use iso_c_binding, only : c_int, c_char, c_null_char, c_ptr, c_loc, c_null_ptr
 
         implicit none
 
@@ -573,6 +573,7 @@ contains
         integer(kind=c_int) :: c_vartype
         integer(kind=c_int) :: c_ndims
 
+        type (c_ptr) :: c_dimnames_ptr
         type (c_ptr), dimension(:), allocatable, target :: c_dimnames
 
         integer :: i, j
@@ -637,7 +638,13 @@ contains
             c_dimnames(j) = c_loc(strings(j) % str)
         end do
 
-        ierr = SMIOL_define_var(c_file, c_varname, c_vartype, c_ndims, c_loc(c_dimnames))
+        if (ndims > 0) then
+            c_dimnames_ptr = c_loc(c_dimnames)
+        else
+            c_dimnames_ptr = c_null_ptr
+        end if
+
+        ierr = SMIOL_define_var(c_file, c_varname, c_vartype, c_ndims, c_dimnames_ptr)
 
         do j=1,ndims
             deallocate(strings(j) % str)
