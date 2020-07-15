@@ -1830,7 +1830,11 @@ contains
 
         ! Get C pointers to Fortran types
         c_context = c_loc(context)
-        c_compute_elements = c_loc(compute_elements)
+        if (size(compute_elements) > 0) then
+            c_compute_elements = c_loc(compute_elements)
+        else
+            c_compute_elements = c_null_ptr
+        end if
 
         c_decomp = c_null_ptr
 
