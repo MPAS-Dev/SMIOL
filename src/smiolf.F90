@@ -270,7 +270,7 @@ contains
     !-----------------------------------------------------------------------
     integer function SMIOLf_open_file(context, filename, mode, file) result(ierr)
 
-        use iso_c_binding, only : c_loc, c_ptr, c_null_ptr, c_char, c_null_char, c_associated, c_f_pointer
+        use iso_c_binding, only : c_loc, c_ptr, c_null_ptr, c_char, c_associated, c_f_pointer
 
         implicit none
 
@@ -400,7 +400,7 @@ contains
     !-----------------------------------------------------------------------
     integer function SMIOLf_define_dim(file, dimname, dimsize) result(ierr)
 
-        use iso_c_binding, only : c_char, c_null_char, c_loc, c_ptr, c_null_ptr, c_associated
+        use iso_c_binding, only : c_char, c_loc, c_ptr
 
         implicit none
 
@@ -461,7 +461,7 @@ contains
     !-----------------------------------------------------------------------
     integer function SMIOLf_inquire_dim(file, dimname, dimsize, is_unlimited) result(ierr)
 
-        use iso_c_binding, only : c_char, c_null_char, c_loc, c_ptr, c_null_ptr, c_associated
+        use iso_c_binding, only : c_char, c_loc, c_ptr, c_null_ptr
 
         implicit none
 
