@@ -1010,10 +1010,10 @@ int SMIOL_put_var(struct SMIOL_file *file, const char *varname,
 		}
 
 		ierr = ncmpi_put_vara_all(file->ncidp,
-                                          varidp,
-                                          mpi_start, mpi_count,
-                                          buf_p,
-                                          0, MPI_DATATYPE_NULL);
+		                          varidp,
+		                          mpi_start, mpi_count,
+		                          buf_p,
+		                          0, MPI_DATATYPE_NULL);
 
 		free(mpi_start);
 		free(mpi_count);
