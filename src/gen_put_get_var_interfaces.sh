@@ -279,7 +279,7 @@ do
 done
 
 # Real - 0D - 1D - 2D - 3D - 4D - 5D - 6D
-for d in 0 1 2 3 5 6
+for d in 0 1 2 3 4 5 6
 do
     generate_put_get_var_interface "real32" "real" $d "c_float" "put" >> $put_var_interfaceBodyFile
     generate_interface_block_entry "put" "real32" $d >> $put_var_interfaceHeaderFile
@@ -289,7 +289,7 @@ do
 done
 
 # Double - 0D - 1D - 2D - 3D - 4D - 5D - 6D
-for d in 0 1 2 3 5 6
+for d in 0 1 2 3 4 5 6
 do
     generate_put_get_var_interface "real64" "real" $d "c_double" "put" >> $put_var_interfaceBodyFile
     generate_interface_block_entry "put" "real64" $d >> $put_var_interfaceHeaderFile
