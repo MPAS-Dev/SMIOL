@@ -2,7 +2,7 @@
 
 program smiol_runner
 
-    use iso_c_binding, only : c_size_t
+    use iso_c_binding, only : c_size_t, c_float
     use SMIOLf
     use mpi
 
@@ -24,6 +24,7 @@ program smiol_runner
     integer(kind=SMIOL_offset_kind) :: dimsize
     integer :: ndims
     character(len=32) :: tempstr
+    real(kind=c_float), dimension(:), pointer :: real32_buf
 
     call MPI_Init(ierr)
     if (ierr /= MPI_SUCCESS) then
@@ -271,18 +272,21 @@ program smiol_runner
     endif
 #endif
 
-    if (SMIOLf_close_file(file) /= SMIOL_SUCCESS) then
-        write(test_log,'(a)') "ERROR: 'SMIOLf_close_file' was not called successfully"
-        stop 1
-    endif
-
-    if (SMIOLf_put_var() /= SMIOL_SUCCESS) then
+    allocate(real32_buf(40962))
+    real32_buf(:) = 0.0
+    if (SMIOLf_put_var(file, 'theta', decomp, real32_buf) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_put_var' was not called successfully"
         stop 1
     endif
 
-    if (SMIOLf_get_var() /= SMIOL_SUCCESS) then
+    if (SMIOLf_get_var(file, 'theta', decomp, real32_buf) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_get_var' was not called successfully"
+        stop 1
+    endif
+    deallocate(real32_buf)
+
+    if (SMIOLf_close_file(file) /= SMIOL_SUCCESS) then
+        write(test_log,'(a)') "ERROR: 'SMIOLf_close_file' was not called successfully"
         stop 1
     endif
 
