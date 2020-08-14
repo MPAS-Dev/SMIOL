@@ -232,8 +232,8 @@ program smiol_runner
         stop 1
     endif
 
-    dimnames(1) = 'Time'
-    dimnames(2) = 'nCells'
+    dimnames(1) = 'nCells'
+    dimnames(2) = 'Time'
     if (SMIOLf_define_var(file, 'theta', SMIOL_REAL32, 2, dimnames) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_define_var' was not called successfully"
         stop 1
@@ -1376,8 +1376,8 @@ contains
 
         ! Define a 32-bit real variable with one non-record dimension and a record dimension
         write(test_log,'(a)',advance='no') 'Define a 32-bit real variable with one non-record dimension and a record dimension: '
-        dimnames(1) = 'Time'
-        dimnames(2) = 'nCells'
+        dimnames(1) = 'nCells'
+        dimnames(2) = 'Time'
         ierr = SMIOLf_define_var(file, 'r1_t', SMIOL_REAL32, 2, dimnames)
         if (ierr == SMIOL_SUCCESS) then
             write(test_log,'(a)') 'PASS'
@@ -1391,11 +1391,11 @@ contains
 
         ! Define a 32-bit real variable with five dimensions, none of which is a record dimension
         write(test_log,'(a)',advance='no') 'Define a 32-bit real variable with five non-record dimension: '
-        dimnames(1) = 'nCells'
-        dimnames(2) = 'nVertLevels'
+        dimnames(1) = 'nMonths'
+        dimnames(2) = 'TWO'
         dimnames(3) = 'maxEdges'
-        dimnames(4) = 'TWO'
-        dimnames(5) = 'nMonths'
+        dimnames(4) = 'nVertLevels'
+        dimnames(5) = 'nCells'
         ierr = SMIOLf_define_var(file, 'r5', SMIOL_REAL32, 5, dimnames)
         if (ierr == SMIOL_SUCCESS) then
             write(test_log,'(a)') 'PASS'
@@ -1409,12 +1409,12 @@ contains
 
         ! Define a 32-bit real variable with five non-record dimensions and a record dimension
         write(test_log,'(a)',advance='no') 'Define a 32-bit real variable with five non-record dimension and a record dimension: '
-        dimnames(1) = 'Time'
-        dimnames(2) = 'nCells'
-        dimnames(3) = 'nVertLevels'
-        dimnames(4) = 'maxEdges'
-        dimnames(5) = 'TWO'
-        dimnames(6) = 'nMonths'
+        dimnames(1) = 'nMonths'
+        dimnames(2) = 'TWO'
+        dimnames(3) = 'maxEdges'
+        dimnames(4) = 'nVertLevels'
+        dimnames(5) = 'nCells'
+        dimnames(6) = 'Time'
         ierr = SMIOLf_define_var(file, 'r5_t', SMIOL_REAL32, 6, dimnames)
         if (ierr == SMIOL_SUCCESS) then
             write(test_log,'(a)') 'PASS'
@@ -1428,12 +1428,12 @@ contains
 
         ! Define a 64-bit real variable with five non-record dimension and a record dimension
         write(test_log,'(a)',advance='no') 'Define a 64-bit real variable with five non-record dimension and a record dimension: '
-        dimnames(1) = 'Time'
-        dimnames(2) = 'nCells'
-        dimnames(3) = 'nVertLevels'
-        dimnames(4) = 'maxEdges'
-        dimnames(5) = 'TWO'
-        dimnames(6) = 'nMonths'
+        dimnames(1) = 'nMonths'
+        dimnames(2) = 'TWO'
+        dimnames(3) = 'maxEdges'
+        dimnames(4) = 'nVertLevels'
+        dimnames(5) = 'nCells'
+        dimnames(6) = 'Time'
         ierr = SMIOLf_define_var(file, 'd5_t', SMIOL_REAL64, 6, dimnames)
         if (ierr == SMIOL_SUCCESS) then
             write(test_log,'(a)') 'PASS'
@@ -1447,12 +1447,12 @@ contains
 
         ! Define a 32-bit int variable with five non-record dimension and a record dimension
         write(test_log,'(a)',advance='no') 'Define a 32-bit int variable with five non-record dimension and a record dimension: '
-        dimnames(1) = 'Time'
-        dimnames(2) = 'nCells'
-        dimnames(3) = 'nVertLevels'
-        dimnames(4) = 'maxEdges'
-        dimnames(5) = 'TWO'
-        dimnames(6) = 'nMonths'
+        dimnames(1) = 'nMonths'
+        dimnames(2) = 'TWO'
+        dimnames(3) = 'maxEdges'
+        dimnames(4) = 'nVertLevels'
+        dimnames(5) = 'nCells'
+        dimnames(6) = 'Time'
         ierr = SMIOLf_define_var(file, 'i5_t', SMIOL_INT32, 6, dimnames)
         if (ierr == SMIOL_SUCCESS) then
             write(test_log,'(a)') 'PASS'
@@ -1466,8 +1466,8 @@ contains
 
         ! Define a char variable with one non-record dimension and a record dimension
         write(test_log,'(a)',advance='no') 'Define a character variable with one non-record dimension and a record dimension: '
-        dimnames(1) = 'Time'
-        dimnames(2) = 'StrLen'
+        dimnames(1) = 'StrLen'
+        dimnames(2) = 'Time'
         ierr = SMIOLf_define_var(file, 'c1_t', SMIOL_CHAR, 2, dimnames)
         if (ierr == SMIOL_SUCCESS) then
             write(test_log,'(a)') 'PASS'
@@ -1482,8 +1482,8 @@ contains
 #ifdef SMIOL_PNETCDF
         ! Try to re-define a variable that already exists
         write(test_log,'(a)',advance='no') 'Try to re-define a variable that already exists: '
-        dimnames(1) = 'Time'
-        dimnames(2) = 'nCells'
+        dimnames(1) = 'nCells'
+        dimnames(2) = 'Time'
         ierr = SMIOLf_define_var(file, 'c1_t', SMIOL_CHAR, 2, dimnames)
         if (ierr == SMIOL_LIBRARY_ERROR) then
             write(test_log,'(a)') 'PASS ('//trim(SMIOLf_lib_error_string(context))//')'
@@ -1497,9 +1497,9 @@ contains
 
         ! Try to define a variable with an undefined dimension
         write(test_log,'(a)',advance='no') 'Try to define a variable with an undefined dimension: '
-        dimnames(1) = 'Time'
+        dimnames(1) = 'nVertLevels'
         dimnames(2) = 'foobar'
-        dimnames(3) = 'nVertLevels'
+        dimnames(3) = 'Time'
         ierr = SMIOLf_define_var(file, 'should_not_exist', SMIOL_INT32, 3, dimnames)
         if (ierr == SMIOL_LIBRARY_ERROR) then
             write(test_log,'(a)') 'PASS ('//trim(SMIOLf_lib_error_string(context))//')'
@@ -1513,9 +1513,9 @@ contains
 
         ! Try to define a variable with an invalid type
         write(test_log,'(a)',advance='no') 'Try to define a variable with an invalid type: '
-        dimnames(1) = 'Time'
+        dimnames(1) = 'nVertLevels'
         dimnames(2) = 'nCells'
-        dimnames(3) = 'nVertLevels'
+        dimnames(3) = 'Time'
         ierr = SMIOLf_define_var(file, 'should_not_exist', &
                                  not(ior(SMIOL_REAL32, ior(SMIOL_REAL64, ior(SMIOL_INT32, SMIOL_CHAR)))), &
                                  3, dimnames)
@@ -1588,8 +1588,8 @@ contains
         dimnames_out(2) = '---------'
         ierr = SMIOLf_inquire_var(file, 'r1_t', dimnames=dimnames_out)
         if (ierr == SMIOL_SUCCESS .and. &
-            trim(dimnames_out(1)) == 'Time' .and. &
-            trim(dimnames_out(2)) == 'nCells') then
+            trim(dimnames_out(1)) == 'nCells' .and. &
+            trim(dimnames_out(2)) == 'Time') then
             write(test_log,'(a)') 'PASS'
         else if (ierr == SMIOL_SUCCESS) then
             write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was returned, but the dimension names were wrong'
@@ -1615,8 +1615,8 @@ contains
         if (ierr == SMIOL_SUCCESS .and. &
             ndims_out == 2 .and. &
             vartype_out == SMIOL_CHAR .and. &
-            trim(dimnames_out(1)) == 'Time' .and. &
-            trim(dimnames_out(2)) == 'StrLen') then
+            trim(dimnames_out(1)) == 'StrLen' .and. &
+            trim(dimnames_out(2)) == 'Time') then
             write(test_log,'(a)') 'PASS'
         else if (ierr == SMIOL_SUCCESS) then
             write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was returned, but one or more properties were wrong'
@@ -1743,8 +1743,8 @@ contains
         end if
 
         ! Define a 32-bit real variable with one non-record dimension and a record dimension
-        dimnames(1) = 'Time'
-        dimnames(2) = 'nCells'
+        dimnames(1) = 'nCells'
+        dimnames(2) = 'Time'
         if (SMIOLf_define_var(file, 'surface_pressure', SMIOL_REAL32, 2, dimnames) /= SMIOL_SUCCESS) then
             write(test_log,'(a)') 'Failed to create variable surface_pressure...'
             ierrcount = -1
@@ -2461,8 +2461,8 @@ contains
         end if
 
         ! Integer 1d
-        dimnames(1) = 'Time'
-        dimnames(2) = 'strlen'
+        dimnames(1) = 'strlen'
+        dimnames(2) = 'Time'
         if (SMIOLf_define_var(file, 'xtime', SMIOL_CHAR, 2, dimnames) /= SMIOL_SUCCESS) then
             write(test_log,'(a)') 'Failed to create xtime var...'
             ierrcount = -1
@@ -2478,8 +2478,8 @@ contains
         endif
 
         ! Real 2d
-        dimnames(1) = 'nCells'
-        dimnames(2) = 'nVertLevels'
+        dimnames(1) = 'nVertLevels'
+        dimnames(2) = 'nCells'
         if (SMIOLf_define_var(file, 'r_2d', SMIOL_REAL32, 2, dimnames) /= SMIOL_SUCCESS) then
             write(test_log,'(a)') 'Failed to create r_2d var...'
             ierrcount = -1
@@ -2487,9 +2487,9 @@ contains
         endif
 
         ! Double 3d
-        dimnames(1) = 'nCells'
+        dimnames(1) = 'nMonths'
         dimnames(2) = 'nVertLevels'
-        dimnames(3) = 'nMonths'
+        dimnames(3) = 'nCells'
         if (SMIOLf_define_var(file, 'd_3d', SMIOL_REAL64, 3, dimnames) /= SMIOL_SUCCESS) then
             write(test_log,'(a)') 'Failed to create r_3d var...'
             ierrcount = -1
