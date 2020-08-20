@@ -93,6 +93,58 @@ module SMIOLf
         module procedure SMIOLf_inquire_att_text
     end interface
 
+    !
+    ! Note: The implementations of the specific SMIOLf_put_var routines
+    !       are found in the file smiolf_put_get_var.inc, which is included
+    !       in this module with a pre-processor directive
+    !
+    interface SMIOLf_put_var
+        module procedure SMIOLf_put_var_0d_char
+        module procedure SMIOLf_put_var_0d_int32
+        module procedure SMIOLf_put_var_0d_real32
+        module procedure SMIOLf_put_var_0d_real64
+        module procedure SMIOLf_put_var_1d_int32
+        module procedure SMIOLf_put_var_1d_real32
+        module procedure SMIOLf_put_var_1d_real64
+        module procedure SMIOLf_put_var_2d_int32
+        module procedure SMIOLf_put_var_2d_real32
+        module procedure SMIOLf_put_var_2d_real64
+        module procedure SMIOLf_put_var_3d_int32
+        module procedure SMIOLf_put_var_3d_real32
+        module procedure SMIOLf_put_var_3d_real64
+        module procedure SMIOLf_put_var_4d_int32
+        module procedure SMIOLf_put_var_4d_real32
+        module procedure SMIOLf_put_var_4d_real64
+        module procedure SMIOLf_put_var_5d_real32
+        module procedure SMIOLf_put_var_5d_real64
+    end interface SMIOLf_put_var
+
+    !
+    ! Note: The implementations of the specific SMIOLf_get_var routines
+    !       are found in the file smiolf_put_get_var.inc, which is included
+    !       in this module with a pre-processor directive
+    !
+    interface SMIOLf_get_var
+        module procedure SMIOLf_get_var_0d_char
+        module procedure SMIOLf_get_var_0d_int32
+        module procedure SMIOLf_get_var_0d_real32
+        module procedure SMIOLf_get_var_0d_real64
+        module procedure SMIOLf_get_var_1d_int32
+        module procedure SMIOLf_get_var_1d_real32
+        module procedure SMIOLf_get_var_1d_real64
+        module procedure SMIOLf_get_var_2d_int32
+        module procedure SMIOLf_get_var_2d_real32
+        module procedure SMIOLf_get_var_2d_real64
+        module procedure SMIOLf_get_var_3d_int32
+        module procedure SMIOLf_get_var_3d_real32
+        module procedure SMIOLf_get_var_3d_real64
+        module procedure SMIOLf_get_var_4d_int32
+        module procedure SMIOLf_get_var_4d_real32
+        module procedure SMIOLf_get_var_4d_real64
+        module procedure SMIOLf_get_var_5d_real32
+        module procedure SMIOLf_get_var_5d_real64
+    end interface SMIOLf_get_var
+
     ! C interface definitions used in multiple routines
     interface
         function SMIOL_define_att(file, varname, att_name, att_type, att) result(ierr) bind(C, name='SMIOL_define_att')
@@ -114,6 +166,24 @@ module SMIOLf
             type (c_ptr), value :: att_len
             type (c_ptr), value :: att
             integer(kind=c_int) :: ierr
+        end function
+
+        function SMIOL_put_var(file, varname, decomp, buf) result(ierr) bind(C, name='SMIOL_put_var')
+             use iso_c_binding, only : c_ptr, c_char, c_int
+             type (c_ptr), value :: file
+             character (kind=c_char), dimension(*) :: varname
+             type (c_ptr), value :: decomp
+             type (c_ptr), value :: buf
+             integer (kind=c_int) :: ierr
+        end function
+
+        function SMIOL_get_var(file, varname, decomp, buf) result(ierr) bind(C, name='SMIOL_get_var')
+             use iso_c_binding, only : c_ptr, c_char, c_int
+             type (c_ptr), value :: file
+             character (kind=c_char), dimension(*) :: varname
+             type (c_ptr), value :: decomp
+             type (c_ptr), value :: buf
+             integer (kind=c_int) :: ierr
         end function
     end interface
 
@@ -813,38 +883,7 @@ contains
     end function SMIOLf_inquire_var
 
 
-    !-----------------------------------------------------------------------
-    !  routine SMIOLf_put_var
-    !
-    !> \brief Writes a variable to a file
-    !> \details
-    !>  Detailed description of what this routine does.
-    !
-    !-----------------------------------------------------------------------
-    integer function SMIOLf_put_var() result(ierr)
-
-        implicit none
-
-        ierr = 0
-
-    end function SMIOLf_put_var
-
-
-    !-----------------------------------------------------------------------
-    !  routine SMIOLf_get_var
-    !
-    !> \brief Reads a variable from a file
-    !> \details
-    !>  Detailed description of what this routine does.
-    !
-    !-----------------------------------------------------------------------
-    integer function SMIOLf_get_var() result(ierr)
-
-        implicit none
-
-        ierr = 0
-
-    end function SMIOLf_get_var
+#include "smiolf_put_get_var.inc"
 
 
     !
