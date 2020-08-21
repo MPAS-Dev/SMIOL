@@ -622,6 +622,11 @@ contains
     !>  are expected to be null-terminated strings, except if the variable has
     !>  zero dimensions, in which case the dimnames argument is ignored.
     !>
+    !>  Unlike the C SMIOL_define_var function, this routine assumes that
+    !>  dimnames provides the dimension names in their natural Fortran order,
+    !>  with the fastest-varying dimension given first and any unlimited
+    !>  dimension given last.
+    !>
     !>  Upon successful completion, SMIOL_SUCCESS is returned; otherwise, an error
     !>  code is returned.
     !
@@ -693,16 +698,16 @@ contains
         c_ndims = ndims
 
         !
-        ! Convert dimnames
+        ! Convert dimnames, reversing their order
         !
         allocate(c_dimnames(ndims))
         allocate(strings(ndims))
 
         do j=1,ndims
-            allocate(strings(j) % str(len_trim(dimnames(j))+1))
+            allocate(strings(j) % str(len_trim(dimnames(ndims-j+1))+1))
 
-            do i=1,len_trim(dimnames(j))
-                strings(j) % str(i) = dimnames(j)(i:i)
+            do i=1,len_trim(dimnames(ndims-j+1))
+                strings(j) % str(i) = dimnames(ndims-j+1)(i:i)
             end do
             strings(j) % str(i) = c_null_char
             c_dimnames(j) = c_loc(strings(j) % str)
@@ -741,6 +746,10 @@ contains
     !>  least the number of dimensions in the variable, and each character string
     !>  in the dimnames array must be large enough to accommodate the corresponding
     !>  dimension name.
+    !>
+    !>  Unlike the C SMIOL_inquire_var function, this routine returns the list of
+    !>  dimension names in its natural Fortran order, with the fastest-varying
+    !>  dimension given first and any unlimited dimension given last.
     !
     !-----------------------------------------------------------------------
     integer function SMIOLf_inquire_var(file, varname, vartype, ndims, dimnames) result(ierr)
@@ -765,7 +774,7 @@ contains
         type (c_ptr) :: c_ndims_ptr
         type (c_ptr) :: c_dimnames_ptr
 
-        integer :: i, j
+        integer :: i, j, ndims_in
 
         ! C interface definitions
         interface
@@ -820,14 +829,15 @@ contains
         end if
 
         !
-        ! Set C pointers for dimension names
+        ! Set C pointers for dimension names in C order
         !
         if (present(dimnames)) then
-            allocate(c_dimnames(size(dimnames)))
-            allocate(strings(size(dimnames)))
+            ndims_in = size(dimnames)
+            allocate(c_dimnames(ndims_in))
+            allocate(strings(ndims_in))
 
-            do j=1,size(dimnames)
-                allocate(strings(j) % str(len(dimnames(j))+1))
+            do j=1,ndims_in
+                allocate(strings(j) % str(len(dimnames(ndims_in-j+1))+1))
                 c_dimnames(j) = c_loc(strings(j) % str)
             end do
             c_dimnames_ptr = c_loc(c_dimnames)
@@ -859,21 +869,21 @@ contains
         end if
 
         !
-        ! Copy dimension names to output argument
+        ! Copy dimension names to output argument, reversing their order
         !
         if (present(dimnames)) then
             do j=1,c_ndims
-                do i=1,len(dimnames(j))
+                do i=1,len(dimnames(c_ndims-j+1))
                     if (strings(j) % str(i) == c_null_char) exit
                 end do
 
                 i = i - 1
 
-                dimnames(j)(1:i) = transfer(strings(j) % str(1:i), dimnames(j))
-                dimnames(j) = dimnames(j)(1:i)
+                dimnames(c_ndims-j+1)(1:i) = transfer(strings(j) % str(1:i), dimnames(c_ndims-j+1))
+                dimnames(c_ndims-j+1) = dimnames(c_ndims-j+1)(1:i)
             end do
 
-            do j=1,size(dimnames)
+            do j=1,ndims_in
                 deallocate(strings(j) % str)
             end do
             deallocate(strings)
