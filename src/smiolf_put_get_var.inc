@@ -173,6 +173,13 @@
         !
         if (associated(buf)) then
             allocate(char_buf(len(buf)))
+
+            ! In case buf contains more characters than will be read from the file,
+            ! initialize char_buf with the contents of buf to preserve un-read
+            ! characters during the copy of char_buf back into buf later on
+            do i=1,len(buf)
+                char_buf(i) = buf(i:i)
+            end do
             c_buf = c_loc(char_buf)
         else
             c_buf = c_null_ptr
