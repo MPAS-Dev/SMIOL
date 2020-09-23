@@ -1722,6 +1722,9 @@ int SMIOL_free_decomp(struct SMIOL_decomp **decomp)
  *    float foo[nCells][nVertLevels] would have an element size of
  *    sizeof(float) * nVertLevels if nCells were a decomposed dimension.
  *
+ *    For non-decomposed variables, the element size is the size of one record
+ *    of the entire variable.
+ *
  * 2) The number of dimensions for the variable, including any unlimited/record
  *    dimension.
  *
@@ -1822,26 +1825,22 @@ int build_start_count(struct SMIOL_file *file, const char *varname,
 	free(dimnames);
 
 	/*
-	 * Set basic size of each element in the field; only necessary if
-	 * the field is decomposed and therefore must be transferred prior to
-	 * writing
+	 * Set basic size of each element in the field
 	 */
 	*element_size = 1;
-	if (decomp) {
-		switch (vartype) {
-			case SMIOL_REAL32:
-				*element_size = sizeof(float);
-				break;
-			case SMIOL_REAL64:
-				*element_size = sizeof(double);
-				break;
-			case SMIOL_INT32:
-				*element_size = sizeof(int);
-				break;
-			case SMIOL_CHAR:
-				*element_size = sizeof(char);
-				break;
-		}
+	switch (vartype) {
+		case SMIOL_REAL32:
+			*element_size = sizeof(float);
+			break;
+		case SMIOL_REAL64:
+			*element_size = sizeof(double);
+			break;
+		case SMIOL_INT32:
+			*element_size = sizeof(int);
+			break;
+		case SMIOL_CHAR:
+			*element_size = sizeof(char);
+			break;
 	}
 
 	*start = malloc(sizeof(size_t) * (size_t)(*ndims));
