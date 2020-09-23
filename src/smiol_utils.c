@@ -712,7 +712,14 @@ int build_exchange(struct SMIOL_context *context,
 		return SMIOL_MALLOC_FAILURE;
 	}
 
+	/*
+	 * Initialize the SMIOL_decomp struct
+	 */
 	(*decomp)->context = context;
+	(*decomp)->comp_list = NULL;
+	(*decomp)->io_list = NULL;
+	(*decomp)->io_start = 0;
+	(*decomp)->io_count = 0;
 
 
 	/*
