@@ -1575,8 +1575,19 @@ int SMIOL_get_frame(struct SMIOL_file *file, SMIOL_Offset *frame)
  *
  * Creates a mapping between compute elements and I/O elements.
  *
- * Given arrays of global element IDs that each task computes, this routine works
- * out a mapping of elements between compute and I/O tasks.
+ * Given arrays of global element IDs that each task computes, this routine
+ * works out a mapping of elements between compute and I/O tasks.
+ *
+ * The aggregation factor is used to indicate the size of subsets of ranks
+ * that will gather fields onto a single rank in each subset before transferring
+ * that field from compute to output tasks; in a symmetric way, it also
+ * indicates the size of subsets over which fields will be scattered after they
+ * are transferred from input tasks to a single compute tasks in each subset.
+ *
+ * An aggregation factor of 0 indicates that the implementation should choose
+ * a suitable aggregation factor (usually matching the size of shared-memory
+ * domains), while a positive integer specifies a specific size for task groups
+ * to be used for aggregation.
  *
  * If all input arguments are determined to be valid and if the routine is
  * successful in working out a mapping, the decomp pointer is allocated and
@@ -1586,6 +1597,7 @@ int SMIOL_get_frame(struct SMIOL_file *file, SMIOL_Offset *frame)
  *******************************************************************************/
 int SMIOL_create_decomp(struct SMIOL_context *context,
                         size_t n_compute_elements, SMIOL_Offset *compute_elements,
+                        int aggregation_factor,
                         struct SMIOL_decomp **decomp)
 {
 	size_t i;

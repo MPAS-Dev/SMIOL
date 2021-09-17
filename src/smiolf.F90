@@ -1850,15 +1850,30 @@ contains
     !>  Given arrays of global element IDs that each task computes, this routine
     !>  works out a mapping of elements between compute and I/O tasks.
     !>
+    !>  The aggregation factor is used to indicate the size of subsets of ranks
+    !>  that will gather fields onto a single rank in each subset before transferring
+    !>  that field from compute to output tasks; in a symmetric way, it also
+    !>  indicates the size of subsets over which fields will be scattered after they
+    !>  are transferred from input tasks to a single compute tasks in each subset.
+    !>
+    !>  An aggregation factor of 0 indicates that the implementation should choose
+    !>  a suitable aggregation factor (usually matching the size of shared-memory
+    !>  domains), while a positive integer specifies a specific size for task groups
+    !>  to be used for aggregation.
+    !>
+    !>  If the optional aggregation_factor argument is not given, it defaults to
+    !>  a value of 0.
+    !>
     !>  If all input arguments are determined to be valid and if the routine is
     !>  successful in working out a mapping, the decomp pointer is allocated
     !>  and given valid contents, and SMIOL_SUCCESS is returned; otherwise
     !>  a non-success error code is returned and the decomp pointer is unassociated.
     !
     !-----------------------------------------------------------------------
-    integer function SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp) result(ierr)
+    integer function SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp, &
+                                          aggregation_factor) result(ierr)
 
-        use iso_c_binding, only : c_size_t, c_ptr, c_null_ptr, c_loc, c_f_pointer, c_associated
+        use iso_c_binding, only : c_int, c_size_t, c_ptr, c_null_ptr, c_loc, c_f_pointer, c_associated
 
         implicit none
 
@@ -1867,25 +1882,33 @@ contains
         integer(kind=c_size_t), intent(in) :: n_compute_elements
         integer(kind=SMIOL_offset_kind), dimension(n_compute_elements), target, intent(in) :: compute_elements
         type (SMIOLf_decomp), pointer, intent(inout) :: decomp
+        integer, intent(in), optional :: aggregation_factor
 
         ! Local variables
         type (c_ptr) :: c_context
         type (c_ptr) :: c_decomp
         type (c_ptr) :: c_compute_elements
+        integer(kind=c_int) :: c_agg_factor
         
         interface
-            function SMIOL_create_decomp(context, n_compute_elements, compute_elements, decomp) &
+            function SMIOL_create_decomp(context, n_compute_elements, compute_elements, aggregation_factor, decomp) &
                                          result(ierr) bind(C, name='SMIOL_create_decomp')
                 use iso_c_binding, only : c_size_t, c_ptr, c_int
                 type (c_ptr), value :: context
                 integer(c_size_t), value :: n_compute_elements
                 type (c_ptr), value :: compute_elements
+                integer(kind=c_int), value :: aggregation_factor
                 integer(kind=c_int) :: ierr
                 type (c_ptr) :: decomp
             end function
         end interface
 
 
+        if (present(aggregation_factor)) then
+            c_agg_factor = aggregation_factor
+        else
+            c_agg_factor = 0    ! Let SMIOL choose its own aggregation factor
+        end if
 
         ! Get C pointers to Fortran types
         c_context = c_loc(context)
@@ -1897,7 +1920,7 @@ contains
 
         c_decomp = c_null_ptr
 
-        ierr = SMIOL_create_decomp(c_context, n_compute_elements, c_compute_elements, c_decomp)
+        ierr = SMIOL_create_decomp(c_context, n_compute_elements, c_compute_elements, c_agg_factor, c_decomp)
 
         ! Error check and translate c_decomp pointer into a Fortran SMIOLf_decomp pointer
         if (ierr == SMIOL_SUCCESS) then

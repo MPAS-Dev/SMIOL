@@ -183,7 +183,7 @@ program smiol_runner
     compute_elements(:) = 0
 
     if (SMIOLf_create_decomp(context, n_compute_elements, compute_elements, &
-                             decomp) /= SMIOL_SUCCESS) then
+                             decomp, aggregation_factor=1) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "Error: SMIOLf_create_decomp was not called successfully"
         stop 1
     endif
@@ -675,7 +675,7 @@ contains
         write(test_log,'(a)',advance='no') 'Everything OK for SMIOLf_create_decomp with 0 elements: '
         n_compute_elements = 0
         allocate(compute_elements(n_compute_elements))
-        ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp)
+        ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp, aggregation_factor=1)
         if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
             write(test_log,'(a)') "PASS"
         else
@@ -703,7 +703,7 @@ contains
         n_compute_elements = 1
         allocate(compute_elements(n_compute_elements))
         compute_elements(:) = 0
-        ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp)
+        ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp, aggregation_factor=1)
         if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
             write(test_log,'(a)') "PASS"
         else
@@ -731,7 +731,7 @@ contains
         n_compute_elements = 1000000
         allocate(compute_elements(n_compute_elements))
         compute_elements(:) = 0
-        ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp)
+        ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp, aggregation_factor=1)
         if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
             write(test_log,'(a)') "PASS"
         else
@@ -804,7 +804,7 @@ contains
                 end do
             end if
 
-            ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp)
+            ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp, aggregation_factor=1)
             if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
 
                 ! The correct comp_list and io_list arrays, below, were verified manually
@@ -868,7 +868,7 @@ contains
                 end do
             end if
 
-            ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp)
+            ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp, aggregation_factor=1)
             if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
 
                 ! The correct comp_list and io_list arrays, below, were verified manually
@@ -934,7 +934,7 @@ contains
                 end do
             end if
 
-            ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp)
+            ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp, aggregation_factor=1)
             if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
 
                 ! The correct comp_list and io_list arrays, below, were verified manually
@@ -2628,7 +2628,8 @@ contains
                 endif
             enddo
 
-            if (SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp) /= SMIOL_SUCCESS) then
+            if (SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp, aggregation_factor=1) &
+                /= SMIOL_SUCCESS) then
                 write(test_log,'(a)') "FAIL: SMIOLf_create_decomp was not called successfully"
                 ierrcount = -1
                 return
