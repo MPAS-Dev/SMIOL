@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <stdint.h>
 #include "smiol.h"
 #include "smiol_utils.h"
 
@@ -20,6 +21,7 @@ int test_transfer(FILE *test_log);
 int test_file_sync(FILE *test_log);
 int test_utils(FILE *test_log);
 int test_io_decomp(FILE *test_log);
+int test_aggregate_list(FILE *test_log);
 int test_set_get_frame(FILE* test_log);
 int test_put_get_vars(FILE *test_log);
 int compare_decomps(struct SMIOL_decomp *decomp,
@@ -256,6 +258,17 @@ int main(int argc, char **argv)
 	 * Unit tests for decomposition of I/O elements
 	 */
 	ierr = test_io_decomp(test_log);
+	if (ierr == 0) {
+		fprintf(test_log, "All tests PASSED!\n\n");
+	}
+	else {
+		fprintf(test_log, "%i tests FAILED!\n\n", ierr);
+	}
+
+	/*
+	 * Unit tests for list aggregation utility function
+	 */
+	ierr = test_aggregate_list(test_log);
 	if (ierr == 0) {
 		fprintf(test_log, "All tests PASSED!\n\n");
 	}
@@ -3789,6 +3802,400 @@ int test_io_decomp(FILE *test_log)
 		fprintf(test_log, "FAIL - Non-zero return code for at least one rank\n");
 		errcount++;
 	}
+
+	fflush(test_log);
+	fprintf(test_log, "\n");
+
+	return errcount;
+}
+
+int test_aggregate_list(FILE *test_log)
+{
+	int errcount;
+	int ierr;
+	int root;
+	SMIOL_Offset *in_list, *out_list;
+	SMIOL_Offset *out_list_expected;
+	size_t n_in, n_out;
+	size_t n_out_expected;
+	size_t i, j;
+	int *counts, *displs;
+	int *counts_expected, *displs_expected;
+	int world_rank, world_size;
+
+	fprintf(test_log, "********************************************************************************\n");
+	fprintf(test_log, "********************* SMIOL list aggregation unit tests ************************\n");
+	fprintf(test_log, "\n");
+
+	errcount = 0;
+
+	ierr = MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+	if (ierr != MPI_SUCCESS) {
+		fprintf(test_log, "Failed to get MPI rank...\n");
+		return -1;
+	}
+
+	ierr = MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+	if (ierr != MPI_SUCCESS) {
+		fprintf(test_log, "Failed to get MPI size...\n");
+		return -1;
+	}
+
+	root = 0;
+
+	/* Aggregate a list across a communicator of size 1 (using MPI_COMM_SELF) */
+	fprintf(test_log, "Testing aggregation of lists across communicator of size 1: ");
+	n_in = 1000;
+	n_out = SIZE_MAX;
+	in_list = malloc(sizeof(SMIOL_Offset) * n_in);
+
+	for (i = 0; i < n_in; i++) {
+		in_list[i] = (SMIOL_Offset)(2 * i);   /* Initialize in_list with positive consecutive even integers */
+	}
+
+	ierr = aggregate_list(MPI_COMM_SELF, root, n_in, in_list,
+	                      &n_out, &out_list,
+	                      &counts, &displs);
+	if (ierr == 0) {
+		if (n_out != n_in) {
+			fprintf(test_log, "FAIL - n_out != n_in\n");
+			errcount++;
+		} else if (counts == NULL || displs == NULL) {
+			fprintf(test_log, "FAIL - either counts or displs not allocated\n");
+			errcount++;
+		} else if (counts[0] != (int)n_in) {
+			fprintf(test_log, "FAIL - counts is incorrect\n");
+			errcount++;
+		} else if (displs[0] != 0) {
+			fprintf(test_log, "FAIL - displs is incorrect\n");
+			errcount++;
+		} else if (out_list == NULL) {
+			fprintf(test_log, "FAIL - out_list not allocated\n");
+			errcount++;
+		} else if (memcmp(in_list, out_list, sizeof(SMIOL_Offset) * n_in)) {
+			fprintf(test_log, "FAIL - out_list differs from in_list\n");
+			errcount++;
+		} else {
+			fprintf(test_log, "PASS\n");
+			free(out_list);
+			free(counts);
+			free(displs);
+		}
+	} else {
+		fprintf(test_log, "FAIL - non-zero return error code\n");
+		errcount++;
+	}
+	free(in_list);
+
+	/* Aggregate zero-sized lists */
+	fprintf(test_log, "Testing aggregation of zero-sized lists on all tasks: ");
+	n_in = 0;
+	n_out = SIZE_MAX;
+	in_list = malloc(sizeof(SMIOL_Offset) * n_in);
+	counts_expected = malloc(sizeof(int) * (size_t)world_size);
+	displs_expected = malloc(sizeof(int) * (size_t)world_size);
+
+	counts_expected[0] = (int)n_in;
+	displs_expected[0] = 0;
+	for (i = 1; i < (size_t)world_size; i++) {
+		counts_expected[i] = (int)n_in;
+		displs_expected[i] = displs_expected[i-1] + counts_expected[i-1];
+	}
+
+	ierr = aggregate_list(MPI_COMM_WORLD, root, n_in, in_list,
+	                      &n_out, &out_list,
+	                      &counts, &displs);
+	if (ierr == 0) {
+		if (n_out != n_in) {
+			fprintf(test_log, "FAIL - n_out != n_in\n");
+			errcount++;
+		} else if (world_rank == root && (counts == NULL || displs == NULL)) {
+			fprintf(test_log, "FAIL - either counts or displs not allocated on root rank\n");
+			errcount++;
+		} else if (world_rank == root && out_list == NULL) {
+			fprintf(test_log, "FAIL - out_list not allocated on root rank\n");
+			errcount++;
+		} else if (world_rank != root && (counts != NULL || displs != NULL)) {
+			fprintf(test_log, "FAIL - either counts or displs is allocated on non-root rank\n");
+			errcount++;
+		} else if (world_rank != root && out_list != NULL) {
+			fprintf(test_log, "FAIL - out_list is allocated on non-root rank\n");
+			errcount++;
+		} else if (world_rank == root && memcmp(counts, counts_expected, sizeof(int) * (size_t)world_size)) { /* Check counts on root rank */
+			fprintf(test_log, "FAIL - counts contains incorrect values\n");
+			errcount++;
+		} else if (world_rank == root && memcmp(displs, displs_expected, sizeof(int) * (size_t)world_size)) { /* Check displs on root rank */
+			fprintf(test_log, "FAIL - displs contains incorrect values\n");
+			errcount++;
+		} else {
+			fprintf(test_log, "PASS\n");
+			free(out_list);
+			free(counts);
+			free(displs);
+		}
+	} else {
+		fprintf(test_log, "FAIL - non-zero return error code\n");
+		errcount++;
+	}
+	free(in_list);
+	free(counts_expected);
+	free(displs_expected);
+
+	for (root = 0; root < world_size; root++) {
+
+		/* Aggregate one-sized lists */
+		fprintf(test_log, "Testing aggregation to %i of one-sized lists on all tasks: ", root);
+		n_in = 1;
+		n_out = SIZE_MAX;
+		if (world_rank == root) {
+			n_out_expected = n_in * (size_t)world_size;
+		} else {
+			n_out_expected = 0;
+		}
+		out_list = NULL;
+		counts = NULL;
+		displs = NULL;
+		in_list = malloc(sizeof(SMIOL_Offset) * n_in);
+		out_list_expected = malloc(sizeof(SMIOL_Offset) * n_out_expected);
+		counts_expected = malloc(sizeof(int) * (size_t)world_size);
+		displs_expected = malloc(sizeof(int) * (size_t)world_size);
+
+		in_list[0] = 100 * world_rank;
+
+		if (world_rank == root) {
+			for (i = 0; i < (size_t)world_size; i++) {
+				out_list_expected[i] = (SMIOL_Offset)(100 * i);
+			}
+		}
+
+		counts_expected[0] = (int)n_in;
+		displs_expected[0] = 0;
+		for (i = 1; i < (size_t)world_size; i++) {
+			counts_expected[i] = (int)n_in;
+			displs_expected[i] = displs_expected[i-1] + counts_expected[i-1];
+		}
+
+		ierr = aggregate_list(MPI_COMM_WORLD, root, n_in, in_list,
+		                      &n_out, &out_list,
+		                      &counts, &displs);
+		if (ierr == 0) {
+			if (world_rank == root && n_out != n_out_expected) {
+				fprintf(test_log, "FAIL - n_out is incorrect on root rank\n");
+				errcount++;
+			} else if (world_rank != root && n_out != 0) {
+				fprintf(test_log, "FAIL - n_out != 0 on non-root rank\n");
+				errcount++;
+			} else if (world_rank == root && (counts == NULL || displs == NULL)) {
+				fprintf(test_log, "FAIL - either counts or displs not allocated on root rank\n");
+				errcount++;
+			} else if (world_rank == root && out_list == NULL) {
+				fprintf(test_log, "FAIL - out_list not allocated on root rank\n");
+				errcount++;
+			} else if (world_rank != root && (counts != NULL || displs != NULL)) {
+				fprintf(test_log, "FAIL - either counts or displs is allocated on non-root rank\n");
+				errcount++;
+			} else if (world_rank != root && out_list != NULL) {
+				fprintf(test_log, "FAIL - out_list is allocated on non-root rank\n");
+				errcount++;
+			} else if (memcmp(out_list, out_list_expected, sizeof(SMIOL_Offset) * n_out_expected)) {      /* Check out_list values on all ranks */
+				fprintf(test_log, "FAIL - out_list contains incorrect values\n");
+				errcount++;
+			} else if (world_rank == root && memcmp(counts, counts_expected, sizeof(int) * (size_t)world_size)) { /* Check counts on root rank */
+				fprintf(test_log, "FAIL - counts contains incorrect values\n");
+				errcount++;
+			} else if (world_rank == root && memcmp(displs, displs_expected, sizeof(int) * (size_t)world_size)) { /* Check displs on root rank */
+				fprintf(test_log, "FAIL - displs contains incorrect values\n");
+				errcount++;
+			} else {
+				fprintf(test_log, "PASS\n");
+				free(out_list);
+				free(counts);
+				free(displs);
+			}
+		} else {
+			fprintf(test_log, "FAIL - non-zero return error code\n");
+			errcount++;
+		}
+		free(in_list);
+		free(out_list_expected);
+		free(counts_expected);
+		free(displs_expected);
+
+		/* Aggregate N-sized lists */
+		fprintf(test_log, "Testing aggregation to %i of N-sized lists on all tasks: ", root);
+		n_in = 1000;
+		n_out = SIZE_MAX;
+		if (world_rank == root) {
+			n_out_expected = n_in * (size_t)world_size;
+		} else {
+			n_out_expected = 0;
+		}
+		out_list = NULL;
+		counts = NULL;
+		displs = NULL;
+		in_list = malloc(sizeof(SMIOL_Offset) * n_in);
+		out_list_expected = malloc(sizeof(SMIOL_Offset) * n_out_expected);
+		counts_expected = malloc(sizeof(int) * (size_t)world_size);
+		displs_expected = malloc(sizeof(int) * (size_t)world_size);
+
+		for (i = 0; i < n_in; i++) {
+			in_list[i] = (SMIOL_Offset)((size_t)world_rank + 2 * i);   /* Initialize in_list with positive consecutive integers with offset */
+		}
+
+		if (world_rank == root) {
+			for (j = 0; j < (size_t)world_size; j++) {
+				for (i = 0; i < n_in; i++) {
+					out_list_expected[j * n_in + i] = (SMIOL_Offset)(j + 2 * i);
+				}
+			}
+		}
+
+		counts_expected[0] = (int)n_in;
+		displs_expected[0] = 0;
+		for (i = 1; i < (size_t)world_size; i++) {
+			counts_expected[i] = (int)n_in;
+			displs_expected[i] = displs_expected[i-1] + counts_expected[i-1];
+		}
+
+		ierr = aggregate_list(MPI_COMM_WORLD, root, n_in, in_list,
+		                      &n_out, &out_list,
+		                      &counts, &displs);
+		if (ierr == 0) {
+			if (world_rank == root && n_out != n_out_expected) {                      /* Check n_out on root rank */
+				fprintf(test_log, "FAIL - n_out is incorrect on root rank\n");
+				errcount++;
+			} else if (world_rank != root && n_out != 0) {                            /* Check n_out on other ranks */
+				fprintf(test_log, "FAIL - n_out != 0 on non-root rank\n");
+				errcount++;
+			} else if (world_rank == root && (counts == NULL || displs == NULL)) {    /* Check non-NULL counts/displs on root rank */
+				fprintf(test_log, "FAIL - either counts or displs not allocated on root rank\n");
+				errcount++;
+			} else if (world_rank == root && out_list == NULL) {                      /* Check non-NULL out_list on root rank */
+				fprintf(test_log, "FAIL - out_list not allocated on root rank\n");
+				errcount++;
+			} else if (world_rank != root && (counts != NULL || displs != NULL)) {    /* Check NULL counts/displs on other ranks */
+				fprintf(test_log, "FAIL - either counts or displs is allocated on non-root rank\n");
+				errcount++;
+			} else if (world_rank != root && out_list != NULL) {                      /* Check NULL out_list on other ranks */
+				fprintf(test_log, "FAIL - out_list is allocated on non-root rank\n");
+				errcount++;
+			} else if (memcmp(out_list, out_list_expected, sizeof(SMIOL_Offset) * n_out_expected)) {      /* Check out_list values on all ranks */
+				fprintf(test_log, "FAIL - out_list contains incorrect values\n");
+				errcount++;
+			} else if (world_rank == root && memcmp(counts, counts_expected, sizeof(int) * (size_t)world_size)) { /* Check counts on root rank */
+				fprintf(test_log, "FAIL - counts contains incorrect values\n");
+				errcount++;
+			} else if (world_rank == root && memcmp(displs, displs_expected, sizeof(int) * (size_t)world_size)) { /* Check displs on root rank */
+				fprintf(test_log, "FAIL - displs contains incorrect values\n");
+				errcount++;
+			} else {
+				fprintf(test_log, "PASS\n");
+				free(out_list);
+				free(counts);
+				free(displs);
+			}
+		} else {
+			fprintf(test_log, "FAIL - non-zero return error code\n");
+			errcount++;
+		}
+		free(in_list);
+		free(out_list_expected);
+		free(counts_expected);
+		free(displs_expected);
+
+		/* Aggregate mixed-sized lists -- tasks will have input list sizes of (N-1), 0, (N-2), 1, (N-3), 2, ... */
+		fprintf(test_log, "Testing aggregation to %i of mixed-sized lists on all tasks: ", root);
+		if (world_rank % 2 == 0) {
+			n_in = (size_t)(10 * (world_size - world_rank / 2 - 1));
+		} else {
+			n_in = (size_t)(10 * (world_rank / 2));
+		}
+		n_out = SIZE_MAX;
+		if (world_rank == root) {
+			n_out_expected = (size_t)(10 * world_size * (world_size - 1) / 2);
+		} else {
+			n_out_expected = 0;
+		}
+		out_list = NULL;
+		counts = NULL;
+		displs = NULL;
+		in_list = malloc(sizeof(SMIOL_Offset) * n_in);
+		out_list_expected = malloc(sizeof(SMIOL_Offset) * n_out_expected);
+		counts_expected = malloc(sizeof(int) * (size_t)world_size);
+		displs_expected = malloc(sizeof(int) * (size_t)world_size);
+
+		for (i = 0; i < n_in; i++) {
+			in_list[i] = world_rank;   /* Initialize in_list with rank in global communicator */
+		}
+
+		for (i = 0; i < (size_t)world_size; i++) {
+			if (i % 2 == 0) {
+				counts_expected[i] = (int)(10 * ((size_t)world_size - i / 2 - 1));
+			} else {
+				counts_expected[i] = (int)(10 * (i / 2));
+			}
+		}
+
+		displs_expected[0] = 0;
+		for (i = 1; i < (size_t)world_size; i++) {
+			displs_expected[i] = displs_expected[i-1] + counts_expected[i-1];
+		}
+
+		if (world_rank == root) {
+			for (j = 0; j < (size_t)world_size; j++) {
+				for (i = 0; i < (size_t)counts_expected[j]; i++) {
+					out_list_expected[(size_t)displs_expected[j] + i] = (SMIOL_Offset)j;
+				}
+			}
+		}
+
+		ierr = aggregate_list(MPI_COMM_WORLD, root, n_in, in_list,
+		                      &n_out, &out_list,
+		                      &counts, &displs);
+		if (ierr == 0) {
+			if (world_rank == root && n_out != n_out_expected) {                      /* Check n_out on root rank */
+				fprintf(test_log, "FAIL - n_out is incorrect on root rank %i %i\n", (int)n_out, (int)n_out_expected);
+				errcount++;
+			} else if (world_rank != root && n_out != 0) {                            /* Check n_out on other ranks */
+				fprintf(test_log, "FAIL - n_out != 0 on non-root rank\n");
+				errcount++;
+			} else if (world_rank == root && (counts == NULL || displs == NULL)) {    /* Check non-NULL counts/displs on root rank */
+				fprintf(test_log, "FAIL - either counts or displs not allocated on root rank\n");
+				errcount++;
+			} else if (world_rank == root && out_list == NULL) {                      /* Check non-NULL out_list on root rank */
+				fprintf(test_log, "FAIL - out_list not allocated on root rank\n");
+				errcount++;
+			} else if (world_rank != root && (counts != NULL || displs != NULL)) {    /* Check NULL counts/displs on other ranks */
+				fprintf(test_log, "FAIL - either counts or displs is allocated on non-root rank\n");
+				errcount++;
+			} else if (world_rank != root && out_list != NULL) {                      /* Check NULL out_list on other ranks */
+				fprintf(test_log, "FAIL - out_list is allocated on non-root rank\n");
+				errcount++;
+			} else if (memcmp(out_list, out_list_expected, sizeof(SMIOL_Offset) * n_out_expected)) {      /* Check out_list values on all ranks */
+				fprintf(test_log, "FAIL - out_list contains incorrect values\n");
+				errcount++;
+			} else if (world_rank == root && memcmp(counts, counts_expected, sizeof(int) * (size_t)world_size)) { /* Check counts on root rank */
+				fprintf(test_log, "FAIL - counts contains incorrect values\n");
+				errcount++;
+			} else if (world_rank == root && memcmp(displs, displs_expected, sizeof(int) * (size_t)world_size)) { /* Check displs on root rank */
+				fprintf(test_log, "FAIL - displs contains incorrect values\n");
+				errcount++;
+			} else {
+				fprintf(test_log, "PASS\n");
+				free(out_list);
+				free(counts);
+				free(displs);
+			}
+		} else {
+			fprintf(test_log, "FAIL - non-zero return error code\n");
+			errcount++;
+		}
+		free(in_list);
+		free(out_list_expected);
+		free(counts_expected);
+		free(displs_expected);
+
+	} /* root loop */
 
 	fflush(test_log);
 	fprintf(test_log, "\n");

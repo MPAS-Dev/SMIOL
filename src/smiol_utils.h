@@ -24,6 +24,10 @@ SMIOL_Offset *search_triplet_array(SMIOL_Offset key,
 int transfer_field(const struct SMIOL_decomp *decomp, int dir,
                    size_t element_size, const void *in_field, void *out_field);
 
+int aggregate_list(MPI_Comm comm, int root, size_t n_in, SMIOL_Offset *in_list,
+                   size_t *n_out, SMIOL_Offset **out_list,
+                   int **counts, int **displs);
+
 /*
  * Field decomposition
  */
