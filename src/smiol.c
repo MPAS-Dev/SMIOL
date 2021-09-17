@@ -1699,12 +1699,26 @@ int SMIOL_create_decomp(struct SMIOL_context *context,
  ********************************************************************************/
 int SMIOL_free_decomp(struct SMIOL_decomp **decomp)
 {
+	MPI_Comm comm;
+
 	if ((*decomp) == NULL) {
 		return SMIOL_SUCCESS;
 	}
 
 	free((*decomp)->comp_list);
 	free((*decomp)->io_list);
+
+	comm = MPI_Comm_f2c((*decomp)->agg_comm);
+	if (comm != MPI_COMM_NULL) {
+		MPI_Comm_free(&comm);
+	}
+	if ((*decomp)->counts != NULL) {
+		free((*decomp)->counts);
+	}
+	if ((*decomp)->displs != NULL) {
+		free((*decomp)->displs);
+	}
+
 	free((*decomp));
 	*decomp = NULL;
 
