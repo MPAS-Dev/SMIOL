@@ -886,6 +886,30 @@ int test_decomp(FILE *test_log)
 		decomp = NULL;
 	}
 
+	/* Check for error with negative aggregation factor */
+	fprintf(test_log, "Check for error with negative aggregation factor: ");
+	n_compute_elements = 0;
+	compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
+	ierr = SMIOL_create_decomp(context, n_compute_elements, compute_elements, -1, &decomp);
+	if (ierr == SMIOL_INVALID_ARGUMENT && decomp == NULL) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr != SMIOL_INVALID_ARGUMENT) {
+		fprintf(test_log, "FAIL - SMIOL_INVALID_ARGUMENT was not returned\n");
+		errcount++;
+	} else if (decomp != NULL) {
+		fprintf(test_log, "FAIL - decomp was not NULL on return\n");
+		errcount++;
+	}
+	free(compute_elements);
+	if (decomp != NULL) {
+		/*
+		 * Since we do not expect decomp to be non-NULL, we have no way
+		 * to know what state decomp is in, so just leak memory and nullify
+		 * rather than calling SMIOL_free_decomp with unknown memory.
+		 */
+		decomp = NULL;
+	}
+
 	/* Create and Free Decomp with elements == 1 */
 	fprintf(test_log, "Everything OK (SMIOL_create_decomp) with 1 elements: ");
 	n_compute_elements = 1;
@@ -1170,6 +1194,177 @@ int test_decomp(FILE *test_log)
 
 	} else {
 		fprintf(test_log, "<<< Tests that require exactly 2 MPI tasks will not be run >>>\n");
+	}
+
+	/*
+	 * The following tests will only be run if there are exactly four MPI tasks.
+	 * In principle, as long as there are at least four MPI ranks in MPI_COMM_WORLD,
+	 * an intracommunicator with exactly four ranks could be created for these tests.
+	 */
+	if (comm_size == 4) {
+		/* Create a SMIOL context for testing decomp routines */
+		ierr = SMIOL_init(MPI_COMM_WORLD, 4, 1, &context);
+		if (ierr != SMIOL_SUCCESS || context == NULL) {
+			fprintf(test_log, "Failed to create SMIOL context...\n");
+			return -1;
+		}
+
+		/* Round-robin compute, stride 1, aggregate 2 */
+		fprintf(test_log, "Round-robin compute, stride 1, aggregate 2: ");
+		n_compute_elements = 4;
+		compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
+
+		for (i = 0; i < n_compute_elements; i++) {
+			compute_elements[i] = (SMIOL_Offset)(4 * i + comm_rank);
+		}
+
+		ierr = SMIOL_create_decomp(context, n_compute_elements, compute_elements, 2, &decomp);
+		if (ierr == SMIOL_SUCCESS && decomp != NULL) {
+
+			/* The correct comp_list and io_list arrays, below, were verified manually */
+			if (comm_rank == 0) {
+				SMIOL_Offset comp_list_correct[] = { 4, 0, 2, 0, 4, 1, 2, 1, 5, 2, 2, 2, 6, 3, 2, 3, 7 };
+				SMIOL_Offset io_list_correct[] = { 2, 0, 2, 0, 1, 2, 2, 2, 3 };
+				ierr = compare_decomps(decomp, (sizeof(comp_list_correct) / sizeof(SMIOL_Offset)), comp_list_correct,
+				                               (sizeof(io_list_correct) / sizeof(SMIOL_Offset)), io_list_correct);
+			} else if (comm_rank == 1) {
+				SMIOL_Offset comp_list_correct[] = { 0 };
+				SMIOL_Offset io_list_correct[] = { 2, 0, 2, 0, 1, 2, 2, 2, 3 };
+				ierr = compare_decomps(decomp, (sizeof(comp_list_correct) / sizeof(SMIOL_Offset)), comp_list_correct,
+				                               (sizeof(io_list_correct) / sizeof(SMIOL_Offset)), io_list_correct);
+			} else if (comm_rank == 2) {
+				SMIOL_Offset comp_list_correct[] = { 4, 0, 2, 0, 4, 1, 2, 1, 5, 2, 2, 2, 6, 3, 2, 3, 7 };
+				SMIOL_Offset io_list_correct[] = { 2, 0, 2, 0, 1, 2, 2, 2, 3 };
+				ierr = compare_decomps(decomp, (sizeof(comp_list_correct) / sizeof(SMIOL_Offset)), comp_list_correct,
+				                               (sizeof(io_list_correct) / sizeof(SMIOL_Offset)), io_list_correct);
+			} else if (comm_rank == 3) {
+				SMIOL_Offset comp_list_correct[] = { 0 };
+				SMIOL_Offset io_list_correct[] = { 2, 0, 2, 0, 1, 2, 2, 2, 3 };
+				ierr = compare_decomps(decomp, (sizeof(comp_list_correct) / sizeof(SMIOL_Offset)), comp_list_correct,
+				                               (sizeof(io_list_correct) / sizeof(SMIOL_Offset)), io_list_correct);
+			} else {
+				ierr = 1;
+				fprintf(stderr, "We seem to have too may ranks in the aggregation decomp unit tests...\n");
+			}
+
+			if (ierr == 0) {
+				fprintf(test_log, "PASS\n");
+			} else {
+				fprintf(test_log, "FAIL - the decomp did not contain the expected values\n");
+				errcount++;
+			}
+		} else {
+			fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned or decomp was NULL\n");
+			errcount++;
+		}
+
+		free(compute_elements);
+
+		ierr = SMIOL_free_decomp(&decomp);
+		if (ierr != SMIOL_SUCCESS || decomp != NULL) {
+			fprintf(test_log, "After previous unit test, SMIOL_free_decomp was unsuccessful: FAIL\n");
+			errcount++;
+		}
+
+		/* Free the SMIOL context */
+		ierr = SMIOL_finalize(&context);
+		if (ierr != SMIOL_SUCCESS || context != NULL) {
+			fprintf(test_log, "Failed to free SMIOL context...\n");
+			return -1;
+		}
+
+		/* Create a SMIOL context for testing decomp routines */
+		ierr = SMIOL_init(MPI_COMM_WORLD, 2, 2, &context);
+		if (ierr != SMIOL_SUCCESS || context == NULL) {
+			fprintf(test_log, "Failed to create SMIOL context...\n");
+			return -1;
+		}
+
+		/* Round-robin compute, stride 2, aggregate 3 */
+		fprintf(test_log, "Round-robin compute, stride 2, aggregate 3: ");
+		n_compute_elements = 4;
+		compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
+
+		for (i = 0; i < n_compute_elements; i++) {
+			compute_elements[i] = (SMIOL_Offset)(4 * i + comm_rank);
+		}
+
+		ierr = SMIOL_create_decomp(context, n_compute_elements, compute_elements, 3, &decomp);
+		if (ierr == SMIOL_SUCCESS && decomp != NULL) {
+
+			/* The correct comp_list and io_list arrays, below, were verified manually */
+			if (comm_rank == 0) {
+				SMIOL_Offset comp_list_correct[] = { 2, 0, 6, 0, 4, 8, 1, 5, 9, 2, 6, 2, 6, 10, 3, 7, 11 };
+				SMIOL_Offset io_list_correct[] = { 2, 0, 6, 0, 1, 2, 4, 5, 6, 3, 2, 3, 7 };
+				ierr = compare_decomps(decomp, (sizeof(comp_list_correct) / sizeof(SMIOL_Offset)), comp_list_correct,
+				                               (sizeof(io_list_correct) / sizeof(SMIOL_Offset)), io_list_correct);
+			} else if (comm_rank == 1) {
+				SMIOL_Offset comp_list_correct[] = { 0 };
+				SMIOL_Offset io_list_correct[] = { 0 };
+				ierr = compare_decomps(decomp, (sizeof(comp_list_correct) / sizeof(SMIOL_Offset)), comp_list_correct,
+				                               (sizeof(io_list_correct) / sizeof(SMIOL_Offset)), io_list_correct);
+			} else if (comm_rank == 2) {
+				SMIOL_Offset comp_list_correct[] = { 0 };
+				SMIOL_Offset io_list_correct[] = { 2, 0, 6, 0, 1, 2, 4, 5, 6, 3, 2, 3, 7 };
+				ierr = compare_decomps(decomp, (sizeof(comp_list_correct) / sizeof(SMIOL_Offset)), comp_list_correct,
+				                               (sizeof(io_list_correct) / sizeof(SMIOL_Offset)), io_list_correct);
+			} else if (comm_rank == 3) {
+				SMIOL_Offset comp_list_correct[] = { 2, 0, 2, 0, 1, 2, 2, 2, 3 };
+				SMIOL_Offset io_list_correct[] = { 0 };
+				ierr = compare_decomps(decomp, (sizeof(comp_list_correct) / sizeof(SMIOL_Offset)), comp_list_correct,
+				                               (sizeof(io_list_correct) / sizeof(SMIOL_Offset)), io_list_correct);
+			} else {
+				ierr = 1;
+				fprintf(stderr, "We seem to have too may ranks in the aggregation decomp unit tests...\n");
+			}
+
+			if (ierr == 0) {
+				fprintf(test_log, "PASS\n");
+			} else {
+				fprintf(test_log, "FAIL - the decomp did not contain the expected values\n");
+				errcount++;
+			}
+		} else {
+			fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned or decomp was NULL\n");
+			errcount++;
+		}
+
+		ierr = SMIOL_free_decomp(&decomp);
+		if (ierr != SMIOL_SUCCESS || decomp != NULL) {
+			fprintf(test_log, "After previous unit test, SMIOL_free_decomp was unsuccessful: FAIL\n");
+			errcount++;
+		}
+
+		/* Round-robin compute, stride 2, aggregate 0 */
+		fprintf(test_log, "Round-robin compute, stride 2, aggregate 0: ");
+		ierr = SMIOL_create_decomp(context, n_compute_elements, compute_elements, 0, &decomp);
+		if (ierr == SMIOL_SUCCESS && decomp != NULL) {
+			/*
+			 * Since the aggregation factor that will ultimately be chosen cannot in general
+			 * be predicted, we cannot really verify the contents of the decomp.
+			 */
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned or decomp was NULL\n");
+			errcount++;
+		}
+
+		ierr = SMIOL_free_decomp(&decomp);
+		if (ierr != SMIOL_SUCCESS || decomp != NULL) {
+			fprintf(test_log, "After previous unit test, SMIOL_free_decomp was unsuccessful: FAIL\n");
+			errcount++;
+		}
+
+		free(compute_elements);
+
+		/* Free the SMIOL context */
+		ierr = SMIOL_finalize(&context);
+		if (ierr != SMIOL_SUCCESS || context != NULL) {
+			fprintf(test_log, "Failed to free SMIOL context...\n");
+			return -1;
+		}
+	} else {
+		fprintf(test_log, "<<< Tests that require exactly 4 MPI tasks will not be run >>>\n");
 	}
 
 	fflush(test_log);

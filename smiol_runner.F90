@@ -698,6 +698,31 @@ contains
             ierrcount = ierrcount + 1
         endif
 
+        ! Check for error with negative aggregation factor
+        write(test_log,'(a)',advance='no') 'Check for error with negative aggregation factor: '
+        n_compute_elements = 0
+        allocate(compute_elements(n_compute_elements))
+        ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp, aggregation_factor=-1)
+        if (ierr == SMIOL_INVALID_ARGUMENT .and. .not. associated(decomp)) then
+            write(test_log,'(a)') 'PASS'
+        else if (ierr /= SMIOL_INVALID_ARGUMENT) then
+            write(test_log, '(a)') 'FAIL - SMIOL_INVALID_ARGUMENT was not returned'
+            ierrcount = ierrcount + 1
+        else if (associated(decomp)) then
+            write(test_log, '(a)') 'FAIL - decomp was associated on return'
+            ierrcount = ierrcount + 1
+        end if
+
+        deallocate(compute_elements)
+        if (associated(decomp)) then
+            !
+            ! Since we do not expect decomp to be associated, we have no way
+            ! to know what state decomp is in, so just leak memory and nullify
+            ! rather than calling SMIOLf_free_decomp with unknown memory.
+            !
+            nullify(decomp)
+        end if
+
         ! Small number of Compute and IO Elements
         write(test_log,'(a)',advance='no') 'Everything OK for SMIOLf_create_decomp 1 element: '
         n_compute_elements = 1
@@ -975,6 +1000,165 @@ contains
             end if
         else
             write(test_log, '(a)') '<<< Tests that require exactly 2 MPI tasks will not be run >>>'
+        end if
+
+        !
+        ! The following tests will only be run if there are exactly four MPI tasks.
+        ! In principle, as long as there are at least four MPI ranks in MPI_COMM_WORLD,
+        ! an intracommunicator with exactly four ranks could be created for these tests.
+        !
+        if (comm_size == 4) then
+            ! Create a SMIOL context for testing decomp routines
+            nullify(context)
+            ierr = SMIOLf_init(MPI_COMM_WORLD, 4, 1, context)
+            if (ierr /= SMIOL_SUCCESS .or. .not. associated(context)) then
+                ierrcount = -1
+                return
+            end if
+
+            ! Round-robin compute, stride 1, aggregate 2
+            write(test_log,'(a)',advance='no') 'Round-robin compute, stride 1, aggregate 2: '
+            n_compute_elements = 4
+            allocate(compute_elements(n_compute_elements))
+
+            do i = 1, n_compute_elements
+                compute_elements(i) = 4 * (i-1) + comm_rank
+            end do
+
+            ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp, aggregation_factor=2)
+            if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
+
+                ! The correct comp_list and io_list arrays, below, were verified manually
+                if (comm_rank == 0) then
+                    matched = compare_decomps(decomp, &
+                                      [ integer(kind=SMIOL_offset_kind) :: 4, 0, 2, 0, 4, 1, 2, 1, 5, 2, 2, 2, 6, 3, 2, 3, 7 ], &
+                                      [ integer(kind=SMIOL_offset_kind) :: 2, 0, 2, 0, 1, 2, 2, 2, 3 ])
+                else if (comm_rank == 1) then
+                    matched = compare_decomps(decomp, &
+                                      [ integer(kind=SMIOL_offset_kind) :: 0 ], &
+                                      [ integer(kind=SMIOL_offset_kind) :: 2, 0, 2, 0, 1, 2, 2, 2, 3 ])
+                else if (comm_rank == 2) then
+                    matched = compare_decomps(decomp, &
+                                      [ integer(kind=SMIOL_offset_kind) :: 4, 0, 2, 0, 4, 1, 2, 1, 5, 2, 2, 2, 6, 3, 2, 3, 7 ], &
+                                      [ integer(kind=SMIOL_offset_kind) :: 2, 0, 2, 0, 1, 2, 2, 2, 3 ])
+                else
+                    matched = compare_decomps(decomp, &
+                                      [ integer(kind=SMIOL_offset_kind) :: 0 ], &
+                                      [ integer(kind=SMIOL_offset_kind) :: 2, 0, 2, 0, 1, 2, 2, 2, 3 ])
+                end if
+
+                if (matched) then
+                    write(test_log,'(a)') 'PASS'
+                else
+                    write(test_log,'(a)') 'FAIL - the decomp did not contain the expected values'
+                    ierrcount = ierrcount + 1
+                end if
+            else
+                write(test_log, '(a)') 'FAIL - Either SMIOL_SUCCESS was not returned or decomp was not associated'
+                ierrcount = ierrcount + 1
+            end if
+
+            deallocate(compute_elements)
+
+            ierr = SMIOLf_free_decomp(decomp)
+            if (ierr /= SMIOL_SUCCESS .or. associated(decomp)) then
+                write(test_log,'(a)') 'After previous unit test, SMIOL_free_decomp was unsuccessful: FAIL'
+                ierrcount = ierrcount + 1
+            end if
+
+            ! Free the SMIOL context
+            ierr = SMIOLf_finalize(context)
+            if (ierr /= SMIOL_SUCCESS .or. associated(context)) then
+                ierrcount = -1
+                return
+            end if
+
+            ! Create a SMIOL context for testing decomp routines
+            nullify(context)
+            ierr = SMIOLf_init(MPI_COMM_WORLD, 2, 2, context)
+            if (ierr /= SMIOL_SUCCESS .or. .not. associated(context)) then
+                ierrcount = -1
+                return
+            end if
+
+            ! Round-robin compute, stride 2, aggregate 3
+            write(test_log,'(a)',advance='no') 'Round-robin compute, stride 2, aggregate 3: '
+            n_compute_elements = 4
+            allocate(compute_elements(n_compute_elements))
+
+            do i = 1, n_compute_elements
+                compute_elements(i) = 4 * (i-1) + comm_rank
+            end do
+
+            ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp, aggregation_factor=3)
+            if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
+
+                ! The correct comp_list and io_list arrays, below, were verified manually
+                if (comm_rank == 0) then
+                    matched = compare_decomps(decomp, &
+                                      [ integer(kind=SMIOL_offset_kind) :: 2, 0, 6, 0, 4, 8, 1, 5, 9, 2, 6, 2, 6, 10, 3, 7, 11 ], &
+                                      [ integer(kind=SMIOL_offset_kind) :: 2, 0, 6, 0, 1, 2, 4, 5, 6, 3, 2, 3, 7 ])
+                else if (comm_rank == 1) then
+                    matched = compare_decomps(decomp, &
+                                      [ integer(kind=SMIOL_offset_kind) :: 0 ], &
+                                      [ integer(kind=SMIOL_offset_kind) :: 0 ])
+                else if (comm_rank == 2) then
+                    matched = compare_decomps(decomp, &
+                                      [ integer(kind=SMIOL_offset_kind) :: 0 ], &
+                                      [ integer(kind=SMIOL_offset_kind) :: 2, 0, 6, 0, 1, 2, 4, 5, 6, 3, 2, 3, 7 ])
+                else
+                    matched = compare_decomps(decomp, &
+                                      [ integer(kind=SMIOL_offset_kind) :: 2, 0, 2, 0, 1, 2, 2, 2, 3 ], &
+                                      [ integer(kind=SMIOL_offset_kind) :: 0 ])
+                end if
+
+                if (matched) then
+                    write(test_log,'(a)') 'PASS'
+                else
+                    write(test_log,'(a)') 'FAIL - the decomp did not contain the expected values'
+                    ierrcount = ierrcount + 1
+                end if
+            else
+                write(test_log, '(a)') 'FAIL - Either SMIOL_SUCCESS was not returned or decomp was not associated'
+                ierrcount = ierrcount + 1
+            end if
+
+            ierr = SMIOLf_free_decomp(decomp)
+            if (ierr /= SMIOL_SUCCESS .or. associated(decomp)) then
+                write(test_log,'(a)') 'After previous unit test, SMIOL_free_decomp was unsuccessful: FAIL'
+                ierrcount = ierrcount + 1
+            end if
+
+            ! Round-robin compute, stride 2, aggregate 0
+            write(test_log,'(a)',advance='no') 'Round-robin compute, stride 2, aggregate 0: '
+            ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp, aggregation_factor=0)
+            if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
+                !
+                ! Since the aggregation factor that will ultimately be chosen cannot in general
+                ! be predicted, we cannot really verify the contents of the decomp.
+                !
+                write(test_log,'(a)') 'PASS'
+            else
+                write(test_log, '(a)') 'FAIL - Either SMIOL_SUCCESS was not returned or decomp was not associated'
+                ierrcount = ierrcount + 1
+            end if
+
+            ierr = SMIOLf_free_decomp(decomp)
+            if (ierr /= SMIOL_SUCCESS .or. associated(decomp)) then
+                write(test_log,'(a)') 'After previous unit test, SMIOL_free_decomp was unsuccessful: FAIL'
+                ierrcount = ierrcount + 1
+            end if
+
+            deallocate(compute_elements)
+
+            ! Free the SMIOL context
+            ierr = SMIOLf_finalize(context)
+            if (ierr /= SMIOL_SUCCESS .or. associated(context)) then
+                ierrcount = -1
+                return
+            end if
+        else
+            write(test_log, '(a)') '<<< Tests that require exactly 4 MPI tasks will not be run >>>'
         end if
 
         write(test_log,'(a)') ''
