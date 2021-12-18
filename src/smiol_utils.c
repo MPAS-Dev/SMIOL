@@ -1096,6 +1096,46 @@ void print_lists(int comm_rank, SMIOL_Offset *comp_list, SMIOL_Offset *io_list)
 		}
 		j += n_elems;
 	}
+	fprintf(f, "\n\n");
+
+
+	fprintf(f, "SMIOL_Offset comp_list_correct[] = { ");
+	j = 0;
+	n_neighbors = comp_list[j++];
+	fprintf(f, "%i", (int)n_neighbors);
+
+	for (i = 0; i < n_neighbors; i++) {
+		neighbor = comp_list[j++];
+		fprintf(f, ", %i", (int)neighbor);
+
+		n_elems = comp_list[j++];
+		fprintf(f, ", %i", (int)n_elems);
+
+		for (k = 0; k < n_elems; k++) {
+			fprintf(f, ", %i", (int)comp_list[j+k]);
+		}
+		j += n_elems;
+	}
+	fprintf(f, " };\n");
+
+	fprintf(f, "SMIOL_Offset io_list_correct[] = { ");
+	j = 0;
+	n_neighbors = io_list[j++];
+	fprintf(f, "%i", (int)n_neighbors);
+
+	for (i = 0; i < n_neighbors; i++) {
+		neighbor = io_list[j++];
+		fprintf(f, ", %i", (int)neighbor);
+
+		n_elems = io_list[j++];
+		fprintf(f, ", %i", (int)n_elems);
+
+		for (k = 0; k < n_elems; k++) {
+			fprintf(f, ", %i", (int)io_list[j+k]);
+		}
+		j += n_elems;
+	}
+	fprintf(f, " };\n");
 
 	fclose(f);
 }
