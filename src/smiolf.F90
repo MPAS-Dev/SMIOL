@@ -63,6 +63,10 @@ module SMIOLf
         integer(c_int) :: state      ! parallel-netCDF file state (i.e. Define or data mode)
         integer(c_int) :: ncidp      ! parallel-netCDF file handle
 #endif
+        integer(c_int) :: io_task    ! 1 = this task performs I/O calls; 0 = no I/O calls on this task
+        integer :: io_file_comm      ! Communicator shared by all tasks with io_task == 1
+        integer :: io_group_comm     ! Communicator shared by tasks associated with an I/O task, usually 1 I/O task
+                                     ! and N-1 non-I/O tasks, where N is the I/O stride
     end type SMIOLf_file
 
     type, bind(C) :: SMIOLf_decomp

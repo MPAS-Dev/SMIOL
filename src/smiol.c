@@ -200,9 +200,11 @@ int SMIOL_inquire(void)
  ********************************************************************************/
 int SMIOL_open_file(struct SMIOL_context *context, const char *filename, int mode, struct SMIOL_file **file)
 {
-#ifdef SMIOL_PNETCDF
+	int io_group;
+	MPI_Comm io_file_comm;
+	MPI_Comm io_group_comm;
 	int ierr;
-#endif
+
 
 	/*
 	 * Before dereferencing file below, ensure that the pointer
@@ -229,6 +231,52 @@ int SMIOL_open_file(struct SMIOL_context *context, const char *filename, int mod
 	 */
 	(*file)->context = context;
 	(*file)->frame = (SMIOL_Offset) 0;
+
+
+	/*
+	 * Determine whether a task is an I/O task or not, and compute
+	 * the I/O group to which each task belongs
+	 */
+	(*file)->io_task = context->comm_rank % context->io_stride == 0 ? 1 : 0;
+	io_group = context->comm_rank / context->io_stride;
+
+	/*
+	 * If there are fewer than comm_size / io_stride I/O tasks, some
+	 * tasks that were set to I/O tasks above will actually not perform
+	 * I/O. Also, place all remainder tasks in the last I/O group
+	 */
+	if (io_group >= context->num_io_tasks) {
+		(*file)->io_task = 0;
+		io_group = context->num_io_tasks - 1;
+	}
+
+	/*
+	 * Create a communicator for communicating within a group of tasks
+	 * associated with an I/O task
+	 */
+	ierr = MPI_Comm_split(MPI_Comm_f2c(context->fcomm), io_group,
+	                      context->comm_rank, &io_group_comm);
+	if (ierr != MPI_SUCCESS) {
+		free((*file));
+		(*file) = NULL;
+		return SMIOL_MPI_ERROR;
+	}
+	(*file)->io_group_comm = MPI_Comm_c2f(io_group_comm);
+
+
+	/*
+	 * Create a communicator for collective file I/O operations among
+	 * I/O tasks (i.e., io_task == 1)
+	 */
+	ierr = MPI_Comm_split(MPI_Comm_f2c(context->fcomm), (*file)->io_task,
+	                      context->comm_rank, &io_file_comm);
+	if (ierr != MPI_SUCCESS) {
+		free((*file));
+		(*file) = NULL;
+		return SMIOL_MPI_ERROR;
+	}
+	(*file)->io_file_comm = MPI_Comm_c2f(io_file_comm);
+
 
 	if (mode & SMIOL_FILE_CREATE) {
 #ifdef SMIOL_PNETCDF
@@ -300,6 +348,9 @@ int SMIOL_close_file(struct SMIOL_file **file)
 #ifdef SMIOL_PNETCDF
 	int ierr;
 #endif
+	MPI_Comm io_file_comm;
+	MPI_Comm io_group_comm;
+
 
 	/*
 	 * If the pointer to the file pointer is NULL, assume we have nothing
@@ -318,6 +369,20 @@ int SMIOL_close_file(struct SMIOL_file **file)
 		return SMIOL_LIBRARY_ERROR;
 	}
 #endif
+
+	io_file_comm = MPI_Comm_f2c((*file)->io_file_comm);
+	if (MPI_Comm_free(&io_file_comm) != MPI_SUCCESS) {
+		free((*file));
+		(*file) = NULL;
+		return SMIOL_MPI_ERROR;
+	}
+
+	io_group_comm = MPI_Comm_f2c((*file)->io_group_comm);
+	if (MPI_Comm_free(&io_group_comm) != MPI_SUCCESS) {
+		free((*file));
+		(*file) = NULL;
+		return SMIOL_MPI_ERROR;
+	}
 
 	free((*file));
 	(*file) = NULL;
