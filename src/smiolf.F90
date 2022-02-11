@@ -62,6 +62,9 @@ module SMIOLf
 #ifdef SMIOL_PNETCDF
         integer(c_int) :: state      ! parallel-netCDF file state (i.e. Define or data mode)
         integer(c_int) :: ncidp      ! parallel-netCDF file handle
+        integer(c_size_t) :: bufsize ! Size of buffer attached to this file
+        integer(c_int) :: n_reqs     ! Number of pending non-blocking requests
+        type (c_ptr) :: reqs         ! Array of pending non-blocking request handles
 #endif
         integer(c_int) :: io_task    ! 1 = this task performs I/O calls; 0 = no I/O calls on this task
         integer :: io_file_comm      ! Communicator shared by all tasks with io_task == 1
@@ -355,14 +358,22 @@ contains
     !>  Depending on the specified file mode, creates or opens the file specified
     !>  by filename within the provided SMIOL context.
     !>
+    !>  The optional bufsize argument specifies the size in bytes of the buffer
+    !>  to be attached to the file by I/O tasks; at present this buffer is only
+    !>  used by the Parallel-NetCDF library if the file is opened with a mode of
+    !>  SMIOL_FILE_CREATE or SMIOL_FILE_WRITE. A bufsize of 0 will force the use of
+    !>  the Parallel-NetCDF blocking write interface, while a nonzero value enables
+    !>  the use of the non-blocking, buffered interface for writing. If the bufsize
+    !>  argument is not present, a default buffer size of 128 MiB is used.
+    !>
     !>  Upon successful completion, SMIOL_SUCCESS is returned, and the file handle argument
     !>  will point to a valid file handle. Otherwise, the file handle is not associated
     !>  and an error code other than SMIOL_SUCCESS is returned.
     !
     !-----------------------------------------------------------------------
-    integer function SMIOLf_open_file(context, filename, mode, file) result(ierr)
+    integer function SMIOLf_open_file(context, filename, mode, file, bufsize) result(ierr)
 
-        use iso_c_binding, only : c_loc, c_ptr, c_null_ptr, c_char, c_associated, c_f_pointer
+        use iso_c_binding, only : c_loc, c_ptr, c_null_ptr, c_char, c_size_t, c_associated, c_f_pointer
 
         implicit none
 
@@ -370,6 +381,10 @@ contains
         character(len=*), intent(in) :: filename
         integer, intent(in) :: mode
         type (SMIOLf_file), pointer :: file
+        integer(kind=c_size_t), intent(in), optional :: bufsize
+
+        ! Default buffer size to use if optional bufsize argument is not provided
+        integer (kind=c_size_t), parameter :: default_bufsize = int(128*1024*1024, kind=c_size_t)
 
         type (c_ptr) :: c_context = c_null_ptr
         type (c_ptr) :: c_file = c_null_ptr
@@ -378,12 +393,13 @@ contains
 
         ! C interface definitions
         interface
-            function SMIOL_open_file(context, filename, mode, file) result(ierr) bind(C, name='SMIOL_open_file')
-                use iso_c_binding, only : c_char, c_ptr, c_int
+            function SMIOL_open_file(context, filename, mode, file, bufsize) result(ierr) bind(C, name='SMIOL_open_file')
+                use iso_c_binding, only : c_char, c_ptr, c_int, c_size_t
                 type (c_ptr), value :: context
                 character(kind=c_char), dimension(*) :: filename
                 integer(kind=c_int), value :: mode
                 type (c_ptr) :: file
+                integer(kind=c_size_t), value :: bufsize
                 integer(kind=c_int) :: ierr
             end function
         end interface
@@ -400,7 +416,13 @@ contains
 
         c_mode = mode
 
-        ierr = SMIOL_open_file(c_context, c_filename, c_mode, c_file)
+        if (present(bufsize)) then
+            ierr = SMIOL_open_file(c_context, c_filename, c_mode, c_file, &
+                                   bufsize)
+        else
+            ierr = SMIOL_open_file(c_context, c_filename, c_mode, c_file, &
+                                   default_bufsize)
+        end if
 
         deallocate(c_filename)
 

@@ -36,6 +36,9 @@ struct SMIOL_file {
 #ifdef SMIOL_PNETCDF
 	int state; /* parallel-netCDF file state (i.e. Define or data mode) */
 	int ncidp; /* parallel-netCDF file handle */
+	size_t bufsize; /* Size of buffer attached to this file */
+	int n_reqs;  /* Number of pending non-blocking requests */
+	int *reqs;   /* Array of pending non-blocking request handles */
 #endif
 	int io_task; /* 1 = this task performs I/O calls
 	                0 = no I/O calls on this task */
