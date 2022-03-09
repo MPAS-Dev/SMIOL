@@ -165,6 +165,18 @@ program smiol_runner
         write(test_log,'(a)') ''
     endif
 
+    !
+    ! Unit tests for I/O aggregation
+    !
+    ierr = test_io_aggregation(test_log)
+    if (ierr == 0) then
+        write(test_log,'(a)') 'All tests PASSED!'
+        write(test_log,'(a)') ''
+    else
+        write(test_log,'(i3,a)') ierr, ' tests FAILED!'
+        write(test_log,'(a)') ''
+    endif
+
     num_io_tasks = 16
     io_stride = 4
 
@@ -183,7 +195,7 @@ program smiol_runner
     compute_elements(:) = 0
 
     if (SMIOLf_create_decomp(context, n_compute_elements, compute_elements, &
-                             decomp) /= SMIOL_SUCCESS) then
+                             decomp, aggregation_factor=1) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "Error: SMIOLf_create_decomp was not called successfully"
         stop 1
     endif
@@ -675,7 +687,7 @@ contains
         write(test_log,'(a)',advance='no') 'Everything OK for SMIOLf_create_decomp with 0 elements: '
         n_compute_elements = 0
         allocate(compute_elements(n_compute_elements))
-        ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp)
+        ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp, aggregation_factor=1)
         if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
             write(test_log,'(a)') "PASS"
         else
@@ -698,12 +710,37 @@ contains
             ierrcount = ierrcount + 1
         endif
 
+        ! Check for error with negative aggregation factor
+        write(test_log,'(a)',advance='no') 'Check for error with negative aggregation factor: '
+        n_compute_elements = 0
+        allocate(compute_elements(n_compute_elements))
+        ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp, aggregation_factor=-1)
+        if (ierr == SMIOL_INVALID_ARGUMENT .and. .not. associated(decomp)) then
+            write(test_log,'(a)') 'PASS'
+        else if (ierr /= SMIOL_INVALID_ARGUMENT) then
+            write(test_log, '(a)') 'FAIL - SMIOL_INVALID_ARGUMENT was not returned'
+            ierrcount = ierrcount + 1
+        else if (associated(decomp)) then
+            write(test_log, '(a)') 'FAIL - decomp was associated on return'
+            ierrcount = ierrcount + 1
+        end if
+
+        deallocate(compute_elements)
+        if (associated(decomp)) then
+            !
+            ! Since we do not expect decomp to be associated, we have no way
+            ! to know what state decomp is in, so just leak memory and nullify
+            ! rather than calling SMIOLf_free_decomp with unknown memory.
+            !
+            nullify(decomp)
+        end if
+
         ! Small number of Compute and IO Elements
         write(test_log,'(a)',advance='no') 'Everything OK for SMIOLf_create_decomp 1 element: '
         n_compute_elements = 1
         allocate(compute_elements(n_compute_elements))
         compute_elements(:) = 0
-        ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp)
+        ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp, aggregation_factor=1)
         if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
             write(test_log,'(a)') "PASS"
         else
@@ -731,7 +768,7 @@ contains
         n_compute_elements = 1000000
         allocate(compute_elements(n_compute_elements))
         compute_elements(:) = 0
-        ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp)
+        ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp, aggregation_factor=1)
         if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
             write(test_log,'(a)') "PASS"
         else
@@ -804,7 +841,7 @@ contains
                 end do
             end if
 
-            ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp)
+            ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp, aggregation_factor=1)
             if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
 
                 ! The correct comp_list and io_list arrays, below, were verified manually
@@ -868,7 +905,7 @@ contains
                 end do
             end if
 
-            ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp)
+            ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp, aggregation_factor=1)
             if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
 
                 ! The correct comp_list and io_list arrays, below, were verified manually
@@ -934,7 +971,7 @@ contains
                 end do
             end if
 
-            ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp)
+            ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp, aggregation_factor=1)
             if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
 
                 ! The correct comp_list and io_list arrays, below, were verified manually
@@ -975,6 +1012,165 @@ contains
             end if
         else
             write(test_log, '(a)') '<<< Tests that require exactly 2 MPI tasks will not be run >>>'
+        end if
+
+        !
+        ! The following tests will only be run if there are exactly four MPI tasks.
+        ! In principle, as long as there are at least four MPI ranks in MPI_COMM_WORLD,
+        ! an intracommunicator with exactly four ranks could be created for these tests.
+        !
+        if (comm_size == 4) then
+            ! Create a SMIOL context for testing decomp routines
+            nullify(context)
+            ierr = SMIOLf_init(MPI_COMM_WORLD, 4, 1, context)
+            if (ierr /= SMIOL_SUCCESS .or. .not. associated(context)) then
+                ierrcount = -1
+                return
+            end if
+
+            ! Round-robin compute, stride 1, aggregate 2
+            write(test_log,'(a)',advance='no') 'Round-robin compute, stride 1, aggregate 2: '
+            n_compute_elements = 4
+            allocate(compute_elements(n_compute_elements))
+
+            do i = 1, n_compute_elements
+                compute_elements(i) = 4 * (i-1) + comm_rank
+            end do
+
+            ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp, aggregation_factor=2)
+            if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
+
+                ! The correct comp_list and io_list arrays, below, were verified manually
+                if (comm_rank == 0) then
+                    matched = compare_decomps(decomp, &
+                                      [ integer(kind=SMIOL_offset_kind) :: 4, 0, 2, 0, 4, 1, 2, 1, 5, 2, 2, 2, 6, 3, 2, 3, 7 ], &
+                                      [ integer(kind=SMIOL_offset_kind) :: 2, 0, 2, 0, 1, 2, 2, 2, 3 ])
+                else if (comm_rank == 1) then
+                    matched = compare_decomps(decomp, &
+                                      [ integer(kind=SMIOL_offset_kind) :: 0 ], &
+                                      [ integer(kind=SMIOL_offset_kind) :: 2, 0, 2, 0, 1, 2, 2, 2, 3 ])
+                else if (comm_rank == 2) then
+                    matched = compare_decomps(decomp, &
+                                      [ integer(kind=SMIOL_offset_kind) :: 4, 0, 2, 0, 4, 1, 2, 1, 5, 2, 2, 2, 6, 3, 2, 3, 7 ], &
+                                      [ integer(kind=SMIOL_offset_kind) :: 2, 0, 2, 0, 1, 2, 2, 2, 3 ])
+                else
+                    matched = compare_decomps(decomp, &
+                                      [ integer(kind=SMIOL_offset_kind) :: 0 ], &
+                                      [ integer(kind=SMIOL_offset_kind) :: 2, 0, 2, 0, 1, 2, 2, 2, 3 ])
+                end if
+
+                if (matched) then
+                    write(test_log,'(a)') 'PASS'
+                else
+                    write(test_log,'(a)') 'FAIL - the decomp did not contain the expected values'
+                    ierrcount = ierrcount + 1
+                end if
+            else
+                write(test_log, '(a)') 'FAIL - Either SMIOL_SUCCESS was not returned or decomp was not associated'
+                ierrcount = ierrcount + 1
+            end if
+
+            deallocate(compute_elements)
+
+            ierr = SMIOLf_free_decomp(decomp)
+            if (ierr /= SMIOL_SUCCESS .or. associated(decomp)) then
+                write(test_log,'(a)') 'After previous unit test, SMIOL_free_decomp was unsuccessful: FAIL'
+                ierrcount = ierrcount + 1
+            end if
+
+            ! Free the SMIOL context
+            ierr = SMIOLf_finalize(context)
+            if (ierr /= SMIOL_SUCCESS .or. associated(context)) then
+                ierrcount = -1
+                return
+            end if
+
+            ! Create a SMIOL context for testing decomp routines
+            nullify(context)
+            ierr = SMIOLf_init(MPI_COMM_WORLD, 2, 2, context)
+            if (ierr /= SMIOL_SUCCESS .or. .not. associated(context)) then
+                ierrcount = -1
+                return
+            end if
+
+            ! Round-robin compute, stride 2, aggregate 3
+            write(test_log,'(a)',advance='no') 'Round-robin compute, stride 2, aggregate 3: '
+            n_compute_elements = 4
+            allocate(compute_elements(n_compute_elements))
+
+            do i = 1, n_compute_elements
+                compute_elements(i) = 4 * (i-1) + comm_rank
+            end do
+
+            ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp, aggregation_factor=3)
+            if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
+
+                ! The correct comp_list and io_list arrays, below, were verified manually
+                if (comm_rank == 0) then
+                    matched = compare_decomps(decomp, &
+                                      [ integer(kind=SMIOL_offset_kind) :: 2, 0, 6, 0, 4, 8, 1, 5, 9, 2, 6, 2, 6, 10, 3, 7, 11 ], &
+                                      [ integer(kind=SMIOL_offset_kind) :: 2, 0, 6, 0, 1, 2, 4, 5, 6, 3, 2, 3, 7 ])
+                else if (comm_rank == 1) then
+                    matched = compare_decomps(decomp, &
+                                      [ integer(kind=SMIOL_offset_kind) :: 0 ], &
+                                      [ integer(kind=SMIOL_offset_kind) :: 0 ])
+                else if (comm_rank == 2) then
+                    matched = compare_decomps(decomp, &
+                                      [ integer(kind=SMIOL_offset_kind) :: 0 ], &
+                                      [ integer(kind=SMIOL_offset_kind) :: 2, 0, 6, 0, 1, 2, 4, 5, 6, 3, 2, 3, 7 ])
+                else
+                    matched = compare_decomps(decomp, &
+                                      [ integer(kind=SMIOL_offset_kind) :: 2, 0, 2, 0, 1, 2, 2, 2, 3 ], &
+                                      [ integer(kind=SMIOL_offset_kind) :: 0 ])
+                end if
+
+                if (matched) then
+                    write(test_log,'(a)') 'PASS'
+                else
+                    write(test_log,'(a)') 'FAIL - the decomp did not contain the expected values'
+                    ierrcount = ierrcount + 1
+                end if
+            else
+                write(test_log, '(a)') 'FAIL - Either SMIOL_SUCCESS was not returned or decomp was not associated'
+                ierrcount = ierrcount + 1
+            end if
+
+            ierr = SMIOLf_free_decomp(decomp)
+            if (ierr /= SMIOL_SUCCESS .or. associated(decomp)) then
+                write(test_log,'(a)') 'After previous unit test, SMIOL_free_decomp was unsuccessful: FAIL'
+                ierrcount = ierrcount + 1
+            end if
+
+            ! Round-robin compute, stride 2, aggregate 0
+            write(test_log,'(a)',advance='no') 'Round-robin compute, stride 2, aggregate 0: '
+            ierr = SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp, aggregation_factor=0)
+            if (ierr == SMIOL_SUCCESS .and. associated(decomp)) then
+                !
+                ! Since the aggregation factor that will ultimately be chosen cannot in general
+                ! be predicted, we cannot really verify the contents of the decomp.
+                !
+                write(test_log,'(a)') 'PASS'
+            else
+                write(test_log, '(a)') 'FAIL - Either SMIOL_SUCCESS was not returned or decomp was not associated'
+                ierrcount = ierrcount + 1
+            end if
+
+            ierr = SMIOLf_free_decomp(decomp)
+            if (ierr /= SMIOL_SUCCESS .or. associated(decomp)) then
+                write(test_log,'(a)') 'After previous unit test, SMIOL_free_decomp was unsuccessful: FAIL'
+                ierrcount = ierrcount + 1
+            end if
+
+            deallocate(compute_elements)
+
+            ! Free the SMIOL context
+            ierr = SMIOLf_finalize(context)
+            if (ierr /= SMIOL_SUCCESS .or. associated(context)) then
+                ierrcount = -1
+                return
+            end if
+        else
+            write(test_log, '(a)') '<<< Tests that require exactly 4 MPI tasks will not be run >>>'
         end if
 
         write(test_log,'(a)') ''
@@ -2628,7 +2824,8 @@ contains
                 endif
             enddo
 
-            if (SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp) /= SMIOL_SUCCESS) then
+            if (SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp, aggregation_factor=1) &
+                /= SMIOL_SUCCESS) then
                 write(test_log,'(a)') "FAIL: SMIOLf_create_decomp was not called successfully"
                 ierrcount = -1
                 return
@@ -2776,6 +2973,331 @@ contains
         write(test_log,'(a)') ''
 
     end function test_put_get_var
+
+
+    function test_io_aggregation(test_log) result(ierrcount)
+
+        implicit none
+
+        integer, intent(in) :: test_log
+        integer :: ierrcount
+
+        integer(kind=c_size_t) :: i, j
+        integer :: ierr
+        integer :: comm_size, comm_rank
+        type (SMIOLf_context), pointer :: context
+        integer :: num_io_tasks, io_stride
+        integer(kind=c_size_t) :: n_compute_elements, n_total, offset
+        integer(kind=SMIOL_offset_kind), dimension(:), pointer :: compute_elements
+        type (SMIOLf_decomp), pointer :: decomp_noagg, decomp_agg2, decomp_agg0
+        type (SMIOLf_file), pointer :: file
+        character(len=32), dimension(2) :: dimnames
+        real, dimension(:,:), pointer :: theta1, theta2
+        logical :: all_equal
+
+
+        write(test_log,'(a)') '********************************************************************************'
+        write(test_log,'(a)') '*************************** I/O aggregation tests ******************************'
+        write(test_log,'(a)') ''
+
+        ierrcount = 0
+
+        call MPI_Comm_rank(MPI_COMM_WORLD, comm_rank, ierr)
+        if (ierr /= MPI_SUCCESS) then
+            write(test_log, '(a)') 'Failed to get MPI rank...'
+            ierrcount = -1
+            return
+        end if
+
+        call MPI_Comm_size(MPI_COMM_WORLD, comm_size, ierr)
+        if (ierr /= MPI_SUCCESS) then
+            write(test_log, '(a)') 'Failed to get MPI size...'
+            ierrcount = -1
+            return
+        end if
+
+        num_io_tasks = comm_size
+        io_stride = 1
+
+        !
+        ! Create a SMIOL context for testing aggregation
+        !
+        ierr = SMIOLf_init(MPI_COMM_WORLD, num_io_tasks, io_stride, context)
+        if (ierr /= SMIOL_SUCCESS .or. .not. associated(context)) then
+            write(test_log,'(a)') 'Failed to initalize a SMIOL context'
+            ierrcount = -1
+            return
+        end if
+
+        !
+        ! Define compute elements for all tasks
+        !
+        n_compute_elements = 10 + comm_rank    ! Give each task a different number... why not?
+
+        ! Total number of compute elements across all tasks
+        n_total = 10 * comm_size + (comm_size * (comm_size - 1)) / 2
+
+        ! Offset for contiguous range of elements computed on this task
+        offset = 10 * comm_rank + (comm_rank * (comm_rank - 1)) / 2
+
+        allocate(compute_elements(n_compute_elements))
+
+        ! Tasks compute contiguous ranges of elements in reverse order
+        do i = 1, n_compute_elements
+            compute_elements(i) = n_total - (offset + i)
+        end do
+
+        !
+        ! Create three decompositions: one that does not use aggregation, one that uses
+        ! an aggregation factor of two, and one that specifies an aggregation factor of 0
+        !
+        if (SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp_noagg, aggregation_factor=1) &
+            /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to create a decomp with aggregation_factor=1'
+            ierrcount = -1
+            return
+        end if
+
+        if (SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp_agg2, aggregation_factor=2) &
+            /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to create a decomp with aggregation_factor=2'
+            ierrcount = -1
+            return
+        end if
+
+        if (SMIOLf_create_decomp(context, n_compute_elements, compute_elements, decomp_agg0, aggregation_factor=0) &
+            /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to create a decomp with aggregation_factor=0'
+            ierrcount = -1
+            return
+        end if
+
+        !
+        ! Create a new file, to which we will write using all three of the decompositions from above
+        !
+        nullify(file)
+        ierr = SMIOLf_open_file(context, 'test_agg_f.nc', SMIOL_FILE_CREATE, file)
+        if (ierr /= SMIOL_SUCCESS .or. .not. associated(file)) then
+            write(test_log,'(a)') 'Failed to create a file for testing aggregation'
+            ierrcount = -1
+            return
+        end if
+
+        if (SMIOLf_define_dim(file, 'nCells', int(n_total, kind=SMIOL_offset_kind)) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to create dimension nCells...'
+            ierrcount = -1
+            return
+        end if
+
+        if (SMIOLf_define_dim(file, 'nVertLevels', 55_SMIOL_offset_kind) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to create dimension nVertLevels...'
+            ierrcount = -1
+            return
+        end if
+
+        ! The theta_noagg variable will be written with no aggregation and later read with aggregation
+        dimnames(1) = 'nVertLevels'
+        dimnames(2) = 'nCells'
+        if (SMIOLf_define_var(file, 'theta_noagg', SMIOL_REAL32, 2, dimnames) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to create theta_noagg var...'
+            ierrcount = -1
+            return
+        end if
+
+        ! The theta_agg2 variable will be written with aggregation=2 and later read without aggregation
+        dimnames(1) = 'nVertLevels'
+        dimnames(2) = 'nCells'
+        if (SMIOLf_define_var(file, 'theta_agg2', SMIOL_REAL32, 2, dimnames) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to create theta_agg2 var...'
+            ierrcount = -1
+            return
+        end if
+
+        ! The theta_agg0 variable will be written with aggregation=0 and later read with aggregation=2
+        dimnames(1) = 'nVertLevels'
+        dimnames(2) = 'nCells'
+        if (SMIOLf_define_var(file, 'theta_agg0', SMIOL_REAL32, 2, dimnames) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to create theta_agg0 var...'
+            ierrcount = -1
+            return
+        end if
+
+        !
+        ! Write a simple pattern to the theta field
+        !
+        allocate(theta1(55, n_compute_elements))
+
+        do j = 1, n_compute_elements
+            do i = 1, 55
+                theta1(i, j) = real(55 * compute_elements(j) + i)
+            end do
+        end do
+
+        deallocate(compute_elements)
+
+        ! Writing a field with a no-aggregation decomp
+        write(test_log,'(a)',advance='no') 'Write a field with a decomp that does not use aggregation: '
+        ierr = SMIOLf_put_var(file, 'theta_noagg', decomp_noagg, theta1)
+        if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned by SMIOLf_put_var'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Writing a field with aggregation=2 decomp
+        write(test_log,'(a)',advance='no') 'Write a field with a decomp that uses aggregation factor 2: '
+        ierr = SMIOLf_put_var(file, 'theta_agg2', decomp_agg2, theta1)
+        if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned by SMIOLf_put_var'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Writing a field with aggregation=0 decomp
+        write(test_log,'(a)',advance='no') 'Write a field with a decomp that uses aggregation factor 0: '
+        ierr = SMIOLf_put_var(file, 'theta_agg0', decomp_agg0, theta1)
+        if (ierr == SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned by SMIOLf_put_var'
+            ierrcount = ierrcount + 1
+        end if
+
+        if (SMIOLf_close_file(file) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to close file for aggregregation tests'
+            ierrcount = -1
+            return
+        end if
+
+        nullify(file)
+        ierr = SMIOLf_open_file(context, 'test_agg_f.nc', SMIOL_FILE_READ, file)
+        if (ierr /= SMIOL_SUCCESS .or. .not. associated(file)) then
+            write(test_log,'(a)') 'Failed to open file that was created for testing aggregation'
+            ierrcount = -1
+            return
+        end if
+
+        allocate(theta2(55, n_compute_elements))
+
+        ! Read a field that was written with aggregation=2 using a no-aggregation decomp
+        write(test_log,'(a)',advance='no') 'Read field written with aggregation=2 using no aggregation: '
+        theta2(:,:) = -1.0
+        ierr = SMIOLf_get_var(file, 'theta_agg2', decomp_noagg, theta2)
+        if (ierr == SMIOL_SUCCESS) then
+            ! Compare with theta1, which still contains the correct field
+            all_equal = .true.
+            AGG_COMP_LOOP1: do j = 1, n_compute_elements
+                do i = 1, 55
+                    if (theta1(i, j) /= theta2(i, j)) then
+                        all_equal = .false.
+                        exit AGG_COMP_LOOP1
+                    end if
+                end do
+            end do AGG_COMP_LOOP1
+
+            if (all_equal) then
+                write(test_log,'(a)') 'PASS'
+            else
+                write(test_log,'(a)') 'FAIL - The field was read with incorrect values'
+                ierrcount = ierrcount + 1
+            end if
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned by SMIOLf_get_var'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Read a field that was written with no aggregation using an aggregation=0 decomp
+        write(test_log,'(a)',advance='no') 'Read field written with no aggregation using aggregation=0: '
+        theta2(:,:) = -1.0
+        ierr = SMIOLf_get_var(file, 'theta_noagg', decomp_agg0, theta2)
+        if (ierr == SMIOL_SUCCESS) then
+            ! Compare with theta1, which still contains the correct field
+            all_equal = .true.
+            AGG_COMP_LOOP2: do j = 1, n_compute_elements
+                do i = 1, 55
+                    if (theta1(i, j) /= theta2(i, j)) then
+                        all_equal = .false.
+                        exit AGG_COMP_LOOP2
+                    end if
+                end do
+            end do AGG_COMP_LOOP2
+
+            if (all_equal) then
+                write(test_log,'(a)') 'PASS'
+            else
+                write(test_log,'(a)') 'FAIL - The field was read with incorrect values'
+                ierrcount = ierrcount + 1
+            end if
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned by SMIOLf_get_var'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Read a field that was written with aggregation=0 using an aggregation=2 decomp
+        write(test_log,'(a)',advance='no') 'Read field written with aggregation=0 using aggregation=2: '
+        theta2(:,:) = -1.0
+        ierr = SMIOLf_get_var(file, 'theta_agg0', decomp_agg2, theta2)
+        if (ierr == SMIOL_SUCCESS) then
+            ! Compare with theta1, which still contains the correct field
+            all_equal = .true.
+            AGG_COMP_LOOP3: do j = 1, n_compute_elements
+                do i = 1, 55
+                    if (theta1(i, j) /= theta2(i, j)) then
+                        all_equal = .false.
+                        exit AGG_COMP_LOOP3
+                    end if
+                end do
+            end do AGG_COMP_LOOP3
+
+            if (all_equal) then
+                write(test_log,'(a)') 'PASS'
+            else
+                write(test_log,'(a)') 'FAIL - The field was read with incorrect values'
+                ierrcount = ierrcount + 1
+            end if
+        else
+            write(test_log,'(a)') 'FAIL - SMIOL_SUCCESS was not returned by SMIOLf_get_var'
+            ierrcount = ierrcount + 1
+        end if
+
+        if (SMIOLf_close_file(file) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to close file for aggregregation tests'
+            ierrcount = -1
+            return
+        end if
+
+        deallocate(theta1)
+        deallocate(theta2)
+
+        if (SMIOLf_free_decomp(decomp_noagg) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to free decomp_noagg'
+            ierrcount = -1
+            return
+        end if
+
+        if (SMIOLf_free_decomp(decomp_agg2) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to free decomp_agg2'
+            ierrcount = -1
+            return
+        end if
+
+        if (SMIOLf_free_decomp(decomp_agg0) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to free decomp_agg0'
+            ierrcount = -1
+            return
+        end if
+
+        ierr = SMIOLf_finalize(context)
+        if (ierr /= SMIOL_SUCCESS .or. associated(context)) then
+            ierrcount = -1
+            return
+        end if
+
+        write(test_log,'(a)') ''
+
+    end function test_io_aggregation
 
 
     !-----------------------------------------------------------------------

@@ -820,6 +820,10 @@ int SMIOL_put_var(struct SMIOL_file *file, const char *varname,
 	size_t *start;
 	size_t *count;
 
+	void *agg_buf = NULL;
+	const void *agg_buf_cnst = NULL;
+
+
 	/*
 	 * Basic checks on arguments
 	 */
@@ -852,13 +856,63 @@ int SMIOL_put_var(struct SMIOL_file *file, const char *varname,
 			return SMIOL_MALLOC_FAILURE;
 		}
 
+		if (decomp->agg_factor != 1) {
+			MPI_Datatype dtype;
+			MPI_Comm agg_comm;
+
+			ierr = MPI_Type_contiguous((int)element_size,
+			                           MPI_UINT8_T, &dtype);
+			if (ierr != MPI_SUCCESS) {
+				fprintf(stderr, "MPI_Type_contiguous failed with code %i\n", ierr);
+				return SMIOL_MPI_ERROR;
+			}
+
+			ierr = MPI_Type_commit(&dtype);
+			if (ierr != MPI_SUCCESS) {
+				fprintf(stderr, "MPI_Type_commit failed with code %i\n", ierr);
+				return SMIOL_MPI_ERROR;
+			}
+
+			agg_buf = malloc(element_size * decomp->n_compute_agg);
+			if (agg_buf == NULL && decomp->n_compute_agg > 0) {
+				return SMIOL_MALLOC_FAILURE;
+			}
+
+			agg_comm = MPI_Comm_f2c(decomp->agg_comm);
+
+			ierr = MPI_Gatherv((const void *)buf,
+			                   (int)decomp->n_compute, dtype,
+			                   (void *)agg_buf,
+			                   (const int *)decomp->counts,
+			                   (const int *)decomp->displs,
+			                   dtype, 0, agg_comm);
+			if (ierr != MPI_SUCCESS) {
+				fprintf(stderr, "MPI_Gatherv failed with code %i\n", ierr);
+				return SMIOL_MPI_ERROR;
+			}
+
+			ierr = MPI_Type_free(&dtype);
+			if (ierr != MPI_SUCCESS) {
+				fprintf(stderr, "MPI_Type_free failed with code %i\n", ierr);
+				return SMIOL_MPI_ERROR;
+			}
+
+			agg_buf_cnst = agg_buf;
+		} else {
+			agg_buf_cnst = buf;
+		}
+
 		ierr = transfer_field(decomp, SMIOL_COMP_TO_IO,
-		                      element_size, buf, out_buf);
+		                      element_size, agg_buf_cnst, out_buf);
 		if (ierr != SMIOL_SUCCESS) {
 			free(start);
 			free(count);
 			free(out_buf);
 			return ierr;
+		}
+
+		if (decomp->agg_factor != 1) {
+			free(agg_buf);
 		}
 	}
 
@@ -1003,6 +1057,9 @@ int SMIOL_get_var(struct SMIOL_file *file, const char *varname,
 	void *in_buf = NULL;
 	size_t *start;
 	size_t *count;
+
+	void *agg_buf = NULL;
+
 
 	/*
 	 * Basic checks on arguments
@@ -1155,8 +1212,57 @@ int SMIOL_get_var(struct SMIOL_file *file, const char *varname,
 	 * be done for decomposed variables.
 	 */
 	if (decomp) {
+		if (decomp->agg_factor != 1) {
+			agg_buf = malloc(element_size * decomp->n_compute_agg);
+			if (agg_buf == NULL && decomp->n_compute_agg > 0) {
+				return SMIOL_MALLOC_FAILURE;
+			}
+		} else {
+			agg_buf = buf;
+		}
+
 		ierr = transfer_field(decomp, SMIOL_IO_TO_COMP,
-		                      element_size, in_buf, buf);
+		                      element_size, in_buf, agg_buf);
+
+		if (decomp->agg_factor != 1) {
+			MPI_Datatype dtype = MPI_DATATYPE_NULL;
+			MPI_Comm agg_comm;
+
+			ierr = MPI_Type_contiguous((int)element_size,
+			                           MPI_UINT8_T, &dtype);
+			if (ierr != MPI_SUCCESS) {
+				fprintf(stderr, "MPI_Type_contiguous failed with code %i\n", ierr);
+				return SMIOL_MPI_ERROR;
+			}
+
+			ierr = MPI_Type_commit(&dtype);
+			if (ierr != MPI_SUCCESS) {
+				fprintf(stderr, "MPI_Type_commit failed with code %i\n", ierr);
+				return SMIOL_MPI_ERROR;
+			}
+
+			agg_comm = MPI_Comm_f2c(decomp->agg_comm);
+
+			ierr = MPI_Scatterv((const void *)agg_buf,
+			                    (const int*)decomp->counts,
+			                    (const int *)decomp->displs,
+			                    dtype, (void *)buf,
+			                    (int)decomp->n_compute,
+			                    dtype, 0, agg_comm);
+			if (ierr != MPI_SUCCESS) {
+				fprintf(stderr, "MPI_Scatterv failed with code %i\n", ierr);
+				return SMIOL_MPI_ERROR;
+			}
+
+			free(agg_buf);
+
+			ierr = MPI_Type_free(&dtype);
+			if (ierr != MPI_SUCCESS) {
+				fprintf(stderr, "MPI_Type_free failed with code %i\n", ierr);
+				return SMIOL_MPI_ERROR;
+			}
+		}
+
 		free(in_buf);
 
 		if (ierr != SMIOL_SUCCESS) {
@@ -1575,8 +1681,19 @@ int SMIOL_get_frame(struct SMIOL_file *file, SMIOL_Offset *frame)
  *
  * Creates a mapping between compute elements and I/O elements.
  *
- * Given arrays of global element IDs that each task computes, this routine works
- * out a mapping of elements between compute and I/O tasks.
+ * Given arrays of global element IDs that each task computes, this routine
+ * works out a mapping of elements between compute and I/O tasks.
+ *
+ * The aggregation factor is used to indicate the size of subsets of ranks
+ * that will gather fields onto a single rank in each subset before transferring
+ * that field from compute to output tasks; in a symmetric way, it also
+ * indicates the size of subsets over which fields will be scattered after they
+ * are transferred from input tasks to a single compute tasks in each subset.
+ *
+ * An aggregation factor of 0 indicates that the implementation should choose
+ * a suitable aggregation factor (usually matching the size of shared-memory
+ * domains), while a positive integer specifies a specific size for task groups
+ * to be used for aggregation.
  *
  * If all input arguments are determined to be valid and if the routine is
  * successful in working out a mapping, the decomp pointer is allocated and
@@ -1586,6 +1703,7 @@ int SMIOL_get_frame(struct SMIOL_file *file, SMIOL_Offset *frame)
  *******************************************************************************/
 int SMIOL_create_decomp(struct SMIOL_context *context,
                         size_t n_compute_elements, SMIOL_Offset *compute_elements,
+                        int aggregation_factor,
                         struct SMIOL_decomp **decomp)
 {
 	size_t i;
@@ -1596,6 +1714,13 @@ int SMIOL_create_decomp(struct SMIOL_context *context,
 	MPI_Datatype dtype;
 	int ierr;
 
+	size_t n_compute_elements_agg;
+	SMIOL_Offset *compute_elements_agg = NULL;
+	MPI_Comm agg_comm = MPI_COMM_NULL;
+	int *counts = NULL;
+	int *displs = NULL;
+	int actual_agg_factor;
+
 
 	/*
 	 * Minimal check on the validity of arguments
@@ -1605,6 +1730,10 @@ int SMIOL_create_decomp(struct SMIOL_context *context,
 	}
 
 	if (compute_elements == NULL && n_compute_elements != 0) {
+		return SMIOL_INVALID_ARGUMENT;
+	}
+
+	if (aggregation_factor < 0) {
 		return SMIOL_INVALID_ARGUMENT;
 	}
 
@@ -1664,14 +1793,78 @@ int SMIOL_create_decomp(struct SMIOL_context *context,
 	}
 
 	/*
+	 * If aggregation_factor != 1, aggregate the list of compute_elements
+	 * before building the mapping
+	 */
+	if (aggregation_factor != 1) {
+		int comm_rank = context->comm_rank;
+
+		/*
+		 * Create intracommunicators for aggregation
+		 */
+		if (aggregation_factor == 0) {
+			ierr = MPI_Comm_split_type(comm, MPI_COMM_TYPE_SHARED,
+			                           comm_rank, MPI_INFO_NULL,
+			                           &agg_comm);
+		} else {
+			ierr = MPI_Comm_split(comm,
+			                      (comm_rank / aggregation_factor),
+			                      comm_rank,
+			                      &agg_comm);
+		}
+		if (ierr != MPI_SUCCESS) {
+			fprintf(stderr, "Error: MPI_Comm_split failed with code %i\n",
+			        ierr);
+			return SMIOL_MPI_ERROR;
+		}
+
+		ierr = MPI_Comm_size(agg_comm, &actual_agg_factor);
+		if (ierr != MPI_SUCCESS) {
+			fprintf(stderr, "Error: MPI_Comm_size failed with code %i\n",
+			        ierr);
+			return SMIOL_MPI_ERROR;
+		}
+
+		/*
+		 * Create aggregated compute_elements list if the actual
+		 * aggregation factor is > 1
+		 */
+		if (actual_agg_factor > 1) {
+			aggregate_list(agg_comm, 0, n_compute_elements,
+			               compute_elements,
+			               &n_compute_elements_agg,
+			               &compute_elements_agg, &counts, &displs);
+		} else {
+			MPI_Comm_free(&agg_comm);
+			n_compute_elements_agg = n_compute_elements;
+			compute_elements_agg = compute_elements;
+		}
+	} else {
+		actual_agg_factor = 1;
+		n_compute_elements_agg = n_compute_elements;
+		compute_elements_agg = compute_elements;
+	}
+
+	/*
 	 * Build the mapping between compute tasks and I/O tasks
 	 */
 	ierr = build_exchange(context,
-	                      n_compute_elements, compute_elements,
+	                      n_compute_elements_agg, compute_elements_agg,
 	                      io_count, io_elements,
 	                      decomp);
 
 	free(io_elements);
+
+	if (actual_agg_factor > 1) {
+		(*decomp)->agg_factor = actual_agg_factor;
+		(*decomp)->agg_comm = MPI_Comm_c2f(agg_comm);
+		(*decomp)->n_compute = n_compute_elements;
+		(*decomp)->n_compute_agg = n_compute_elements_agg;
+		(*decomp)->counts = counts;
+		(*decomp)->displs = displs;
+
+		free(compute_elements_agg);
+	}
 
 	/*
 	 * If decomp was successfully created, add io_start and io_count values
@@ -1699,12 +1892,26 @@ int SMIOL_create_decomp(struct SMIOL_context *context,
  ********************************************************************************/
 int SMIOL_free_decomp(struct SMIOL_decomp **decomp)
 {
+	MPI_Comm comm;
+
 	if ((*decomp) == NULL) {
 		return SMIOL_SUCCESS;
 	}
 
 	free((*decomp)->comp_list);
 	free((*decomp)->io_list);
+
+	comm = MPI_Comm_f2c((*decomp)->agg_comm);
+	if (comm != MPI_COMM_NULL) {
+		MPI_Comm_free(&comm);
+	}
+	if ((*decomp)->counts != NULL) {
+		free((*decomp)->counts);
+	}
+	if ((*decomp)->displs != NULL) {
+		free((*decomp)->displs);
+	}
+
 	free((*decomp));
 	*decomp = NULL;
 

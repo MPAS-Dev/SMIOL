@@ -24,6 +24,7 @@ int test_io_decomp(FILE *test_log);
 int test_aggregate_list(FILE *test_log);
 int test_set_get_frame(FILE* test_log);
 int test_put_get_vars(FILE *test_log);
+int test_io_aggregation(FILE *test_log);
 int compare_decomps(struct SMIOL_decomp *decomp,
                     size_t n_comp_list, SMIOL_Offset *comp_list_correct,
                     size_t n_io_list, SMIOL_Offset *io_list_correct);
@@ -298,6 +299,17 @@ int main(int argc, char **argv)
 		fprintf(test_log, "%i tests FAILED!\n\n", ierr);
 	}
 
+	/*
+	 * Test I/O aggregation
+	 */
+	ierr = test_io_aggregation(test_log);
+	if (ierr == 0) {
+		fprintf(test_log, "All tests PASSED!\n\n");
+	}
+	else {
+		fprintf(test_log, "%i tests FAILED!\n\n", ierr);
+	}
+
 
 	num_io_tasks = 16;
 	io_stride = 4;
@@ -318,7 +330,7 @@ int main(int argc, char **argv)
 
 	memset((void *)compute_elements, 0, sizeof(SMIOL_Offset) * n_compute_elements);
 
-	ierr = SMIOL_create_decomp(context, n_compute_elements, compute_elements,
+	ierr = SMIOL_create_decomp(context, n_compute_elements, compute_elements, 1,
 	                           &decomp);
 	if (ierr != SMIOL_SUCCESS) {
 		printf("ERROR: SMIOL_create_decomp - SMIOL_SUCCESS was not returned\n");
@@ -834,7 +846,7 @@ int test_decomp(FILE *test_log)
 	/* Test create decomp with compute_elements == NULL and n_compute != 0 */
 	fprintf(test_log, "Testing SMIOL_create_decomp with NULL elements and n_elements != 0: ");
 	n_compute_elements = 1;
-	ierr = SMIOL_create_decomp(context, n_compute_elements, compute_elements, &decomp);
+	ierr = SMIOL_create_decomp(context, n_compute_elements, compute_elements, 1, &decomp);
 	if (ierr == SMIOL_INVALID_ARGUMENT && decomp == NULL) {
 		fprintf(test_log, "PASS\n");
 	} else {
@@ -859,7 +871,7 @@ int test_decomp(FILE *test_log)
 	fprintf(test_log, "Everything OK (SMIOL_create_decomp) with 0 elements: ");
 	n_compute_elements = 0;
 	compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
-	ierr = SMIOL_create_decomp(context, n_compute_elements, compute_elements, &decomp);
+	ierr = SMIOL_create_decomp(context, n_compute_elements, compute_elements, 1, &decomp);
 	if (ierr == SMIOL_SUCCESS && decomp != NULL) {
 		fprintf(test_log, "PASS\n");
 	} else {
@@ -886,12 +898,36 @@ int test_decomp(FILE *test_log)
 		decomp = NULL;
 	}
 
+	/* Check for error with negative aggregation factor */
+	fprintf(test_log, "Check for error with negative aggregation factor: ");
+	n_compute_elements = 0;
+	compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
+	ierr = SMIOL_create_decomp(context, n_compute_elements, compute_elements, -1, &decomp);
+	if (ierr == SMIOL_INVALID_ARGUMENT && decomp == NULL) {
+		fprintf(test_log, "PASS\n");
+	} else if (ierr != SMIOL_INVALID_ARGUMENT) {
+		fprintf(test_log, "FAIL - SMIOL_INVALID_ARGUMENT was not returned\n");
+		errcount++;
+	} else if (decomp != NULL) {
+		fprintf(test_log, "FAIL - decomp was not NULL on return\n");
+		errcount++;
+	}
+	free(compute_elements);
+	if (decomp != NULL) {
+		/*
+		 * Since we do not expect decomp to be non-NULL, we have no way
+		 * to know what state decomp is in, so just leak memory and nullify
+		 * rather than calling SMIOL_free_decomp with unknown memory.
+		 */
+		decomp = NULL;
+	}
+
 	/* Create and Free Decomp with elements == 1 */
 	fprintf(test_log, "Everything OK (SMIOL_create_decomp) with 1 elements: ");
 	n_compute_elements = 1;
 	compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
 	memset((void *)compute_elements, 0, sizeof(SMIOL_Offset) * n_compute_elements);
-	ierr = SMIOL_create_decomp(context, n_compute_elements, compute_elements, &decomp);
+	ierr = SMIOL_create_decomp(context, n_compute_elements, compute_elements, 1, &decomp);
 	if (ierr == SMIOL_SUCCESS && decomp != NULL) {
 		fprintf(test_log, "PASS\n");
 	} else {
@@ -922,7 +958,7 @@ int test_decomp(FILE *test_log)
 	n_compute_elements = 1000000;
 	compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
 	memset((void *)compute_elements, 0, sizeof(SMIOL_Offset) * n_compute_elements);
-	ierr = SMIOL_create_decomp(context, n_compute_elements, compute_elements, &decomp);
+	ierr = SMIOL_create_decomp(context, n_compute_elements, compute_elements, 1, &decomp);
 	if (ierr == SMIOL_SUCCESS && decomp != NULL) {
 		fprintf(test_log, "PASS\n");
 	} else {
@@ -996,7 +1032,7 @@ int test_decomp(FILE *test_log)
 				compute_elements[i] = (SMIOL_Offset)(2 * i);        /* Even elements */
 			}
 		}
-		ierr = SMIOL_create_decomp(context, n_compute_elements, compute_elements, &decomp);
+		ierr = SMIOL_create_decomp(context, n_compute_elements, compute_elements, 1, &decomp);
 		if (ierr == SMIOL_SUCCESS && decomp != NULL) {
 
 			/* The correct comp_list and io_list arrays, below, were verified manually */
@@ -1060,7 +1096,7 @@ int test_decomp(FILE *test_log)
 				compute_elements[i] = (SMIOL_Offset)(2 * i + 1);    /* Odd elements */
 			}
 		}
-		ierr = SMIOL_create_decomp(context, n_compute_elements, compute_elements, &decomp);
+		ierr = SMIOL_create_decomp(context, n_compute_elements, compute_elements, 1, &decomp);
 		if (ierr == SMIOL_SUCCESS && decomp != NULL) {
 
 			/* The correct comp_list and io_list arrays, below, were verified manually */
@@ -1126,7 +1162,7 @@ int test_decomp(FILE *test_log)
 				compute_elements[i] = (SMIOL_Offset)(n_compute_elements - 1 - i);    /* All compute elements */
 			}
 		}
-		ierr = SMIOL_create_decomp(context, n_compute_elements, compute_elements, &decomp);
+		ierr = SMIOL_create_decomp(context, n_compute_elements, compute_elements, 1, &decomp);
 		if (ierr == SMIOL_SUCCESS && decomp != NULL) {
 
 			/* The correct comp_list and io_list arrays, below, were verified manually */
@@ -1170,6 +1206,177 @@ int test_decomp(FILE *test_log)
 
 	} else {
 		fprintf(test_log, "<<< Tests that require exactly 2 MPI tasks will not be run >>>\n");
+	}
+
+	/*
+	 * The following tests will only be run if there are exactly four MPI tasks.
+	 * In principle, as long as there are at least four MPI ranks in MPI_COMM_WORLD,
+	 * an intracommunicator with exactly four ranks could be created for these tests.
+	 */
+	if (comm_size == 4) {
+		/* Create a SMIOL context for testing decomp routines */
+		ierr = SMIOL_init(MPI_COMM_WORLD, 4, 1, &context);
+		if (ierr != SMIOL_SUCCESS || context == NULL) {
+			fprintf(test_log, "Failed to create SMIOL context...\n");
+			return -1;
+		}
+
+		/* Round-robin compute, stride 1, aggregate 2 */
+		fprintf(test_log, "Round-robin compute, stride 1, aggregate 2: ");
+		n_compute_elements = 4;
+		compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
+
+		for (i = 0; i < n_compute_elements; i++) {
+			compute_elements[i] = (SMIOL_Offset)(4 * i + comm_rank);
+		}
+
+		ierr = SMIOL_create_decomp(context, n_compute_elements, compute_elements, 2, &decomp);
+		if (ierr == SMIOL_SUCCESS && decomp != NULL) {
+
+			/* The correct comp_list and io_list arrays, below, were verified manually */
+			if (comm_rank == 0) {
+				SMIOL_Offset comp_list_correct[] = { 4, 0, 2, 0, 4, 1, 2, 1, 5, 2, 2, 2, 6, 3, 2, 3, 7 };
+				SMIOL_Offset io_list_correct[] = { 2, 0, 2, 0, 1, 2, 2, 2, 3 };
+				ierr = compare_decomps(decomp, (sizeof(comp_list_correct) / sizeof(SMIOL_Offset)), comp_list_correct,
+				                               (sizeof(io_list_correct) / sizeof(SMIOL_Offset)), io_list_correct);
+			} else if (comm_rank == 1) {
+				SMIOL_Offset comp_list_correct[] = { 0 };
+				SMIOL_Offset io_list_correct[] = { 2, 0, 2, 0, 1, 2, 2, 2, 3 };
+				ierr = compare_decomps(decomp, (sizeof(comp_list_correct) / sizeof(SMIOL_Offset)), comp_list_correct,
+				                               (sizeof(io_list_correct) / sizeof(SMIOL_Offset)), io_list_correct);
+			} else if (comm_rank == 2) {
+				SMIOL_Offset comp_list_correct[] = { 4, 0, 2, 0, 4, 1, 2, 1, 5, 2, 2, 2, 6, 3, 2, 3, 7 };
+				SMIOL_Offset io_list_correct[] = { 2, 0, 2, 0, 1, 2, 2, 2, 3 };
+				ierr = compare_decomps(decomp, (sizeof(comp_list_correct) / sizeof(SMIOL_Offset)), comp_list_correct,
+				                               (sizeof(io_list_correct) / sizeof(SMIOL_Offset)), io_list_correct);
+			} else if (comm_rank == 3) {
+				SMIOL_Offset comp_list_correct[] = { 0 };
+				SMIOL_Offset io_list_correct[] = { 2, 0, 2, 0, 1, 2, 2, 2, 3 };
+				ierr = compare_decomps(decomp, (sizeof(comp_list_correct) / sizeof(SMIOL_Offset)), comp_list_correct,
+				                               (sizeof(io_list_correct) / sizeof(SMIOL_Offset)), io_list_correct);
+			} else {
+				ierr = 1;
+				fprintf(stderr, "We seem to have too may ranks in the aggregation decomp unit tests...\n");
+			}
+
+			if (ierr == 0) {
+				fprintf(test_log, "PASS\n");
+			} else {
+				fprintf(test_log, "FAIL - the decomp did not contain the expected values\n");
+				errcount++;
+			}
+		} else {
+			fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned or decomp was NULL\n");
+			errcount++;
+		}
+
+		free(compute_elements);
+
+		ierr = SMIOL_free_decomp(&decomp);
+		if (ierr != SMIOL_SUCCESS || decomp != NULL) {
+			fprintf(test_log, "After previous unit test, SMIOL_free_decomp was unsuccessful: FAIL\n");
+			errcount++;
+		}
+
+		/* Free the SMIOL context */
+		ierr = SMIOL_finalize(&context);
+		if (ierr != SMIOL_SUCCESS || context != NULL) {
+			fprintf(test_log, "Failed to free SMIOL context...\n");
+			return -1;
+		}
+
+		/* Create a SMIOL context for testing decomp routines */
+		ierr = SMIOL_init(MPI_COMM_WORLD, 2, 2, &context);
+		if (ierr != SMIOL_SUCCESS || context == NULL) {
+			fprintf(test_log, "Failed to create SMIOL context...\n");
+			return -1;
+		}
+
+		/* Round-robin compute, stride 2, aggregate 3 */
+		fprintf(test_log, "Round-robin compute, stride 2, aggregate 3: ");
+		n_compute_elements = 4;
+		compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
+
+		for (i = 0; i < n_compute_elements; i++) {
+			compute_elements[i] = (SMIOL_Offset)(4 * i + comm_rank);
+		}
+
+		ierr = SMIOL_create_decomp(context, n_compute_elements, compute_elements, 3, &decomp);
+		if (ierr == SMIOL_SUCCESS && decomp != NULL) {
+
+			/* The correct comp_list and io_list arrays, below, were verified manually */
+			if (comm_rank == 0) {
+				SMIOL_Offset comp_list_correct[] = { 2, 0, 6, 0, 4, 8, 1, 5, 9, 2, 6, 2, 6, 10, 3, 7, 11 };
+				SMIOL_Offset io_list_correct[] = { 2, 0, 6, 0, 1, 2, 4, 5, 6, 3, 2, 3, 7 };
+				ierr = compare_decomps(decomp, (sizeof(comp_list_correct) / sizeof(SMIOL_Offset)), comp_list_correct,
+				                               (sizeof(io_list_correct) / sizeof(SMIOL_Offset)), io_list_correct);
+			} else if (comm_rank == 1) {
+				SMIOL_Offset comp_list_correct[] = { 0 };
+				SMIOL_Offset io_list_correct[] = { 0 };
+				ierr = compare_decomps(decomp, (sizeof(comp_list_correct) / sizeof(SMIOL_Offset)), comp_list_correct,
+				                               (sizeof(io_list_correct) / sizeof(SMIOL_Offset)), io_list_correct);
+			} else if (comm_rank == 2) {
+				SMIOL_Offset comp_list_correct[] = { 0 };
+				SMIOL_Offset io_list_correct[] = { 2, 0, 6, 0, 1, 2, 4, 5, 6, 3, 2, 3, 7 };
+				ierr = compare_decomps(decomp, (sizeof(comp_list_correct) / sizeof(SMIOL_Offset)), comp_list_correct,
+				                               (sizeof(io_list_correct) / sizeof(SMIOL_Offset)), io_list_correct);
+			} else if (comm_rank == 3) {
+				SMIOL_Offset comp_list_correct[] = { 2, 0, 2, 0, 1, 2, 2, 2, 3 };
+				SMIOL_Offset io_list_correct[] = { 0 };
+				ierr = compare_decomps(decomp, (sizeof(comp_list_correct) / sizeof(SMIOL_Offset)), comp_list_correct,
+				                               (sizeof(io_list_correct) / sizeof(SMIOL_Offset)), io_list_correct);
+			} else {
+				ierr = 1;
+				fprintf(stderr, "We seem to have too may ranks in the aggregation decomp unit tests...\n");
+			}
+
+			if (ierr == 0) {
+				fprintf(test_log, "PASS\n");
+			} else {
+				fprintf(test_log, "FAIL - the decomp did not contain the expected values\n");
+				errcount++;
+			}
+		} else {
+			fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned or decomp was NULL\n");
+			errcount++;
+		}
+
+		ierr = SMIOL_free_decomp(&decomp);
+		if (ierr != SMIOL_SUCCESS || decomp != NULL) {
+			fprintf(test_log, "After previous unit test, SMIOL_free_decomp was unsuccessful: FAIL\n");
+			errcount++;
+		}
+
+		/* Round-robin compute, stride 2, aggregate 0 */
+		fprintf(test_log, "Round-robin compute, stride 2, aggregate 0: ");
+		ierr = SMIOL_create_decomp(context, n_compute_elements, compute_elements, 0, &decomp);
+		if (ierr == SMIOL_SUCCESS && decomp != NULL) {
+			/*
+			 * Since the aggregation factor that will ultimately be chosen cannot in general
+			 * be predicted, we cannot really verify the contents of the decomp.
+			 */
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned or decomp was NULL\n");
+			errcount++;
+		}
+
+		ierr = SMIOL_free_decomp(&decomp);
+		if (ierr != SMIOL_SUCCESS || decomp != NULL) {
+			fprintf(test_log, "After previous unit test, SMIOL_free_decomp was unsuccessful: FAIL\n");
+			errcount++;
+		}
+
+		free(compute_elements);
+
+		/* Free the SMIOL context */
+		ierr = SMIOL_finalize(&context);
+		if (ierr != SMIOL_SUCCESS || context != NULL) {
+			fprintf(test_log, "Failed to free SMIOL context...\n");
+			return -1;
+		}
+	} else {
+		fprintf(test_log, "<<< Tests that require exactly 4 MPI tasks will not be run >>>\n");
 	}
 
 	fflush(test_log);
@@ -4425,7 +4632,7 @@ int test_put_get_vars(FILE *test_log)
 			compute_elements[i] = comm_rank * (nCells / comm_size) + (SMIOL_Offset)i;
 		}
 		ierr = SMIOL_create_decomp(context,
-		                           n_compute_elements, compute_elements,
+		                           n_compute_elements, compute_elements, 1,
 		                           &decomp);
 		if (ierr != SMIOL_SUCCESS) {
 			fprintf(test_log, "Failed to create decomp...\n");
@@ -4441,7 +4648,7 @@ int test_put_get_vars(FILE *test_log)
 	/* Create a second decomp in which each task owns just one element */
 	compute_element = comm_rank;
 	ierr = SMIOL_create_decomp(context,
-	                           1, &compute_element,
+	                           1, &compute_element, 1,
 	                           &decomp2);
 	if (ierr != SMIOL_SUCCESS) {
 		fprintf(test_log, "Failed to create decomp2...\n");
@@ -4810,7 +5017,7 @@ int test_put_get_vars(FILE *test_log)
 			compute_elements[i] = comm_rank + comm_size * (SMIOL_Offset)i;
 		}
 		ierr = SMIOL_create_decomp(context,
-		                           n_compute_elements, compute_elements,
+		                           n_compute_elements, compute_elements, 1,
 		                           &decomp);
 		if (ierr != SMIOL_SUCCESS) {
 			fprintf(test_log, "Failed to create decomp...\n");
@@ -5243,6 +5450,313 @@ int test_put_get_vars(FILE *test_log)
 	fflush(test_log);
 	ierr = MPI_Barrier(MPI_COMM_WORLD);
 
+	fprintf(test_log, "\n");
+
+	return errcount;
+}
+
+int test_io_aggregation(FILE *test_log)
+{
+	int errcount;
+	int ierr;
+	size_t i, j;
+	struct SMIOL_context *context;
+	int comm_rank, comm_size;
+	int num_io_tasks, io_stride;
+
+	size_t n_compute_elements, n_total, offset;
+	SMIOL_Offset *compute_elements = NULL;
+	struct SMIOL_decomp *decomp_noagg = NULL, *decomp_agg2 = NULL, *decomp_agg0 = NULL;
+	struct SMIOL_file *file = NULL;
+	char **dimnames = NULL;
+	float *theta1 = NULL, *theta2 = NULL;
+	int all_equal;
+
+	fprintf(test_log, "********************************************************************************\n");
+	fprintf(test_log, "********************** SMIOL I/O aggregation unit tests ************************\n");
+	fprintf(test_log, "\n");
+
+	errcount = 0;
+
+	ierr = MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+	if (ierr != MPI_SUCCESS) {
+		fprintf(test_log, "Failed to get MPI rank...\n");
+		return -1;
+	}
+
+	ierr = MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+	if (ierr != MPI_SUCCESS) {
+		fprintf(test_log, "Failed to get MPI size...\n");
+		return -1;
+	}
+
+	num_io_tasks = comm_size;
+	io_stride = 1;
+
+	/* Create a SMIOL context for testing aggregation */
+	context = NULL;
+	ierr = SMIOL_init(MPI_COMM_WORLD, num_io_tasks, io_stride, &context);
+	if (ierr != SMIOL_SUCCESS || context == NULL) {
+		fprintf(test_log, "Failed to create SMIOL context...\n");
+		return -1;
+	}
+
+	/*
+	 * Define compute elements for all tasks
+	 */
+	n_compute_elements = (size_t)(10 + comm_rank);    /* Give each task a different number... why not? */
+
+	/* Total number of compute elements across all tasks */
+	n_total = (size_t)(10 * comm_size + (comm_size * (comm_size - 1)) / 2);
+
+	/* Offset for contiguous range of elements computed on this task */
+	offset = (size_t)(10 * comm_rank + (comm_rank * (comm_rank - 1)) / 2);
+
+	compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
+
+	/* Tasks compute contiguous ranges of elements in reverse order */
+	for (i = 0; i < n_compute_elements; i++) {
+		compute_elements[i] = (SMIOL_Offset)(n_total - (offset + i) - 1);
+	}
+
+	/*
+	 * Create three decompositions: one that does not use aggregation, one that uses
+	 * an aggregation factor of two, and one that specifies an aggregation factor of 0
+	 */
+	if (SMIOL_create_decomp(context, n_compute_elements, compute_elements, 1, &decomp_noagg) != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create a decomp with aggregation_factor=1\n");
+		return -1;
+	}
+
+	if (SMIOL_create_decomp(context, n_compute_elements, compute_elements, 2, &decomp_agg2) != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create a decomp with aggregation_factor=2\n");
+		return -1;
+	}
+
+	if (SMIOL_create_decomp(context, n_compute_elements, compute_elements, 0, &decomp_agg0) != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create a decomp with aggregation_factor=0\n");
+		return -1;
+	}
+
+	/*
+	 * Create a new file, to which we will write using all three of the decompositions from above
+	 */
+	file = NULL;
+	ierr = SMIOL_open_file(context, "test_agg.nc", SMIOL_FILE_CREATE, &file);
+	if (ierr != SMIOL_SUCCESS || file == NULL) {
+		fprintf(test_log, "Failed to create a file for testing aggregation\n");
+		return -1;
+	}
+
+	if (SMIOL_define_dim(file, "nCells", (SMIOL_Offset)n_total) != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create dimension nCells...\n");
+		return -1;
+	}
+
+	if (SMIOL_define_dim(file, "nVertLevels", (SMIOL_Offset)55) != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create dimension nVertLevels...\n");
+		return -1;
+	}
+
+	/* The theta_noagg variable will be written with no aggregation and later read with aggregation */
+	dimnames = (char **)malloc((size_t)2 * sizeof(char *));
+	dimnames[0] = (char *)malloc((size_t)64 * sizeof(char));
+	dimnames[1] = (char *)malloc((size_t)64 * sizeof(char));
+	snprintf(dimnames[0], 64, "nCells");
+	snprintf(dimnames[1], 64, "nVertLevels");
+
+	if (SMIOL_define_var(file, "theta_noagg", SMIOL_REAL32, 2, (const char **)dimnames) != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create theta_noagg var...\n");
+		return -1;
+	}
+
+	/* The theta_agg2 variable will be written with aggregation=2 and later read without aggregation */
+	if (SMIOL_define_var(file, "theta_agg2", SMIOL_REAL32, 2, (const char **)dimnames) != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create theta_agg2 var...\n");
+		return -1;
+	}
+
+	/* The theta_agg0 variable will be written with aggregation=0 and later read with aggregation=2 */
+	if (SMIOL_define_var(file, "theta_agg0", SMIOL_REAL32, 2, (const char **)dimnames) != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create theta_agg0 var...\n");
+		return -1;
+	}
+
+	free(dimnames[0]);
+	free(dimnames[1]);
+	free(dimnames);
+
+	/*
+	 * Write a simple pattern to the theta field
+	 */
+	theta1 = malloc(sizeof(float) * (size_t)55 * n_compute_elements);
+
+	for (j = 0; j < n_compute_elements; j++) {
+		for (i = 0; i < 55; i++) {
+			theta1[j * 55 + i] = (float)(55 * compute_elements[j] + (SMIOL_Offset)i);
+		}
+	}
+
+	free(compute_elements);
+	compute_elements = NULL;
+
+	/* Writing a field with a no-aggregation decomp */
+	fprintf(test_log, "Write a field with a decomp that does not use aggregation: ");
+	ierr = SMIOL_put_var(file, "theta_noagg", decomp_noagg, theta1);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned by SMIOL_put_var\n");
+		errcount++;
+	}
+
+	/* Writing a field with aggregation=2 decomp */
+	fprintf(test_log, "Write a field with a decomp that uses aggregation factor 2: ");
+	ierr = SMIOL_put_var(file, "theta_agg2", decomp_agg2, theta1);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned by SMIOL_put_var\n");
+		errcount++;
+	}
+
+	/* Writing a field with aggregation=0 decomp */
+	fprintf(test_log, "Write a field with a decomp that uses aggregation factor 0: ");
+	ierr = SMIOL_put_var(file, "theta_agg0", decomp_agg0, theta1);
+	if (ierr == SMIOL_SUCCESS) {
+		fprintf(test_log, "PASS\n");
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned by SMIOL_put_var\n");
+		errcount++;
+	}
+
+	if (SMIOL_close_file(&file) != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to close file for aggregregation tests\n");
+		return -1;
+	}
+
+	file = NULL;
+	ierr = SMIOL_open_file(context, "test_agg.nc", SMIOL_FILE_READ, &file);
+	if (ierr != SMIOL_SUCCESS || file == NULL) {
+		fprintf(test_log, "Failed to open file that was created for testing aggregation\n");
+		return -1;
+	}
+
+	theta2 = malloc(sizeof(float) * (size_t)55 * n_compute_elements);
+
+	/* Read a field that was written with aggregation=2 using a no-aggregation decomp */
+	fprintf(test_log, "Read field written with aggregation=2 using no aggregation: ");
+	for (i = 0; i < (size_t)55 * n_compute_elements; i++) {
+		theta2[i] = (float)-1.0;
+	}
+	ierr = SMIOL_get_var(file, "theta_agg2", decomp_noagg, theta2);
+	if (ierr == SMIOL_SUCCESS) {
+		/* Compare with theta1, which still contains the correct field */
+		all_equal = 1;
+		for (i = 0; i < (size_t)55 * n_compute_elements; i++) {
+			if (theta1[i] != theta2[i]) {
+				all_equal = 0;
+				break;
+			}
+		}
+
+		if (all_equal) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - The field was read with incorrect values\n");
+			errcount++;
+		}
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned by SMIOL_get_var\n");
+		errcount++;
+	}
+
+	/* Read a field that was written with no aggregation using an aggregation=0 decomp */
+	fprintf(test_log, "Read field written with no aggregation using aggregation=0: ");
+	for (i = 0; i < (size_t)55 * n_compute_elements; i++) {
+		theta2[i] = (float)-1.0;
+	}
+	ierr = SMIOL_get_var(file, "theta_noagg", decomp_agg0, theta2);
+	if (ierr == SMIOL_SUCCESS) {
+		/* Compare with theta1, which still contains the correct field */
+		all_equal = 1;
+		for (i = 0; i < (size_t)55 * n_compute_elements; i++) {
+			if (theta1[i] != theta2[i]) {
+				all_equal = 0;
+				break;
+			}
+		}
+
+		if (all_equal) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - The field was read with incorrect values\n");
+			errcount++;
+		}
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned by SMIOL_get_var\n");
+		errcount++;
+	}
+
+	/* Read a field that was written with aggregation=0 using an aggregation=2 decomp */
+	fprintf(test_log, "Read field written with aggregation=0 using aggregation=2: ");
+	for (i = 0; i < (size_t)55 * n_compute_elements; i++) {
+		theta2[i] = (float)-1.0;
+	}
+	ierr = SMIOL_get_var(file, "theta_agg0", decomp_agg2, theta2);
+	if (ierr == SMIOL_SUCCESS) {
+		/* Compare with theta1, which still contains the correct field */
+		all_equal = 1;
+		for (i = 0; i < (size_t)55 * n_compute_elements; i++) {
+			if (theta1[i] != theta2[i]) {
+				all_equal = 0;
+				break;
+			}
+		}
+
+		if (all_equal) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - The field was read with incorrect values\n");
+			errcount++;
+		}
+	} else {
+		fprintf(test_log, "FAIL - SMIOL_SUCCESS was not returned by SMIOL_get_var\n");
+		errcount++;
+	}
+
+	if (SMIOL_close_file(&file) != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to close file for aggregregation tests\n");
+		return -1;
+	}
+
+	free(theta1);
+	free(theta2);
+
+
+	if (SMIOL_free_decomp(&decomp_noagg) != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to free decomp_noagg\n");
+		return -1;
+	}
+
+	if (SMIOL_free_decomp(&decomp_agg2) != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to free decomp_agg2\n");
+		return -1;
+	}
+
+	if (SMIOL_free_decomp(&decomp_agg0) != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to free decomp_agg0\n");
+		return -1;
+	}
+
+	/* Free the SMIOL context */
+	ierr = SMIOL_finalize(&context);
+	if (ierr != SMIOL_SUCCESS || context != NULL) {
+		fprintf(test_log, "Failed to free SMIOL context...\n");
+		return -1;
+	}
+
+	fflush(test_log);
 	fprintf(test_log, "\n");
 
 	return errcount;

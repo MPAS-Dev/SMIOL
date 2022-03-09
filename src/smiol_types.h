@@ -56,6 +56,14 @@ struct SMIOL_decomp {
 
 	size_t io_start;  /* The starting offset on disk for I/O by a task */
 	size_t io_count;  /* The number of elements for I/O by a task */
+
+	int agg_factor;        /* Aggregation factor, or size of aggregation group */
+	MPI_Fint agg_comm;     /* Communicator for aggregation/deaggregation operations */
+	size_t n_compute;      /* Number of un-aggregated compute elements on the task */
+	size_t n_compute_agg;  /* Number of aggregated compute elements on the task */
+	int *counts;           /* Compute element counts for tasks in aggregation group */
+	int *displs;           /* Displacements in aggregated list of elements for tasks */
+	                       /*    in aggregation group */
 };
 
 
