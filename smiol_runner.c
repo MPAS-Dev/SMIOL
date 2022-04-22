@@ -681,6 +681,14 @@ int test_open_close(FILE *test_log)
 		errcount++;
 	}
 
+#if 0
+/*
+ * Since members of the SMIOL_file struct may be used in various ways within
+ * SMIOL_close_file, and without being able to verify that the contents of the
+ * SMIOL_file are valid, this test may lead to segfaults or other crashes.
+ * Until we have a way of verifying the validity of a SMIOL_file before using
+ * its contents, this test should probably just be omitted.
+ */
 	/* Try to close a file that was never opened */
 	fprintf(test_log, "Try to close a file that was never opened: ");
 	file = (struct SMIOL_file *)malloc(sizeof(struct SMIOL_file));
@@ -694,6 +702,7 @@ int test_open_close(FILE *test_log)
 		fprintf(test_log, "FAIL - expected error code of SMIOL_LIBRARY_ERROR not returned\n");
 		errcount++;
 	}
+#endif
 
 	/* Create a file to be closed and opened again */
 	fprintf(test_log, "Create a file to be closed and later re-opened: ");
@@ -3446,6 +3455,14 @@ int test_file_sync(FILE *test_log)
 	}
 
 
+#if 0
+/*
+ * Since members of the SMIOL_file struct may be used in various ways within
+ * SMIOL_sync_file, and without being able to verify that the contents of the
+ * SMIOL_file are valid, this test may lead to segfaults or other crashes.
+ * Until we have a way of verifying the validity of a SMIOL_file before using
+ * its contents, this test should probably just be omitted.
+ */
 #ifdef SMIOL_PNETCDF
 	/* Testing a file that was never opened */
 	fprintf(test_log, "Try to sync a file that was never opened: ");
@@ -3461,6 +3478,7 @@ int test_file_sync(FILE *test_log)
 		errcount++;
 	}
 	free(file);
+#endif
 #endif
 
 	/* Testing SMIOL_sync_file with a NULL file pointer*/
