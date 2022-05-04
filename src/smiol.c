@@ -510,9 +510,9 @@ int SMIOL_inquire_dim(struct SMIOL_file *file, const char *dimname,
 {
 	MPI_Comm io_group_comm;
 #ifdef SMIOL_PNETCDF
-	int dimidp;
+	int dimidp = 0;
 	int ierr;
-	MPI_Offset len;
+	MPI_Offset len = 0;
 #endif
 	/*
 	 * Check that file handle is valid
@@ -582,7 +582,7 @@ int SMIOL_inquire_dim(struct SMIOL_file *file, const char *dimname,
 	 * Inquire if this dimension is the unlimited dimension
 	 */
 	if (is_unlimited != NULL) {
-		int unlimdimidp;
+		int unlimdimidp = 0;
 		if (file->io_task) {
 			ierr = ncmpi_inq_unlimdim(file->ncidp, &unlimdimidp);
 		}
@@ -768,11 +768,11 @@ int SMIOL_inquire_var(struct SMIOL_file *file, const char *varname, int *vartype
 	MPI_Comm io_group_comm;
 #ifdef SMIOL_PNETCDF
 	int *dimids;
-	int varidp;
+	int varidp = 0;
 	int ierr;
 	int i;
 	int xtypep;
-	int ndimsp;
+	int ndimsp = 0;
 #endif
 
 	/*
@@ -1080,7 +1080,7 @@ int SMIOL_put_var(struct SMIOL_file *file, const char *varname,
 #ifdef SMIOL_PNETCDF
 	{
 		int j;
-		int varidp;
+		int varidp = 0;
 		const void *buf_p;
 		MPI_Offset *mpi_start;
 		MPI_Offset *mpi_count;
@@ -1287,7 +1287,7 @@ int SMIOL_get_var(struct SMIOL_file *file, const char *varname,
 #ifdef SMIOL_PNETCDF
 	{
 		int j;
-		int varidp;
+		int varidp = 0;
 		void *buf_p;
 		MPI_Offset *mpi_start;
 		MPI_Offset *mpi_count;
@@ -1484,7 +1484,7 @@ int SMIOL_define_att(struct SMIOL_file *file, const char *varname,
 	MPI_Comm io_group_comm;
 #ifdef SMIOL_PNETCDF
 	int ierr;
-	int varidp;
+	int varidp = 0;
 	nc_type xtype;
 #endif
 
@@ -1613,9 +1613,9 @@ int SMIOL_inquire_att(struct SMIOL_file *file, const char *varname,
 	MPI_Comm io_group_comm;
 #ifdef SMIOL_PNETCDF
 	int ierr;
-	int varidp;
-	nc_type xtypep;
-	MPI_Offset lenp;
+	int varidp = 0;
+	nc_type xtypep = 0;
+	MPI_Offset lenp = 0;
 #endif
 
 	/*
