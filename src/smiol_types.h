@@ -37,6 +37,13 @@ struct SMIOL_file {
 	int state; /* parallel-netCDF file state (i.e. Define or data mode) */
 	int ncidp; /* parallel-netCDF file handle */
 #endif
+	int io_task; /* 1 = this task performs I/O calls
+	                0 = no I/O calls on this task */
+	MPI_Fint io_file_comm;  /* Communicator shared by all tasks with
+	                           io_task == 1 */
+	MPI_Fint io_group_comm; /* Communicator shared by tasks associated with
+	                           an I/O task, usually 1 I/O task and N-1
+	                           non-I/O tasks, where N is the I/O stride */
 };
 
 struct SMIOL_decomp {
