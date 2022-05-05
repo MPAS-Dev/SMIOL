@@ -412,8 +412,8 @@ int SMIOL_close_file(struct SMIOL_file **file)
  ********************************************************************************/
 int SMIOL_define_dim(struct SMIOL_file *file, const char *dimname, SMIOL_Offset dimsize)
 {
-	MPI_Comm io_group_comm;
 #ifdef SMIOL_PNETCDF
+	MPI_Comm io_group_comm;
 	int dimidp;
 	int ierr;
 	MPI_Offset len;
@@ -433,9 +433,9 @@ int SMIOL_define_dim(struct SMIOL_file *file, const char *dimname, SMIOL_Offset 
 		return SMIOL_INVALID_ARGUMENT;
 	}
 
+#ifdef SMIOL_PNETCDF
 	io_group_comm = MPI_Comm_f2c(file->io_group_comm);
 
-#ifdef SMIOL_PNETCDF
 	/*
 	 * The parallel-netCDF library does not permit zero-length dimensions
 	 */
@@ -508,8 +508,8 @@ int SMIOL_define_dim(struct SMIOL_file *file, const char *dimname, SMIOL_Offset 
 int SMIOL_inquire_dim(struct SMIOL_file *file, const char *dimname,
                       SMIOL_Offset *dimsize, int *is_unlimited)
 {
-	MPI_Comm io_group_comm;
 #ifdef SMIOL_PNETCDF
+	MPI_Comm io_group_comm;
 	int dimidp = 0;
 	int ierr;
 	MPI_Offset len = 0;
@@ -543,9 +543,9 @@ int SMIOL_inquire_dim(struct SMIOL_file *file, const char *dimname,
 		(*is_unlimited) = 0; /* Return 0 if no library provides a value */
 	}
 
+#ifdef SMIOL_PNETCDF
 	io_group_comm = MPI_Comm_f2c(file->io_group_comm);
 
-#ifdef SMIOL_PNETCDF
 	if (file->io_task) {
 		ierr = ncmpi_inq_dimid(file->ncidp, dimname, &dimidp);
 	}
@@ -625,8 +625,8 @@ int SMIOL_inquire_dim(struct SMIOL_file *file, const char *dimname,
  ********************************************************************************/
 int SMIOL_define_var(struct SMIOL_file *file, const char *varname, int vartype, int ndims, const char **dimnames)
 {
-	MPI_Comm io_group_comm;
 #ifdef SMIOL_PNETCDF
+	MPI_Comm io_group_comm;
 	int *dimids;
 	int ierr;
 	int i;
@@ -659,9 +659,9 @@ int SMIOL_define_var(struct SMIOL_file *file, const char *varname, int vartype, 
 		return SMIOL_INVALID_ARGUMENT;
 	}
 
+#ifdef SMIOL_PNETCDF
 	io_group_comm = MPI_Comm_f2c(file->io_group_comm);
 
-#ifdef SMIOL_PNETCDF
 	dimids = (int *)malloc(sizeof(int) * (size_t)ndims);
 	if (dimids == NULL) {
 		return SMIOL_MALLOC_FAILURE;
@@ -765,8 +765,8 @@ int SMIOL_define_var(struct SMIOL_file *file, const char *varname, int vartype, 
  ********************************************************************************/
 int SMIOL_inquire_var(struct SMIOL_file *file, const char *varname, int *vartype, int *ndims, char **dimnames)
 {
-	MPI_Comm io_group_comm;
 #ifdef SMIOL_PNETCDF
+	MPI_Comm io_group_comm;
 	int *dimids;
 	int varidp = 0;
 	int ierr;
@@ -807,9 +807,9 @@ int SMIOL_inquire_var(struct SMIOL_file *file, const char *varname, int *vartype
 		*ndims = 0;
 	}
 
+#ifdef SMIOL_PNETCDF
 	io_group_comm = MPI_Comm_f2c(file->io_group_comm);
 
-#ifdef SMIOL_PNETCDF
 	/*
 	 * Get variable ID
 	 */
@@ -975,8 +975,6 @@ int SMIOL_put_var(struct SMIOL_file *file, const char *varname,
 	void *agg_buf = NULL;
 	const void *agg_buf_cnst = NULL;
 
-	MPI_Comm io_group_comm;
-
 
 	/*
 	 * Basic checks on arguments
@@ -984,8 +982,6 @@ int SMIOL_put_var(struct SMIOL_file *file, const char *varname,
 	if (file == NULL || varname == NULL) {
 		return SMIOL_INVALID_ARGUMENT;
 	}
-
-	io_group_comm = MPI_Comm_f2c(file->io_group_comm);
 
 	/*
 	 * Work out the start[] and count[] arrays for writing this variable
@@ -1084,6 +1080,9 @@ int SMIOL_put_var(struct SMIOL_file *file, const char *varname,
 		const void *buf_p;
 		MPI_Offset *mpi_start;
 		MPI_Offset *mpi_count;
+		MPI_Comm io_group_comm;
+
+		io_group_comm = MPI_Comm_f2c(file->io_group_comm);
 
 		if (file->state == PNETCDF_DEFINE_MODE) {
 			if (file->io_task) {
@@ -1481,8 +1480,8 @@ int SMIOL_get_var(struct SMIOL_file *file, const char *varname,
 int SMIOL_define_att(struct SMIOL_file *file, const char *varname,
                      const char *att_name, int att_type, const void *att)
 {
-	MPI_Comm io_group_comm;
 #ifdef SMIOL_PNETCDF
+	MPI_Comm io_group_comm;
 	int ierr;
 	int varidp = 0;
 	nc_type xtype;
@@ -1495,14 +1494,14 @@ int SMIOL_define_att(struct SMIOL_file *file, const char *varname,
 		return SMIOL_INVALID_ARGUMENT;
 	}
 
-	io_group_comm = MPI_Comm_f2c(file->io_group_comm);
-
 	/*
 	 * Checks for valid attribute type are handled in library-specific
 	 * code, below
 	 */
 
 #ifdef SMIOL_PNETCDF
+	io_group_comm = MPI_Comm_f2c(file->io_group_comm);
+
 	/*
 	 * If varname was provided, get the variable ID; else, the attribute
 	 * is a global attribute not associated with a specific variable
@@ -1610,8 +1609,8 @@ int SMIOL_inquire_att(struct SMIOL_file *file, const char *varname,
                       const char *att_name, int *att_type,
                       SMIOL_Offset *att_len, void *att)
 {
-	MPI_Comm io_group_comm;
 #ifdef SMIOL_PNETCDF
+	MPI_Comm io_group_comm;
 	int ierr;
 	int varidp = 0;
 	nc_type xtypep = 0;
@@ -1636,9 +1635,9 @@ int SMIOL_inquire_att(struct SMIOL_file *file, const char *varname,
 		*att_type = SMIOL_UNKNOWN_VAR_TYPE;
 	}
 
+#ifdef SMIOL_PNETCDF
 	io_group_comm = MPI_Comm_f2c(file->io_group_comm);
 
-#ifdef SMIOL_PNETCDF
 	/*
 	 * If varname was provided, get the variable ID; else, the inquiry is
 	 * is for a global attribute not associated with a specific variable
@@ -1753,8 +1752,8 @@ int SMIOL_inquire_att(struct SMIOL_file *file, const char *varname,
  ********************************************************************************/
 int SMIOL_sync_file(struct SMIOL_file *file)
 {
-	MPI_Comm io_group_comm;
 #ifdef SMIOL_PNETCDF
+	MPI_Comm io_group_comm;
 	int ierr;
 #endif
 
@@ -1765,9 +1764,9 @@ int SMIOL_sync_file(struct SMIOL_file *file)
 		return SMIOL_INVALID_ARGUMENT;
 	}
 
+#ifdef SMIOL_PNETCDF
 	io_group_comm = MPI_Comm_f2c(file->io_group_comm);
 
-#ifdef SMIOL_PNETCDF
 	/*
 	 * If the file is in define mode then switch it into data mode
 	 */
