@@ -177,6 +177,18 @@ program smiol_runner
         write(test_log,'(a)') ''
     endif
 
+    !
+    ! Unit tests for buffered I/O
+    !
+    ierr = test_buffered_io(test_log)
+    if (ierr == 0) then
+        write(test_log,'(a)') 'All tests PASSED!'
+        write(test_log,'(a)') ''
+    else
+        write(test_log,'(i3,a)') ierr, ' tests FAILED!'
+        write(test_log,'(a)') ''
+    endif
+
     num_io_tasks = 16
     io_stride = 4
 
@@ -3298,6 +3310,377 @@ contains
         write(test_log,'(a)') ''
 
     end function test_io_aggregation
+
+
+    function test_buffered_io(test_log) result(ierrcount)
+
+        implicit none
+
+        integer, intent(in) :: test_log
+        integer :: ierrcount
+
+        integer :: ierr
+        integer :: comm_size, comm_rank
+        integer :: num_io_tasks, io_stride
+        type (SMIOLf_context), pointer :: context
+        type (SMIOLf_file), pointer :: file
+        character(len=64) :: filename
+        integer(kind=c_size_t) :: bufsize
+        character(len=32), dimension(2) :: dimnames
+        integer(kind=SMIOL_offset_kind) :: i, j
+        integer(kind=c_size_t) :: n_compute_elements
+        integer(kind=SMIOL_offset_kind), dimension(:), pointer :: compute_elements
+        type (SMIOLf_decomp), pointer :: small_decomp, medium_decomp, large_decomp, null_decomp
+        integer, dimension(:), pointer :: small_var, medium_var, large_var
+
+
+        write(test_log,'(a)') '********************************************************************************'
+        write(test_log,'(a)') '*************************** Buffered I/O tests *********************************'
+        write(test_log,'(a)') ''
+
+        ierrcount = 0
+
+        call MPI_Comm_rank(MPI_COMM_WORLD, comm_rank, ierr)
+        if (ierr /= MPI_SUCCESS) then
+            write(test_log, '(a)') 'Failed to get MPI rank...'
+            ierrcount = -1
+            return
+        end if
+
+        call MPI_Comm_size(MPI_COMM_WORLD, comm_size, ierr)
+        if (ierr /= MPI_SUCCESS) then
+            write(test_log, '(a)') 'Failed to get MPI size...'
+            ierrcount = -1
+            return
+        end if
+
+        if (comm_size > 1) then
+            num_io_tasks = comm_size / 2
+        else
+            num_io_tasks = 1
+        end if
+        io_stride = 2
+
+        !
+        ! Create a SMIOL context for testing buffered I/O
+        !
+        ierr = SMIOLf_init(MPI_COMM_WORLD, num_io_tasks, io_stride, context)
+        if (ierr /= SMIOL_SUCCESS .or. .not. associated(context)) then
+            write(test_log,'(a)') 'Failed to initalize a SMIOL context'
+            ierrcount = -1
+            return
+        end if
+
+        n_compute_elements = 1
+        allocate(compute_elements(n_compute_elements))
+        do i = 1, n_compute_elements
+            compute_elements(i) = (i - 1) + n_compute_elements * comm_rank
+        end do
+        if (SMIOLf_create_decomp(context, n_compute_elements, compute_elements, small_decomp, aggregation_factor=1) &
+            /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to create small_decomp'
+            ierrcount = -1
+            return
+        end if
+        deallocate(compute_elements)
+
+        n_compute_elements = 2048
+        allocate(compute_elements(n_compute_elements))
+        do i = 1, n_compute_elements
+            compute_elements(i) = (i - 1) + n_compute_elements * comm_rank
+        end do
+        if (SMIOLf_create_decomp(context, n_compute_elements, compute_elements, medium_decomp, aggregation_factor=1) &
+            /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to create medium_decomp'
+            ierrcount = -1
+            return
+        end if
+        deallocate(compute_elements)
+
+        n_compute_elements = 6000000
+        allocate(compute_elements(n_compute_elements))
+        do i = 1, n_compute_elements
+            compute_elements(i) = (i - 1) + n_compute_elements * comm_rank
+        end do
+        if (SMIOLf_create_decomp(context, n_compute_elements, compute_elements, large_decomp, aggregation_factor=1) &
+            /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to create large_decomp'
+            ierrcount = -1
+            return
+        end if
+        deallocate(compute_elements)
+
+        do bufsize = 0, 4*1024*1024, 4*1024*1024
+            write(filename, '(a,i1,a)') 'buffered_write_', bufsize/1024/1024, 'MB_f.nc'
+
+            nullify(file)
+            ierr = SMIOLf_open_file(context, filename, SMIOL_FILE_CREATE, file, bufsize=bufsize)
+            if (ierr /= SMIOL_SUCCESS .or. .not. associated(file)) then
+                write(test_log,'(a)') 'Failed to create a file for testing buffered I/O'
+                ierrcount = -1
+                return
+            end if
+
+            if (SMIOLf_define_dim(file, 'Time', -1_SMIOL_offset_kind) /= SMIOL_SUCCESS) then
+                write(test_log,'(a)') 'Failed to create dimension Time...'
+                ierrcount = -1
+                return
+            end if
+
+            if (SMIOLf_define_dim(file, 'small_dim', int(comm_size, kind=SMIOL_offset_kind)) /= SMIOL_SUCCESS) then
+                write(test_log,'(a)') 'Failed to create dimension small_dim...'
+                ierrcount = -1
+                return
+            end if
+
+            if (SMIOLf_define_dim(file, 'medium_dim', int(2048 * comm_size, kind=SMIOL_offset_kind)) /= SMIOL_SUCCESS) then
+                write(test_log,'(a)') 'Failed to create dimension medium_dim...'
+                ierrcount = -1
+                return
+            end if
+
+            if (SMIOLf_define_dim(file, 'large_dim', int(6000000 * comm_size, kind=SMIOL_offset_kind)) /= SMIOL_SUCCESS) then
+                write(test_log,'(a)') 'Failed to create dimension large_dim...'
+                ierrcount = -1
+                return
+            end if
+
+            dimnames(1) = 'small_dim'
+            dimnames(2) = 'Time'
+
+            if (SMIOLf_define_var(file, 'small_var', SMIOL_INT32, 2, dimnames) /= SMIOL_SUCCESS) then
+                write(test_log,'(a)') 'Failed to create small_var variable...'
+                ierrcount = -1
+                return
+            end if
+
+            dimnames(1) = 'medium_dim'
+            dimnames(2) = 'Time'
+            if (SMIOLf_define_var(file, 'medium_var', SMIOL_INT32, 2, dimnames) /= SMIOL_SUCCESS) then
+                write(test_log,'(a)') 'Failed to create medium_var variable...'
+                ierrcount = -1
+                return
+            end if
+
+            dimnames(1) = 'large_dim'
+            if (SMIOLf_define_var(file, 'large_var', SMIOL_INT32, 1, dimnames) /= SMIOL_SUCCESS) then
+                write(test_log,'(a)') 'Failed to create large_var variable...'
+                ierrcount = -1
+                return
+            end if
+
+            allocate(small_var(1))
+            allocate(medium_var(2048))
+            allocate(large_var(6000000))
+
+            do i = 1, 1
+                small_var(i) = int((i - 1) + 1 * comm_rank)
+            end do
+
+            do i = 1, 2048
+                medium_var(i) = int((i - 1) + 2048 * comm_rank)
+            end do
+
+            do i = 1, 6000000
+                large_var(i) = int((i - 1) + 6000000 * comm_rank)
+            end do
+
+            ! Write a single small variable
+            write(test_log,'(a,i7,a)',advance='no') 'Bufsize = ', bufsize, &
+                                                    ' write a single small variable: '
+            ierr = SMIOLf_put_var(file, 'small_var', small_decomp, small_var)
+            if (ierr == SMIOL_SUCCESS) then
+                write(test_log,'(a)') 'PASS'
+            else
+                write(test_log,'(a)') 'FAIL - '//trim(SMIOLf_error_string(ierr))
+                ierrcount = ierrcount + 1
+            end if
+
+            ! Write more variables than available pending requests
+            write(test_log,'(a,i7,a)',advance='no') 'Bufsize = ', bufsize, &
+                                                    ' write more variables than available pending requests: '
+            do i = 1, 300
+                ierr = SMIOLf_set_frame(file, i-1)
+                if (ierr /= SMIOL_SUCCESS) then
+                    exit
+                end if
+
+                ierr = SMIOLf_put_var(file, 'small_var', small_decomp, small_var)
+                if (ierr /= SMIOL_SUCCESS) then
+                    exit
+                end if
+            end do
+            if (ierr == SMIOL_SUCCESS) then
+                write(test_log,'(a)') 'PASS'
+            else
+                write(test_log,'(a)') 'FAIL - '//trim(SMIOLf_error_string(ierr))
+                ierrcount = ierrcount + 1
+            end if
+
+            ! Synchronize a file with buffered writes
+            write(test_log,'(a)',advance='no') 'Synchronize a file with buffered writes: '
+            ierr = SMIOLf_sync_file(file);
+            if (ierr == SMIOL_SUCCESS) then
+                write(test_log,'(a)') 'PASS'
+            else
+                write(test_log,'(a)') 'FAIL - '//trim(SMIOLf_error_string(ierr))
+                ierrcount = ierrcount + 1
+            end if
+
+            ! Write variables to simultaneously exceed all requests and buffer space
+            write(test_log,'(a,i7,a)',advance='no') 'Bufsize = ', bufsize, &
+                                                    ' write variables to simultaneously exceed all requests and buffer space: '
+            do i = 1, 257
+                ierr = SMIOLf_set_frame(file, i-1)
+                if (ierr /= SMIOL_SUCCESS) then
+                    exit
+                end if
+
+                ierr = SMIOLf_put_var(file, 'medium_var', medium_decomp, medium_var)
+                if (ierr /= SMIOL_SUCCESS) then
+                    exit
+                end if
+            end do
+            if (ierr == SMIOL_SUCCESS) then
+                write(test_log,'(a)') 'PASS'
+            else
+                write(test_log,'(a)') 'FAIL - '//trim(SMIOLf_error_string(ierr))
+                ierrcount = ierrcount + 1
+            end if
+
+            ! Write a single variable that should exceed buffer space
+            write(test_log,'(a,i7,a)',advance='no') 'Bufsize = ', bufsize, &
+                                                    ' write a single variable that should exceed buffer space: '
+            ierr = SMIOLf_put_var(file, 'large_var', large_decomp, large_var)
+            if (ierr == SMIOL_SUCCESS) then
+                write(test_log,'(a)') 'PASS'
+            else
+                write(test_log,'(a)') 'FAIL - '//trim(SMIOLf_error_string(ierr))
+                ierrcount = ierrcount + 1
+            end if
+
+            deallocate(small_var)
+            deallocate(medium_var)
+            deallocate(large_var)
+
+            nullify(null_decomp)
+
+#ifdef SMIOL_PNETCDF
+            ! Read back and verify large variable
+            write(test_log,'(a)',advance='no') 'Read back and verify large variable: '
+            allocate(large_var(6000000 * comm_size))
+            large_var(:) = 0
+            ierr = SMIOLf_get_var(file, 'large_var', null_decomp, large_var)
+            if (ierr == SMIOL_SUCCESS) then
+                do i = 1, 6000000 * comm_size
+                    if (large_var(i) /= int(i-1)) then
+                        ierr = not(SMIOL_SUCCESS)
+                        exit
+                    end if
+                end do
+            end if
+
+            deallocate(large_var)
+
+            if (ierr == SMIOL_SUCCESS) then
+                write(test_log,'(a)') 'PASS'
+            else
+                write(test_log,'(a)') 'FAIL'
+                ierrcount = ierrcount + 1
+            end if
+
+            ! Read back and verify medium variable
+            write(test_log,'(a)',advance='no') 'Read back and verify medium variable: '
+            allocate(medium_var(2048 * comm_size))
+            MEDIUM_LOOP: do j = 1, 257
+                ierr = SMIOLf_set_frame(file, j-1)
+                if (ierr /= SMIOL_SUCCESS) exit
+
+                medium_var(:) = 0
+                ierr = SMIOLf_get_var(file, 'medium_var', null_decomp, medium_var)
+                if (ierr == SMIOL_SUCCESS) then
+                    do i = 1, 2048 * comm_size
+                        if (medium_var(i) /= int(i-1)) then
+                            ierr = not(SMIOL_SUCCESS)
+                            exit MEDIUM_LOOP
+                        end if
+                    end do
+                end if
+            end do MEDIUM_LOOP
+
+            deallocate(medium_var)
+
+            if (ierr == SMIOL_SUCCESS) then
+                write(test_log,'(a)') 'PASS'
+            else
+                write(test_log,'(a)') 'FAIL'
+                ierrcount = ierrcount + 1
+            end if
+
+            ! Read back and verify small variable
+            write(test_log,'(a)',advance='no') 'Read back and verify small variable: '
+            allocate(small_var(comm_size))
+            SMALL_LOOP: do j = 1, 300
+                ierr = SMIOLf_set_frame(file, j-1)
+                if (ierr /= SMIOL_SUCCESS) exit
+
+                small_var(:) = 0
+                ierr = SMIOLf_get_var(file, 'small_var', null_decomp, small_var)
+                if (ierr == SMIOL_SUCCESS) then
+                    do i = 1, comm_size
+                        if (small_var(i) /= int(i-1)) then
+                            ierr = not(SMIOL_SUCCESS)
+                            exit SMALL_LOOP
+                        end if
+                    end do
+                end if
+            end do SMALL_LOOP
+
+            deallocate(small_var)
+
+            if (ierr == SMIOL_SUCCESS) then
+                write(test_log,'(a)') 'PASS'
+            else
+                write(test_log,'(a)') 'FAIL'
+                ierrcount = ierrcount + 1
+            end if
+#endif
+
+            if (SMIOLf_close_file(file) /= SMIOL_SUCCESS) then
+                write(test_log,'(a)') 'Failed to close file for buffered I/O tests'
+                ierrcount = -1
+                return
+            end if
+
+        end do
+
+        if (SMIOLf_free_decomp(small_decomp) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to free small_decomp'
+            ierrcount = -1
+            return
+        end if
+
+        if (SMIOLf_free_decomp(medium_decomp) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to free medium_decomp'
+            ierrcount = -1
+            return
+        end if
+
+        if (SMIOLf_free_decomp(large_decomp) /= SMIOL_SUCCESS) then
+            write(test_log,'(a)') 'Failed to free large_decomp'
+            ierrcount = -1
+            return
+        end if
+
+        ierr = SMIOLf_finalize(context)
+        if (ierr /= SMIOL_SUCCESS .or. associated(context)) then
+            ierrcount = -1
+            return
+        end if
+
+        write(test_log,'(a)') ''
+
+    end function test_buffered_io
 
 
     !-----------------------------------------------------------------------

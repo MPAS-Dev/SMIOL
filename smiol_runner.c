@@ -25,6 +25,7 @@ int test_aggregate_list(FILE *test_log);
 int test_set_get_frame(FILE* test_log);
 int test_put_get_vars(FILE *test_log);
 int test_io_aggregation(FILE *test_log);
+int test_buffered_io(FILE *test_log);
 int compare_decomps(struct SMIOL_decomp *decomp,
                     size_t n_comp_list, SMIOL_Offset *comp_list_correct,
                     size_t n_io_list, SMIOL_Offset *io_list_correct);
@@ -310,6 +311,17 @@ int main(int argc, char **argv)
 		fprintf(test_log, "%i tests FAILED!\n\n", ierr);
 	}
 
+	/*
+	 * Test buffered I/O
+	 */
+	ierr = test_buffered_io(test_log);
+	if (ierr == 0) {
+		fprintf(test_log, "All tests PASSED!\n\n");
+	}
+	else {
+		fprintf(test_log, "%i tests FAILED!\n\n", ierr);
+	}
+
 
 	num_io_tasks = 16;
 	io_stride = 4;
@@ -357,7 +369,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if ((ierr = SMIOL_open_file(context, "blah.nc", SMIOL_FILE_CREATE, &file)) != SMIOL_SUCCESS) {
+	if ((ierr = SMIOL_open_file(context, "blah.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_open_file: %s ",
 			SMIOL_error_string(ierr));
 		return 1;
@@ -647,7 +659,7 @@ int test_open_close(FILE *test_log)
 	/* Try to open a file with an invalid mode */
 	fprintf(test_log, "Try to open a file with an invalid mode: ");
 	file = NULL;
-	ierr = SMIOL_open_file(context, "smiol_invalid.nc", ~(SMIOL_FILE_CREATE | SMIOL_FILE_WRITE | SMIOL_FILE_READ), &file);
+	ierr = SMIOL_open_file(context, "smiol_invalid.nc", ~(SMIOL_FILE_CREATE | SMIOL_FILE_WRITE | SMIOL_FILE_READ), &file, (size_t)64000000);
 	if (ierr == SMIOL_INVALID_ARGUMENT && file == NULL) {
 		fprintf(test_log, "PASS\n");
 	}
@@ -660,7 +672,7 @@ int test_open_close(FILE *test_log)
 	/* Try to create a file for which we should not have sufficient permissions */
 	fprintf(test_log, "Try to create a file with insufficient permissions: ");
 	file = NULL;
-	ierr = SMIOL_open_file(context, "/smiol_test.nc", SMIOL_FILE_CREATE, &file);
+	ierr = SMIOL_open_file(context, "/smiol_test.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000);
 	if (ierr == SMIOL_LIBRARY_ERROR && file == NULL) {
 		fprintf(test_log, "PASS (%s)\n", SMIOL_lib_error_string(context));
 	}
@@ -672,7 +684,7 @@ int test_open_close(FILE *test_log)
 	/* Try to open a file that does not exist */
 	fprintf(test_log, "Try to open a non-existent file: ");
 	file = NULL;
-	ierr = SMIOL_open_file(context, "/smiol_foobar.nc", SMIOL_FILE_READ, &file);
+	ierr = SMIOL_open_file(context, "/smiol_foobar.nc", SMIOL_FILE_READ, &file, (size_t)0);
 	if (ierr == SMIOL_LIBRARY_ERROR && file == NULL) {
 		fprintf(test_log, "PASS (%s)\n", SMIOL_lib_error_string(context));
 	}
@@ -707,7 +719,7 @@ int test_open_close(FILE *test_log)
 	/* Create a file to be closed and opened again */
 	fprintf(test_log, "Create a file to be closed and later re-opened: ");
 	file = NULL;
-	ierr = SMIOL_open_file(context, "pnetcdf_test_c.nc", SMIOL_FILE_CREATE, &file);
+	ierr = SMIOL_open_file(context, "pnetcdf_test_c.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000);
 	if (ierr == SMIOL_SUCCESS && file != NULL) {
 		fprintf(test_log, "PASS\n");
 	}
@@ -730,7 +742,7 @@ int test_open_close(FILE *test_log)
 	/* Re-open the file with read access */
 	fprintf(test_log, "Re-open file with read access: ");
 	file = NULL;
-	ierr = SMIOL_open_file(context, "pnetcdf_test_c.nc", SMIOL_FILE_READ, &file);
+	ierr = SMIOL_open_file(context, "pnetcdf_test_c.nc", SMIOL_FILE_READ, &file, (size_t)0);
 	if (ierr == SMIOL_SUCCESS && file != NULL) {
 		fprintf(test_log, "PASS\n");
 	}
@@ -753,7 +765,7 @@ int test_open_close(FILE *test_log)
 	/* Re-open the file with write access */
 	fprintf(test_log, "Re-open file with write access: ");
 	file = NULL;
-	ierr = SMIOL_open_file(context, "pnetcdf_test_c.nc", SMIOL_FILE_WRITE, &file);
+	ierr = SMIOL_open_file(context, "pnetcdf_test_c.nc", SMIOL_FILE_WRITE, &file, (size_t)64000000);
 	if (ierr == SMIOL_SUCCESS && file != NULL) {
 		fprintf(test_log, "PASS\n");
 	}
@@ -777,7 +789,7 @@ int test_open_close(FILE *test_log)
 	/* Everything OK (SMIOL_open_file) */
 	fprintf(test_log, "Everything OK (SMIOL_open_file): ");
 	file = NULL;
-	ierr = SMIOL_open_file(context, "test.nc", SMIOL_FILE_CREATE, &file);
+	ierr = SMIOL_open_file(context, "test.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000);
 	if (ierr == SMIOL_SUCCESS && file != NULL) {
 		fprintf(test_log, "PASS\n");
 	}
@@ -2069,7 +2081,7 @@ int test_dimensions(FILE *test_log)
 
 	/* Create a SMIOL file for testing dimension routines */
 	file = NULL;
-	ierr = SMIOL_open_file(context, "test_dims.nc", SMIOL_FILE_CREATE, &file);
+	ierr = SMIOL_open_file(context, "test_dims.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000);
 	if (ierr != SMIOL_SUCCESS || file == NULL) {
 		fprintf(test_log, "Failed to create SMIOL file...\n");
 		return -1;
@@ -2296,7 +2308,7 @@ int test_dimensions(FILE *test_log)
 
 	/* Re-open the SMIOL file */
 	file = NULL;
-	ierr = SMIOL_open_file(context, "test_dims.nc", SMIOL_FILE_READ, &file);
+	ierr = SMIOL_open_file(context, "test_dims.nc", SMIOL_FILE_READ, &file, (size_t)0);
 	if (ierr != SMIOL_SUCCESS || file == NULL) {
 		fprintf(test_log, "Failed to open existing SMIOL file...\n");
 		return -1;
@@ -2423,7 +2435,7 @@ int test_variables(FILE *test_log)
 
 	/* Create a SMIOL file for testing variable routines */
 	file = NULL;
-	ierr = SMIOL_open_file(context, "test_vars.nc", SMIOL_FILE_CREATE, &file);
+	ierr = SMIOL_open_file(context, "test_vars.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000);
 	if (ierr != SMIOL_SUCCESS || file == NULL) {
 		fprintf(test_log, "Failed to create SMIOL file...\n");
 		return -1;
@@ -2714,7 +2726,7 @@ int test_variables(FILE *test_log)
 
 	/* Re-open the SMIOL file */
 	file = NULL;
-	ierr = SMIOL_open_file(context, "test_vars.nc", SMIOL_FILE_READ, &file);
+	ierr = SMIOL_open_file(context, "test_vars.nc", SMIOL_FILE_READ, &file, (size_t)0);
 	if (ierr != SMIOL_SUCCESS || file == NULL) {
 		fprintf(test_log, "Failed to re-open SMIOL file...\n");
 		return -1;
@@ -2910,7 +2922,7 @@ int test_attributes(FILE *test_log)
 
 	/* Create a SMIOL file for testing attribute routines */
 	file = NULL;
-	ierr = SMIOL_open_file(context, "test_atts.nc", SMIOL_FILE_CREATE, &file);
+	ierr = SMIOL_open_file(context, "test_atts.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000);
 	if (ierr != SMIOL_SUCCESS || file == NULL) {
 		fprintf(test_log, "Failed to create SMIOL file...\n");
 		return -1;
@@ -3145,7 +3157,7 @@ int test_attributes(FILE *test_log)
 
 	/* Re-open the SMIOL file */
 	file = NULL;
-	ierr = SMIOL_open_file(context, "test_atts.nc", SMIOL_FILE_READ, &file);
+	ierr = SMIOL_open_file(context, "test_atts.nc", SMIOL_FILE_READ, &file, (size_t)0);
 	if (ierr != SMIOL_SUCCESS || file == NULL) {
 		fprintf(test_log, "Failed to re-open SMIOL file...\n");
 		return -1;
@@ -3364,7 +3376,7 @@ int test_file_sync(FILE *test_log)
 	}
 
 	/* Open a file for syncing */
-	ierr = SMIOL_open_file(context, "smiol_sync_file.nc", SMIOL_FILE_CREATE, &file);
+	ierr = SMIOL_open_file(context, "smiol_sync_file.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000);
 	if (ierr != SMIOL_SUCCESS || file == NULL) {
 		fprintf(test_log, "Failed to open `smiol_sycn_file.nc\n");
 		return -1;
@@ -3395,7 +3407,7 @@ int test_file_sync(FILE *test_log)
 
 
 	/* Testing SMIOL_sync_file on a file opened with SMIOL_FILE_WRITE */
-	ierr = SMIOL_open_file(context, "smiol_sync_file.nc", SMIOL_FILE_WRITE, &file);
+	ierr = SMIOL_open_file(context, "smiol_sync_file.nc", SMIOL_FILE_WRITE, &file, (size_t)64000000);
 	if (ierr != SMIOL_SUCCESS || file == NULL) {
 		fprintf(test_log, "Failed to open `smiol_sync_file.nc in write mode\n");
 		return -1;
@@ -3425,7 +3437,7 @@ int test_file_sync(FILE *test_log)
 	}
 
 	/* Testing SMIOL_sync_file on a file opened with SMIOL_FILE_READ*/
-	ierr = SMIOL_open_file(context, "smiol_sync_file.nc", SMIOL_FILE_READ, &file);
+	ierr = SMIOL_open_file(context, "smiol_sync_file.nc", SMIOL_FILE_READ, &file, (size_t)0);
 	if (ierr != SMIOL_SUCCESS || file == NULL) {
 		fprintf(test_log, "Failed to open `smiol_sync_file.nc with SMIOL_FILE_READ\n");
 		return -1;
@@ -4460,7 +4472,7 @@ int test_set_get_frame(FILE* test_log)
 	/* See if the frame is set correctly when opening a file */
 	fprintf(test_log, "Everything OK - Frame set correct on file open: ");
 	file = NULL;
-	ierr = SMIOL_open_file(context, "test_frame.nc", SMIOL_FILE_CREATE, &file);
+	ierr = SMIOL_open_file(context, "test_frame.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000);
 	if (ierr != SMIOL_SUCCESS || file == NULL) {
 		fprintf(test_log, "Failed to create SMIOL file...\n");
 		return -1;
@@ -4675,7 +4687,7 @@ int test_put_get_vars(FILE *test_log)
 
 	/* Create a SMIOL file */
 	file = NULL;
-	ierr = SMIOL_open_file(context, "test_put_get_vars.nc", SMIOL_FILE_CREATE, &file);
+	ierr = SMIOL_open_file(context, "test_put_get_vars.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000);
 	if (ierr != SMIOL_SUCCESS || file == NULL) {
 		fprintf(test_log, "Failed to create SMIOL file...\n");
 		return -1;
@@ -5058,7 +5070,7 @@ int test_put_get_vars(FILE *test_log)
 
 	/* Re-open the SMIOL file */
 	file = NULL;
-	ierr = SMIOL_open_file(context, "test_put_get_vars.nc", SMIOL_FILE_READ, &file);
+	ierr = SMIOL_open_file(context, "test_put_get_vars.nc", SMIOL_FILE_READ, &file, (size_t)0);
 	if (ierr != SMIOL_SUCCESS || file == NULL) {
 		fprintf(test_log, "Failed to create SMIOL file...\n");
 		return -1;
@@ -5560,7 +5572,7 @@ int test_io_aggregation(FILE *test_log)
 	 * Create a new file, to which we will write using all three of the decompositions from above
 	 */
 	file = NULL;
-	ierr = SMIOL_open_file(context, "test_agg.nc", SMIOL_FILE_CREATE, &file);
+	ierr = SMIOL_open_file(context, "test_agg.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000);
 	if (ierr != SMIOL_SUCCESS || file == NULL) {
 		fprintf(test_log, "Failed to create a file for testing aggregation\n");
 		return -1;
@@ -5654,7 +5666,7 @@ int test_io_aggregation(FILE *test_log)
 	}
 
 	file = NULL;
-	ierr = SMIOL_open_file(context, "test_agg.nc", SMIOL_FILE_READ, &file);
+	ierr = SMIOL_open_file(context, "test_agg.nc", SMIOL_FILE_READ, &file, (size_t)0);
 	if (ierr != SMIOL_SUCCESS || file == NULL) {
 		fprintf(test_log, "Failed to open file that was created for testing aggregation\n");
 		return -1;
@@ -5764,6 +5776,354 @@ int test_io_aggregation(FILE *test_log)
 
 	if (SMIOL_free_decomp(&decomp_agg0) != SMIOL_SUCCESS) {
 		fprintf(test_log, "Failed to free decomp_agg0\n");
+		return -1;
+	}
+
+	/* Free the SMIOL context */
+	ierr = SMIOL_finalize(&context);
+	if (ierr != SMIOL_SUCCESS || context != NULL) {
+		fprintf(test_log, "Failed to free SMIOL context...\n");
+		return -1;
+	}
+
+	fflush(test_log);
+	fprintf(test_log, "\n");
+
+	return errcount;
+}
+
+int test_buffered_io(FILE *test_log)
+{
+	int ierr;
+	int errcount;
+	int comm_rank, comm_size;
+	int num_io_tasks, io_stride;
+	struct SMIOL_context *context;
+	struct SMIOL_file *file = NULL;
+	char filename[64];
+	size_t bufsize;
+	char **dimnames = NULL;
+	size_t i, j;
+	size_t n_compute_elements;
+	SMIOL_Offset *compute_elements = NULL;
+	struct SMIOL_decomp *small_decomp = NULL, *medium_decomp = NULL, *large_decomp = NULL;
+	int *small_var = NULL, *medium_var = NULL, *large_var = NULL;
+
+	fprintf(test_log, "********************************************************************************\n");
+	fprintf(test_log, "********************** SMIOL buffered I/O unit tests ***************************\n");
+	fprintf(test_log, "\n");
+
+	errcount = 0;
+
+	ierr = MPI_Comm_rank(MPI_COMM_WORLD, &comm_rank);
+	if (ierr != MPI_SUCCESS) {
+		fprintf(test_log, "Failed to get MPI rank...\n");
+		return -1;
+	}
+
+	ierr = MPI_Comm_size(MPI_COMM_WORLD, &comm_size);
+	if (ierr != MPI_SUCCESS) {
+		fprintf(test_log, "Failed to get MPI size...\n");
+		return -1;
+	}
+
+	if (comm_size > 1) {
+		num_io_tasks = comm_size / 2;
+	} else {
+		num_io_tasks = 1;
+	}
+	io_stride = 2;
+
+	/* Create a SMIOL context for testing buffered I/O */
+	context = NULL;
+	ierr = SMIOL_init(MPI_COMM_WORLD, num_io_tasks, io_stride, &context);
+	if (ierr != SMIOL_SUCCESS || context == NULL) {
+		fprintf(test_log, "Failed to create SMIOL context...\n");
+		return -1;
+	}
+
+	n_compute_elements = 1ul;
+	compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
+	for (i = 0; i < n_compute_elements; i++) {
+		compute_elements[i] = (SMIOL_Offset)i + (SMIOL_Offset)(n_compute_elements * (size_t)comm_rank);
+	}
+	if (SMIOL_create_decomp(context, n_compute_elements, compute_elements, 1, &small_decomp) != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create small_decomp\n");
+		return -1;
+	}
+	free(compute_elements);
+
+	n_compute_elements = 2048ul;
+	compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
+	for (i = 0; i < n_compute_elements; i++) {
+		compute_elements[i] = (SMIOL_Offset)i + (SMIOL_Offset)(n_compute_elements * (size_t)comm_rank);
+	}
+	if (SMIOL_create_decomp(context, n_compute_elements, compute_elements, 1, &medium_decomp) != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create medium_decomp\n");
+		return -1;
+	}
+	free(compute_elements);
+
+	n_compute_elements = 6000000ul;
+	compute_elements = malloc(sizeof(SMIOL_Offset) * n_compute_elements);
+	for (i = 0; i < n_compute_elements; i++) {
+		compute_elements[i] = (SMIOL_Offset)i + (SMIOL_Offset)(n_compute_elements * (size_t)comm_rank);
+	}
+	if (SMIOL_create_decomp(context, n_compute_elements, compute_elements, 1, &large_decomp) != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to create large_decomp\n");
+		return -1;
+	}
+	free(compute_elements);
+
+	for (bufsize = 0ul; bufsize <= (size_t)(4*1024*1024); bufsize += (size_t)(4*1024*1024)) {
+		snprintf(filename, 64, "buffered_write_%dMB.nc", (int)(bufsize / 1024ul / 1024ul));
+
+		file = NULL;
+		ierr = SMIOL_open_file(context, filename, SMIOL_FILE_CREATE, &file, bufsize);
+		if (ierr != SMIOL_SUCCESS || file == NULL) {
+			fprintf(test_log, "Failed to create a file for testing buffered I/O\n");
+			return -1;
+		}
+
+		if ((ierr = SMIOL_define_dim(file, "Time", (SMIOL_Offset)-1)) != SMIOL_SUCCESS) {
+			fprintf(test_log, "ERROR: SMIOL_define_dim: %s ", SMIOL_error_string(ierr));
+			return 1;
+		}
+
+		if ((ierr = SMIOL_define_dim(file, "small_dim", (SMIOL_Offset)(comm_size))) != SMIOL_SUCCESS) {
+			fprintf(test_log, "ERROR: SMIOL_define_dim: %s ", SMIOL_error_string(ierr));
+			return 1;
+		}
+
+		if ((ierr = SMIOL_define_dim(file, "medium_dim", (SMIOL_Offset)(2048 * comm_size))) != SMIOL_SUCCESS) {
+			fprintf(test_log, "ERROR: SMIOL_define_dim: %s ", SMIOL_error_string(ierr));
+			return 1;
+		}
+
+		if ((ierr = SMIOL_define_dim(file, "large_dim", (SMIOL_Offset)(6000000 * comm_size))) != SMIOL_SUCCESS) {
+			fprintf(test_log, "ERROR: SMIOL_define_dim: %s ", SMIOL_error_string(ierr));
+			return 1;
+		}
+
+		dimnames = (char **)malloc((size_t)2 * sizeof(char *));
+		dimnames[0] = (char *)malloc((size_t)64 * sizeof(char));
+		dimnames[1] = (char *)malloc((size_t)64 * sizeof(char));
+
+		snprintf(dimnames[0], 64, "Time");
+		snprintf(dimnames[1], 64, "small_dim");
+
+		if (SMIOL_define_var(file, "small_var", SMIOL_INT32, 2, (const char **)dimnames) != SMIOL_SUCCESS) {
+			fprintf(test_log, "Failed to create small_var variable...\n");
+			return -1;
+		}
+
+		snprintf(dimnames[0], 64, "Time");
+		snprintf(dimnames[1], 64, "medium_dim");
+
+		if (SMIOL_define_var(file, "medium_var", SMIOL_INT32, 2, (const char **)dimnames) != SMIOL_SUCCESS) {
+			fprintf(test_log, "Failed to create medium_var variable...\n");
+			return -1;
+		}
+
+		snprintf(dimnames[0], 64, "large_dim");
+
+		if (SMIOL_define_var(file, "large_var", SMIOL_INT32, 1, (const char **)dimnames) != SMIOL_SUCCESS) {
+			fprintf(test_log, "Failed to create large_var variable...\n");
+			return -1;
+		}
+
+		free(dimnames[0]);
+		free(dimnames[1]);
+		free(dimnames);
+
+		small_var = malloc(sizeof(int) * 1ul);
+		medium_var = malloc(sizeof(int) * 2048ul);
+		large_var = malloc(sizeof(int) * 6000000ul);
+
+		for (i = 0; i < 1ul; i++) {
+			small_var[i] = (int)i + 1 * comm_rank;
+		}
+
+		for (i = 0; i < 2048ul; i++) {
+			medium_var[i] = (int)i + 2048 * comm_rank;
+		}
+
+		for (i = 0; i < 6000000ul; i++) {
+			large_var[i] = (int)i + 6000000 * comm_rank;
+		}
+
+		/* Write a single small variable */
+		fprintf(test_log, "Bufsize = %lu, write a single small variable: ", bufsize);
+		ierr = SMIOL_put_var(file, "small_var", small_decomp, small_var);
+		if (ierr == SMIOL_SUCCESS) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - (%s)\n", SMIOL_error_string(ierr));
+			errcount++;
+		}
+
+		/* Write more variables than available pending requests */
+		fprintf(test_log, "Bufsize = %lu, write more variables than available pending requests: ", bufsize);
+		for (i = 0; i < 300ul; i++) {
+			ierr = SMIOL_set_frame(file, (SMIOL_Offset)i);
+			if (ierr != SMIOL_SUCCESS) {
+				break;
+			}
+
+			ierr = SMIOL_put_var(file, "small_var", small_decomp, small_var);
+			if (ierr != SMIOL_SUCCESS) {
+				break;
+			}
+		}
+		if (ierr == SMIOL_SUCCESS) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - (%s)\n", SMIOL_error_string(ierr));
+			errcount++;
+		}
+
+		/* Synchronize a file with buffered writes */
+		fprintf(test_log, "Synchronize a file with buffered writes: ");
+		ierr = SMIOL_sync_file(file);
+		if (ierr == SMIOL_SUCCESS) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - (%s)\n", SMIOL_error_string(ierr));
+			errcount++;
+		}
+
+		/* Write variables to simultaneously exceed all requests and buffer space */
+		fprintf(test_log, "Bufsize = %lu, write variables to simultaneously exceed all requests and buffer space: ", bufsize);
+		for (i = 0; i < 257ul; i++) {
+			ierr = SMIOL_set_frame(file, (SMIOL_Offset)i);
+			if (ierr != SMIOL_SUCCESS) {
+				break;
+			}
+
+			ierr = SMIOL_put_var(file, "medium_var", medium_decomp, medium_var);
+			if (ierr != SMIOL_SUCCESS) {
+				break;
+			}
+		}
+		if (ierr == SMIOL_SUCCESS) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - (%s)\n", SMIOL_error_string(ierr));
+			errcount++;
+		}
+
+		/* Write a single variable that should exceed buffer space */
+		fprintf(test_log, "Bufsize = %lu, write a single variable that should exceed buffer space: ", bufsize);
+		ierr = SMIOL_put_var(file, "large_var", large_decomp, large_var);
+		if (ierr == SMIOL_SUCCESS) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL - (%s)\n", SMIOL_error_string(ierr));
+			errcount++;
+		}
+
+		free(small_var);
+		free(medium_var);
+		free(large_var);
+
+#ifdef SMIOL_PNETCDF
+		/* Read back and verify large variable */
+		fprintf(test_log, "Read back and verify large variable: ");
+		large_var = malloc(sizeof(int) * 6000000ul * (size_t)comm_size);
+		memset((void *)large_var, 0, sizeof(int) * 6000000ul * (size_t)comm_size);
+		ierr = SMIOL_get_var(file, "large_var", NULL, large_var);
+		if (ierr == SMIOL_SUCCESS) {
+			for (i = 0; i < 6000000ul * (size_t)comm_size; i++) {
+				if (large_var[i] != (int)i) {
+					ierr = ~SMIOL_SUCCESS;
+					break;
+				}
+			}
+		}
+		free(large_var);
+
+		if (ierr == SMIOL_SUCCESS) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL\n");
+			errcount++;
+		}
+
+		/* Read back and verify medium variable */
+		fprintf(test_log, "Read back and verify medium variable: ");
+		medium_var = malloc(sizeof(int) * 2048ul * (size_t)comm_size);
+		for (j = 0; j < 257ul; j++) {
+			ierr = SMIOL_set_frame(file, (SMIOL_Offset)j);
+			if (ierr != SMIOL_SUCCESS) break;
+
+			memset((void *)medium_var, 0, sizeof(int) * 2048ul * (size_t)comm_size);
+			ierr = SMIOL_get_var(file, "medium_var", NULL, medium_var);
+			if (ierr == SMIOL_SUCCESS) {
+				for (i = 0; i < 2048ul * (size_t)comm_size; i++) {
+					if (medium_var[i] != (int)i) {
+						ierr = ~SMIOL_SUCCESS;
+						break;
+					}
+				}
+			}
+			if (ierr != SMIOL_SUCCESS) break;
+		}
+		free(medium_var);
+
+		if (ierr == SMIOL_SUCCESS) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL\n");
+			errcount++;
+		}
+
+		/* Read back and verify small variable */
+		fprintf(test_log, "Read back and verify small variable: ");
+		small_var = malloc(sizeof(int) * (size_t)comm_size);
+		for (j = 0; j < 300ul; j++) {
+			ierr = SMIOL_set_frame(file, (SMIOL_Offset)j);
+			if (ierr != SMIOL_SUCCESS) break;
+
+			memset((void *)small_var, 0, sizeof(int) * (size_t)comm_size);
+			ierr = SMIOL_get_var(file, "small_var", NULL, small_var);
+			if (ierr == SMIOL_SUCCESS) {
+				for (i = 0; i < (size_t)comm_size; i++) {
+					if (small_var[i] != (int)i) {
+						ierr = ~SMIOL_SUCCESS;
+						break;
+					}
+				}
+			}
+			if (ierr != SMIOL_SUCCESS) break;
+		}
+		free(small_var);
+
+		if (ierr == SMIOL_SUCCESS) {
+			fprintf(test_log, "PASS\n");
+		} else {
+			fprintf(test_log, "FAIL\n");
+			errcount++;
+		}
+#endif
+
+		if (SMIOL_close_file(&file) != SMIOL_SUCCESS) {
+			fprintf(test_log, "Failed to close file for buffered I/O tests\n");
+			return -1;
+		}
+	}
+
+	if (SMIOL_free_decomp(&small_decomp) != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to free small_decomp\n");
+		return -1;
+	}
+
+	if (SMIOL_free_decomp(&medium_decomp) != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to free medium_decomp\n");
+		return -1;
+	}
+
+	if (SMIOL_free_decomp(&large_decomp) != SMIOL_SUCCESS) {
+		fprintf(test_log, "Failed to free large_decomp\n");
 		return -1;
 	}
 
