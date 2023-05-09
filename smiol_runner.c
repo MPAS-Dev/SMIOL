@@ -2425,6 +2425,12 @@ int test_variables(FILE *test_log)
 	MPI_Comm_size(MPI_COMM_WORLD, &num_io_tasks);
 	io_stride = 1;
 
+	/* If more than one MPI rank, use an io_stride of 2 */
+	if (num_io_tasks > 1) {
+		io_stride = 2;
+		num_io_tasks = num_io_tasks / io_stride;
+	}
+
 	/* Create a SMIOL context for testing variable routines */
 	context = NULL;
 	ierr = SMIOL_init(MPI_COMM_WORLD, num_io_tasks, io_stride, &context);
