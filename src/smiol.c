@@ -995,6 +995,7 @@ int SMIOL_inquire_var(struct SMIOL_file *file, const char *varname, int *vartype
 			if (file->io_task) {
 				len = (int)strnlen(dimnames[i],
 				                   (size_t)NC_MAX_NAME);
+				len++; /* Include the terminating '\0' character */
 			}
 			MPI_Bcast(&len, 1, MPI_INT, 0, io_group_comm);
 			MPI_Bcast(dimnames[i], len, MPI_CHAR, 0, io_group_comm);

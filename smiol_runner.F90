@@ -1548,6 +1548,12 @@ contains
         call MPI_Comm_size(MPI_COMM_WORLD, num_io_tasks, ierr)
         io_stride = 1
 
+        ! If more than one MPI rank, use an io_stride of 2
+        if (num_io_tasks > 1) then
+            io_stride = 2
+            num_io_tasks = num_io_tasks / io_stride
+        end if
+
         ! Create a SMIOL context for testing file variable routines
         nullify(context)
         ierr = SMIOLf_init(MPI_COMM_WORLD, num_io_tasks, io_stride, context)
