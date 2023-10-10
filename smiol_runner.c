@@ -491,6 +491,8 @@ int main(int argc, char **argv)
 		SMIOL_error_string(SMIOL_WRONG_ARG_TYPE));
 	fprintf(test_log, "SMIOL_error_string test 'argument is of insufficient size': %s\n",
 		SMIOL_error_string(SMIOL_INSUFFICIENT_ARG));
+	fprintf(test_log, "SMIOL_error_string test 'invalid format for file creation': %s\n",
+		SMIOL_error_string(SMIOL_INVALID_FORMAT));
 
 	if ((ierr = SMIOL_finalize(&context)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_finalize: %s ", SMIOL_error_string(ierr));

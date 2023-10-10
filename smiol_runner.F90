@@ -349,6 +349,8 @@ program smiol_runner
                trim(SMIOLf_error_string(SMIOL_WRONG_ARG_TYPE))
     write(test_log,'(a)') "Testing SMIOL_error_string 'argument is of insufficient size': ", &
                trim(SMIOLf_error_string(SMIOL_INSUFFICIENT_ARG))
+    write(test_log,'(a)') "Testing SMIOL_error_string 'invalid format for file creation': ", &
+               trim(SMIOLf_error_string(SMIOL_INVALID_FORMAT))
 
     if (SMIOLf_finalize(context) /= SMIOL_SUCCESS) then
         write(test_log,'(a)') "ERROR: 'SMIOLf_finalize' was not called successfully"

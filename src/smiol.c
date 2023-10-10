@@ -1994,6 +1994,8 @@ const char *SMIOL_error_string(int errno)
 		return "argument is of the wrong type";
 	case SMIOL_INSUFFICIENT_ARG:
 		return "argument is of insufficient size";
+	case SMIOL_INVALID_FORMAT:
+		return "invalid format for file creation";
 	default:
 		return "Unknown error";
 	}
