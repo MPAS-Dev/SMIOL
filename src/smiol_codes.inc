@@ -20,3 +20,6 @@
 #define SMIOL_INT32            (2002)
 #define SMIOL_CHAR             (2003)
 #define SMIOL_UNKNOWN_VAR_TYPE (2004)
+
+#define SMIOL_FORMAT_CDF2      (3000)
+#define SMIOL_FORMAT_CDF5      (3001)
