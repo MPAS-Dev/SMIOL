@@ -505,6 +505,58 @@ contains
             ierrcount = ierrcount + 1
         end if
 
+        ! Try to create a file with an invalid format
+        write(test_log,'(a)', advance='no') 'Try to create a file with an invalid file format: '
+        nullify(file)
+        ierr = SMIOLf_open_file(context, 'smiolf_invalid_frmt.nc', &
+                                SMIOL_FILE_CREATE, file, &
+                                fformat=not(ior(SMIOL_FORMAT_CDF2, SMIOL_FORMAT_CDF5)))
+        if (ierr == SMIOL_INVALID_FORMAT .and. .not. associated(file)) then
+            write(test_log,'(a)') 'PASS'
+        else
+            write(test_log, '(a)') 'FAIL - expected error code of SMIOL_INVALID_FORMT not returned, or file handle is associated'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Try to create the file with the other, optional file format that needs to be requested
+        write(test_log,'(a)', advance='no') 'Try to create a file with CDF2 file format: '
+        nullify(file)
+        ierr = SMIOLf_open_file(context, 'smiolf_cdf2.nc', &
+                                SMIOL_FILE_CREATE, file, &
+                                fformat=SMIOL_FORMAT_CDF2)
+        if (ierr == SMIOL_SUCCESS .and. associated(file)) then
+            ierr = SMIOLf_close_file(file)
+            if (ierr == SMIOL_SUCCESS) then
+               write(test_log,'(a)') 'PASS'
+            else
+               write(test_log,'(a)') 'FAIL - unable to close newly created CDF2 format file'
+               ierrcount = ierrcount + 1
+            end if
+        else
+            write(test_log, '(a)') 'FAIL - unable to create file of CDF2 format'
+            ierrcount = ierrcount + 1
+        end if
+
+        ! Try to open a file with an invalid file format (ensure fformat is ignored for opening files)
+        write(test_log,'(a)', advance='no') 'Try to open a file with an ignored invalid file format: '
+        nullify(file)
+        ierr = SMIOLf_open_file(context, 'smiolf_cdf2.nc', &
+                                SMIOL_FILE_READ, file, &
+                                fformat=not(ior(SMIOL_FORMAT_CDF2, SMIOL_FORMAT_CDF5)))
+        if (ierr == SMIOL_SUCCESS .and. associated(file)) then
+            ierr = SMIOLf_close_file(file)
+            if (ierr == SMIOL_SUCCESS) then
+               write(test_log,'(a)') 'PASS'
+            else
+               write(test_log,'(a)') 'FAIL - unable to close file opened with an ignored invalid file format'
+               ierrcount = ierrcount + 1
+            end if
+        else
+            write(test_log,'(a)') 'FAIL - unable to open file with an ignored invalid file format'
+            ierrcount = ierrcount + 1
+        end if
+
+
 #ifdef SMIOL_PNETCDF
         ! Try to create a file for which we should not have sufficient permissions
         write(test_log,'(a)',advance='no') 'Try to create a file with insufficient permissions: '

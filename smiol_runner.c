@@ -671,6 +671,57 @@ int test_open_close(FILE *test_log)
 		errcount++;
 	}
 
+	/* Try to create a file with an invalid file format */
+	fprintf(test_log, "Try to create a file with an invalid file format: ");
+	file = NULL;
+	ierr = SMIOL_open_file(context, "smiol_invalid_fformat.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000, ~(SMIOL_FORMAT_CDF2 | SMIOL_FORMAT_CDF5));
+	if (ierr == SMIOL_INVALID_FORMAT && file == NULL){
+		fprintf(test_log, "PASS\n");
+	}
+	else {
+		fprintf(test_log, "FAIL - expected error code of SMIOL_INVALID_FORMAT not returned or file not NULL\n");
+		errcount++;
+	}
+
+	/* Try to create a file with the so far unused file format */
+	fprintf(test_log, "Try to create a file with CDF2 file format: ");
+	file = NULL;
+	ierr = SMIOL_open_file(context, "smiol_cdf2.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000, SMIOL_FORMAT_CDF2);
+	if (ierr == SMIOL_SUCCESS && file != NULL){
+		ierr = SMIOL_close_file(&file);
+		if (ierr == SMIOL_SUCCESS){
+			fprintf(test_log, "PASS\n");
+		}
+		else {
+			fprintf(test_log, "FAIL - unable to close newly created CDF2 format file\n");
+			errcount++;
+		}
+	}
+	else {
+		fprintf(test_log, "FAIL - unable to create file of CDF2 format\n");
+		errcount++;
+	}
+
+	/* Try open a file with an invalid file format (ensure fformat is ignored for opening files) */
+	fprintf(test_log,"Try to open a file with an ignored invalid file format: ");
+	file = NULL;
+	ierr = SMIOL_open_file(context, "smiol_cdf2.nc", SMIOL_FILE_READ, &file, (size_t)64000000, ~(SMIOL_FORMAT_CDF2 | SMIOL_FORMAT_CDF5));
+	if (ierr == SMIOL_SUCCESS && file != NULL){
+		ierr = SMIOL_close_file(&file);
+		if (ierr == SMIOL_SUCCESS){
+			fprintf(test_log, "PASS\n");
+		}
+		else {
+			fprintf(test_log, "FAIL - unable to close file opened with an ignored invalid file format\n");
+			errcount++;
+		}
+	}
+	else {
+		fprintf(test_log, "FAIL - unable to open file with an ignored invalid file format\n");
+		errcount++;
+	}
+
+
 #ifdef SMIOL_PNETCDF
 	/* Try to create a file for which we should not have sufficient permissions */
 	fprintf(test_log, "Try to create a file with insufficient permissions: ");
