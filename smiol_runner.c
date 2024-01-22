@@ -369,7 +369,8 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if ((ierr = SMIOL_open_file(context, "blah.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000)) != SMIOL_SUCCESS) {
+	if ((ierr = SMIOL_open_file(context, "blah.nc", SMIOL_FILE_CREATE, &file,
+	                            (size_t)64000000, SMIOL_FORMAT_CDF5)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_open_file: %s ",
 			SMIOL_error_string(ierr));
 		return 1;
@@ -491,6 +492,8 @@ int main(int argc, char **argv)
 		SMIOL_error_string(SMIOL_WRONG_ARG_TYPE));
 	fprintf(test_log, "SMIOL_error_string test 'argument is of insufficient size': %s\n",
 		SMIOL_error_string(SMIOL_INSUFFICIENT_ARG));
+	fprintf(test_log, "SMIOL_error_string test 'invalid format for file creation': %s\n",
+		SMIOL_error_string(SMIOL_INVALID_FORMAT));
 
 	if ((ierr = SMIOL_finalize(&context)) != SMIOL_SUCCESS) {
 		fprintf(test_log, "ERROR: SMIOL_finalize: %s ", SMIOL_error_string(ierr));
@@ -659,7 +662,7 @@ int test_open_close(FILE *test_log)
 	/* Try to open a file with an invalid mode */
 	fprintf(test_log, "Try to open a file with an invalid mode: ");
 	file = NULL;
-	ierr = SMIOL_open_file(context, "smiol_invalid.nc", ~(SMIOL_FILE_CREATE | SMIOL_FILE_WRITE | SMIOL_FILE_READ), &file, (size_t)64000000);
+	ierr = SMIOL_open_file(context, "smiol_invalid.nc", ~(SMIOL_FILE_CREATE | SMIOL_FILE_WRITE | SMIOL_FILE_READ), &file, (size_t)64000000, SMIOL_FORMAT_CDF5);
 	if (ierr == SMIOL_INVALID_ARGUMENT && file == NULL) {
 		fprintf(test_log, "PASS\n");
 	}
@@ -668,11 +671,62 @@ int test_open_close(FILE *test_log)
 		errcount++;
 	}
 
+	/* Try to create a file with an invalid file format */
+	fprintf(test_log, "Try to create a file with an invalid file format: ");
+	file = NULL;
+	ierr = SMIOL_open_file(context, "smiol_invalid_fformat.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000, ~(SMIOL_FORMAT_CDF2 | SMIOL_FORMAT_CDF5));
+	if (ierr == SMIOL_INVALID_FORMAT && file == NULL){
+		fprintf(test_log, "PASS\n");
+	}
+	else {
+		fprintf(test_log, "FAIL - expected error code of SMIOL_INVALID_FORMAT not returned or file not NULL\n");
+		errcount++;
+	}
+
+	/* Try to create a file with the so far unused file format */
+	fprintf(test_log, "Try to create a file with CDF2 file format: ");
+	file = NULL;
+	ierr = SMIOL_open_file(context, "smiol_cdf2.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000, SMIOL_FORMAT_CDF2);
+	if (ierr == SMIOL_SUCCESS && file != NULL){
+		ierr = SMIOL_close_file(&file);
+		if (ierr == SMIOL_SUCCESS){
+			fprintf(test_log, "PASS\n");
+		}
+		else {
+			fprintf(test_log, "FAIL - unable to close newly created CDF2 format file\n");
+			errcount++;
+		}
+	}
+	else {
+		fprintf(test_log, "FAIL - unable to create file of CDF2 format\n");
+		errcount++;
+	}
+
+	/* Try open a file with an invalid file format (ensure fformat is ignored for opening files) */
+	fprintf(test_log,"Try to open a file with an ignored invalid file format: ");
+	file = NULL;
+	ierr = SMIOL_open_file(context, "smiol_cdf2.nc", SMIOL_FILE_READ, &file, (size_t)64000000, ~(SMIOL_FORMAT_CDF2 | SMIOL_FORMAT_CDF5));
+	if (ierr == SMIOL_SUCCESS && file != NULL){
+		ierr = SMIOL_close_file(&file);
+		if (ierr == SMIOL_SUCCESS){
+			fprintf(test_log, "PASS\n");
+		}
+		else {
+			fprintf(test_log, "FAIL - unable to close file opened with an ignored invalid file format\n");
+			errcount++;
+		}
+	}
+	else {
+		fprintf(test_log, "FAIL - unable to open file with an ignored invalid file format\n");
+		errcount++;
+	}
+
+
 #ifdef SMIOL_PNETCDF
 	/* Try to create a file for which we should not have sufficient permissions */
 	fprintf(test_log, "Try to create a file with insufficient permissions: ");
 	file = NULL;
-	ierr = SMIOL_open_file(context, "/smiol_test.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000);
+	ierr = SMIOL_open_file(context, "/smiol_test.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000, SMIOL_FORMAT_CDF5);
 	if (ierr == SMIOL_LIBRARY_ERROR && file == NULL) {
 		fprintf(test_log, "PASS (%s)\n", SMIOL_lib_error_string(context));
 	}
@@ -684,7 +738,7 @@ int test_open_close(FILE *test_log)
 	/* Try to open a file that does not exist */
 	fprintf(test_log, "Try to open a non-existent file: ");
 	file = NULL;
-	ierr = SMIOL_open_file(context, "/smiol_foobar.nc", SMIOL_FILE_READ, &file, (size_t)0);
+	ierr = SMIOL_open_file(context, "/smiol_foobar.nc", SMIOL_FILE_READ, &file, (size_t)0, SMIOL_FORMAT_CDF5);
 	if (ierr == SMIOL_LIBRARY_ERROR && file == NULL) {
 		fprintf(test_log, "PASS (%s)\n", SMIOL_lib_error_string(context));
 	}
@@ -719,7 +773,7 @@ int test_open_close(FILE *test_log)
 	/* Create a file to be closed and opened again */
 	fprintf(test_log, "Create a file to be closed and later re-opened: ");
 	file = NULL;
-	ierr = SMIOL_open_file(context, "pnetcdf_test_c.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000);
+	ierr = SMIOL_open_file(context, "pnetcdf_test_c.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000, SMIOL_FORMAT_CDF5);
 	if (ierr == SMIOL_SUCCESS && file != NULL) {
 		fprintf(test_log, "PASS\n");
 	}
@@ -742,7 +796,7 @@ int test_open_close(FILE *test_log)
 	/* Re-open the file with read access */
 	fprintf(test_log, "Re-open file with read access: ");
 	file = NULL;
-	ierr = SMIOL_open_file(context, "pnetcdf_test_c.nc", SMIOL_FILE_READ, &file, (size_t)0);
+	ierr = SMIOL_open_file(context, "pnetcdf_test_c.nc", SMIOL_FILE_READ, &file, (size_t)0, SMIOL_FORMAT_CDF5);
 	if (ierr == SMIOL_SUCCESS && file != NULL) {
 		fprintf(test_log, "PASS\n");
 	}
@@ -765,7 +819,7 @@ int test_open_close(FILE *test_log)
 	/* Re-open the file with write access */
 	fprintf(test_log, "Re-open file with write access: ");
 	file = NULL;
-	ierr = SMIOL_open_file(context, "pnetcdf_test_c.nc", SMIOL_FILE_WRITE, &file, (size_t)64000000);
+	ierr = SMIOL_open_file(context, "pnetcdf_test_c.nc", SMIOL_FILE_WRITE, &file, (size_t)64000000, SMIOL_FORMAT_CDF5);
 	if (ierr == SMIOL_SUCCESS && file != NULL) {
 		fprintf(test_log, "PASS\n");
 	}
@@ -789,7 +843,7 @@ int test_open_close(FILE *test_log)
 	/* Everything OK (SMIOL_open_file) */
 	fprintf(test_log, "Everything OK (SMIOL_open_file): ");
 	file = NULL;
-	ierr = SMIOL_open_file(context, "test.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000);
+	ierr = SMIOL_open_file(context, "test.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000, SMIOL_FORMAT_CDF5);
 	if (ierr == SMIOL_SUCCESS && file != NULL) {
 		fprintf(test_log, "PASS\n");
 	}
@@ -2081,7 +2135,7 @@ int test_dimensions(FILE *test_log)
 
 	/* Create a SMIOL file for testing dimension routines */
 	file = NULL;
-	ierr = SMIOL_open_file(context, "test_dims.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000);
+	ierr = SMIOL_open_file(context, "test_dims.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000, SMIOL_FORMAT_CDF5);
 	if (ierr != SMIOL_SUCCESS || file == NULL) {
 		fprintf(test_log, "Failed to create SMIOL file...\n");
 		return -1;
@@ -2308,7 +2362,7 @@ int test_dimensions(FILE *test_log)
 
 	/* Re-open the SMIOL file */
 	file = NULL;
-	ierr = SMIOL_open_file(context, "test_dims.nc", SMIOL_FILE_READ, &file, (size_t)0);
+	ierr = SMIOL_open_file(context, "test_dims.nc", SMIOL_FILE_READ, &file, (size_t)0, SMIOL_FORMAT_CDF5);
 	if (ierr != SMIOL_SUCCESS || file == NULL) {
 		fprintf(test_log, "Failed to open existing SMIOL file...\n");
 		return -1;
@@ -2441,7 +2495,7 @@ int test_variables(FILE *test_log)
 
 	/* Create a SMIOL file for testing variable routines */
 	file = NULL;
-	ierr = SMIOL_open_file(context, "test_vars.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000);
+	ierr = SMIOL_open_file(context, "test_vars.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000, SMIOL_FORMAT_CDF5);
 	if (ierr != SMIOL_SUCCESS || file == NULL) {
 		fprintf(test_log, "Failed to create SMIOL file...\n");
 		return -1;
@@ -2732,7 +2786,7 @@ int test_variables(FILE *test_log)
 
 	/* Re-open the SMIOL file */
 	file = NULL;
-	ierr = SMIOL_open_file(context, "test_vars.nc", SMIOL_FILE_READ, &file, (size_t)0);
+	ierr = SMIOL_open_file(context, "test_vars.nc", SMIOL_FILE_READ, &file, (size_t)0, SMIOL_FORMAT_CDF5);
 	if (ierr != SMIOL_SUCCESS || file == NULL) {
 		fprintf(test_log, "Failed to re-open SMIOL file...\n");
 		return -1;
@@ -2928,7 +2982,7 @@ int test_attributes(FILE *test_log)
 
 	/* Create a SMIOL file for testing attribute routines */
 	file = NULL;
-	ierr = SMIOL_open_file(context, "test_atts.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000);
+	ierr = SMIOL_open_file(context, "test_atts.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000, SMIOL_FORMAT_CDF5);
 	if (ierr != SMIOL_SUCCESS || file == NULL) {
 		fprintf(test_log, "Failed to create SMIOL file...\n");
 		return -1;
@@ -3163,7 +3217,7 @@ int test_attributes(FILE *test_log)
 
 	/* Re-open the SMIOL file */
 	file = NULL;
-	ierr = SMIOL_open_file(context, "test_atts.nc", SMIOL_FILE_READ, &file, (size_t)0);
+	ierr = SMIOL_open_file(context, "test_atts.nc", SMIOL_FILE_READ, &file, (size_t)0, SMIOL_FORMAT_CDF5);
 	if (ierr != SMIOL_SUCCESS || file == NULL) {
 		fprintf(test_log, "Failed to re-open SMIOL file...\n");
 		return -1;
@@ -3382,7 +3436,7 @@ int test_file_sync(FILE *test_log)
 	}
 
 	/* Open a file for syncing */
-	ierr = SMIOL_open_file(context, "smiol_sync_file.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000);
+	ierr = SMIOL_open_file(context, "smiol_sync_file.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000, SMIOL_FORMAT_CDF5);
 	if (ierr != SMIOL_SUCCESS || file == NULL) {
 		fprintf(test_log, "Failed to open `smiol_sycn_file.nc\n");
 		return -1;
@@ -3413,7 +3467,7 @@ int test_file_sync(FILE *test_log)
 
 
 	/* Testing SMIOL_sync_file on a file opened with SMIOL_FILE_WRITE */
-	ierr = SMIOL_open_file(context, "smiol_sync_file.nc", SMIOL_FILE_WRITE, &file, (size_t)64000000);
+	ierr = SMIOL_open_file(context, "smiol_sync_file.nc", SMIOL_FILE_WRITE, &file, (size_t)64000000, SMIOL_FORMAT_CDF5);
 	if (ierr != SMIOL_SUCCESS || file == NULL) {
 		fprintf(test_log, "Failed to open `smiol_sync_file.nc in write mode\n");
 		return -1;
@@ -3443,7 +3497,7 @@ int test_file_sync(FILE *test_log)
 	}
 
 	/* Testing SMIOL_sync_file on a file opened with SMIOL_FILE_READ*/
-	ierr = SMIOL_open_file(context, "smiol_sync_file.nc", SMIOL_FILE_READ, &file, (size_t)0);
+	ierr = SMIOL_open_file(context, "smiol_sync_file.nc", SMIOL_FILE_READ, &file, (size_t)0, SMIOL_FORMAT_CDF5);
 	if (ierr != SMIOL_SUCCESS || file == NULL) {
 		fprintf(test_log, "Failed to open `smiol_sync_file.nc with SMIOL_FILE_READ\n");
 		return -1;
@@ -4478,7 +4532,7 @@ int test_set_get_frame(FILE* test_log)
 	/* See if the frame is set correctly when opening a file */
 	fprintf(test_log, "Everything OK - Frame set correct on file open: ");
 	file = NULL;
-	ierr = SMIOL_open_file(context, "test_frame.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000);
+	ierr = SMIOL_open_file(context, "test_frame.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000, SMIOL_FORMAT_CDF5);
 	if (ierr != SMIOL_SUCCESS || file == NULL) {
 		fprintf(test_log, "Failed to create SMIOL file...\n");
 		return -1;
@@ -4693,7 +4747,7 @@ int test_put_get_vars(FILE *test_log)
 
 	/* Create a SMIOL file */
 	file = NULL;
-	ierr = SMIOL_open_file(context, "test_put_get_vars.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000);
+	ierr = SMIOL_open_file(context, "test_put_get_vars.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000, SMIOL_FORMAT_CDF5);
 	if (ierr != SMIOL_SUCCESS || file == NULL) {
 		fprintf(test_log, "Failed to create SMIOL file...\n");
 		return -1;
@@ -5076,7 +5130,7 @@ int test_put_get_vars(FILE *test_log)
 
 	/* Re-open the SMIOL file */
 	file = NULL;
-	ierr = SMIOL_open_file(context, "test_put_get_vars.nc", SMIOL_FILE_READ, &file, (size_t)0);
+	ierr = SMIOL_open_file(context, "test_put_get_vars.nc", SMIOL_FILE_READ, &file, (size_t)0, SMIOL_FORMAT_CDF5);
 	if (ierr != SMIOL_SUCCESS || file == NULL) {
 		fprintf(test_log, "Failed to create SMIOL file...\n");
 		return -1;
@@ -5578,7 +5632,7 @@ int test_io_aggregation(FILE *test_log)
 	 * Create a new file, to which we will write using all three of the decompositions from above
 	 */
 	file = NULL;
-	ierr = SMIOL_open_file(context, "test_agg.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000);
+	ierr = SMIOL_open_file(context, "test_agg.nc", SMIOL_FILE_CREATE, &file, (size_t)64000000, SMIOL_FORMAT_CDF5);
 	if (ierr != SMIOL_SUCCESS || file == NULL) {
 		fprintf(test_log, "Failed to create a file for testing aggregation\n");
 		return -1;
@@ -5672,7 +5726,7 @@ int test_io_aggregation(FILE *test_log)
 	}
 
 	file = NULL;
-	ierr = SMIOL_open_file(context, "test_agg.nc", SMIOL_FILE_READ, &file, (size_t)0);
+	ierr = SMIOL_open_file(context, "test_agg.nc", SMIOL_FILE_READ, &file, (size_t)0, SMIOL_FORMAT_CDF5);
 	if (ierr != SMIOL_SUCCESS || file == NULL) {
 		fprintf(test_log, "Failed to open file that was created for testing aggregation\n");
 		return -1;
@@ -5885,7 +5939,7 @@ int test_buffered_io(FILE *test_log)
 		snprintf(filename, 64, "buffered_write_%dMB.nc", (int)(bufsize / 1024ul / 1024ul));
 
 		file = NULL;
-		ierr = SMIOL_open_file(context, filename, SMIOL_FILE_CREATE, &file, bufsize);
+		ierr = SMIOL_open_file(context, filename, SMIOL_FILE_CREATE, &file, bufsize, SMIOL_FORMAT_CDF5);
 		if (ierr != SMIOL_SUCCESS || file == NULL) {
 			fprintf(test_log, "Failed to create a file for testing buffered I/O\n");
 			return -1;
